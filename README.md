@@ -42,6 +42,7 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 - Reference-suite trace hash locking and enforcement.
 - Trace profiling for heavy-tail, congestion, over-request, and user-skew analysis.
 - Runtime quantile modeling (`p10/p50/p90`) with monotonic inference enforcement.
+- Runtime baseline-lift reporting against naive comparators (global mean/median and user-history median).
 - Deterministic simulation core for:
   - `FIFO_STRICT`
   - `EASY_BACKFILL_BASELINE`
@@ -66,8 +67,7 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 - direct production scheduler integration (Slurm/PBS/LSF),
 - autonomous policy actuation,
 - RL-based scheduler,
-- complete feature-pipeline command implementation (`hpcopt features build` currently scaffolded),
-- complete stress-run orchestration command (`hpcopt stress run` currently scaffolded).
+- richer stress-policy diagnostics and scenario expansion.
 
 ## Architecture
 
@@ -136,7 +136,17 @@ hpcopt profile trace \
   --out outputs/reports
 ```
 
-### 3) Train runtime quantile model
+### 3) Build time-safe feature dataset and chronological splits
+
+```bash
+hpcopt features build \
+  --dataset data/curated/ctc_sp2_1996.parquet \
+  --out data/curated \
+  --report-out outputs/reports \
+  --n-folds 3
+```
+
+### 4) Train runtime quantile model
 
 ```bash
 hpcopt train runtime \
@@ -145,7 +155,7 @@ hpcopt train runtime \
   --model-id runtime_ctc_v1
 ```
 
-### 4) Replay baselines
+### 5) Replay baselines
 
 ```bash
 hpcopt simulate replay-baselines \
@@ -154,7 +164,7 @@ hpcopt simulate replay-baselines \
   --strict-invariants
 ```
 
-### 5) Run ML candidate policy
+### 6) Run ML candidate policy
 
 ```bash
 hpcopt simulate run \
@@ -166,7 +176,7 @@ hpcopt simulate run \
   --strict-invariants
 ```
 
-### 6) Execute fidelity gate
+### 7) Execute fidelity gate
 
 ```bash
 hpcopt simulate fidelity-gate \
@@ -174,7 +184,7 @@ hpcopt simulate fidelity-gate \
   --capacity-cpus 64
 ```
 
-### 7) Generate recommendation
+### 8) Generate recommendation
 
 ```bash
 hpcopt recommend generate \
@@ -184,7 +194,7 @@ hpcopt recommend generate \
   --out outputs/reports
 ```
 
-### 8) Export run bundle
+### 9) Export run bundle
 
 ```bash
 hpcopt report export --run-id <run_id> --format both
@@ -305,4 +315,3 @@ Design and contract history:
 - `design_docs/policy_spec_baselines_mvp.md`
 - `design_docs/mvp_backlog_p0_p1_p2.md`
 - `design_docs/systems_first_research_appendix.md`
-

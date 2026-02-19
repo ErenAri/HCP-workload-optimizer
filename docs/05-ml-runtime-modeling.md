@@ -68,6 +68,13 @@ Interval metric:
 
 - empirical coverage of `[p10, p90]`.
 
+Naive comparator block (for lift claims):
+
+- global median runtime baseline,
+- global mean runtime baseline,
+- user-history median baseline (train-window only, fallback to global median),
+- reported as `naive_baselines` and `p50_lift_vs_naive` in training metrics artifact.
+
 Artifacts:
 
 - `p10.joblib`, `p50.joblib`, `p90.joblib`,
@@ -137,4 +144,3 @@ Behavior:
 - no direct production scheduler actuation.
 
 These are deliberate deferments to preserve systems-first rigor in the core pipeline.
-

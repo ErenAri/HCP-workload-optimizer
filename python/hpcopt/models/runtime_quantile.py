@@ -93,6 +93,11 @@ def _pinball_loss(y_true: np.ndarray, y_pred: np.ndarray, alpha: float) -> float
     return float(np.mean(np.maximum(alpha * delta, (alpha - 1.0) * delta)))
 
 
+def _safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    denom = np.maximum(np.abs(y_true), 1.0)
+    return float(np.mean(np.abs(y_true - y_pred) / denom))
+
+
 def _build_pipeline(alpha: float, seed: int) -> Pipeline:
     preprocessor = ColumnTransformer(
         transformers=[
@@ -210,6 +215,46 @@ def train_runtime_quantile_models(
     p90 = test_predictions["p90"]
     coverage = np.mean((y_test >= p10) & (y_test <= p90))
     metrics["interval_coverage_p10_p90"] = float(coverage)
+
+    # Naive comparators for policy-credible lift reporting.
+    global_median = float(np.median(y_train))
+    global_mean = float(np.mean(y_train))
+
+    train_users = pd.to_numeric(train_df["user_id"], errors="coerce").fillna(-1).astype(int)
+    test_users = pd.to_numeric(test_df["user_id"], errors="coerce").fillna(-1).astype(int)
+    user_runtime_map = (
+        pd.DataFrame({"user_id": train_users, "runtime_actual_sec": y_train})
+        .groupby("user_id", as_index=True)["runtime_actual_sec"]
+        .median()
+        .to_dict()
+    )
+
+    baseline_preds: dict[str, np.ndarray] = {
+        "global_median": np.full(shape=y_test.shape, fill_value=global_median, dtype=float),
+        "global_mean": np.full(shape=y_test.shape, fill_value=global_mean, dtype=float),
+        "user_history_median": np.array(
+            [float(user_runtime_map.get(int(uid), global_median)) for uid in test_users],
+            dtype=float,
+        ),
+    }
+
+    metrics["naive_baselines"] = {}
+    for baseline_name, pred in baseline_preds.items():
+        metrics["naive_baselines"][baseline_name] = {
+            "mae": float(np.mean(np.abs(y_test - pred))),
+            "mape": _safe_mape(y_test, pred),
+            "pinball_loss_p50": _pinball_loss(y_test, pred, alpha=0.5),
+        }
+
+    p50_mae = float(metrics["quantiles"]["p50"]["mae"])
+    p50_pinball = float(metrics["quantiles"]["p50"]["pinball_loss"])
+    metrics["p50_lift_vs_naive"] = {
+        baseline_name: {
+            "mae_improvement": float(payload["mae"] - p50_mae),
+            "pinball_p50_improvement": float(payload["pinball_loss_p50"] - p50_pinball),
+        }
+        for baseline_name, payload in metrics["naive_baselines"].items()
+    }
     metrics["timestamp_utc"] = dt.datetime.now(tz=dt.UTC).isoformat()
 
     metadata = {

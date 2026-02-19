@@ -7,6 +7,7 @@ from typing import Optional
 
 import pandas as pd
 import typer
+import yaml
 
 from hpcopt.artifacts.manifest import build_manifest, write_manifest
 from hpcopt.artifacts.report_export import export_run_report
@@ -15,6 +16,7 @@ from hpcopt.data.reference_suite import (
     assert_reference_trace_hash_match,
     lock_reference_suite_hashes,
 )
+from hpcopt.features.pipeline import build_feature_dataset
 from hpcopt.ingest.swf import ingest_swf
 from hpcopt.models.runtime_quantile import (
     RuntimeQuantilePredictor,
@@ -25,6 +27,7 @@ from hpcopt.profile.trace_profile import build_trace_profile
 from hpcopt.recommend.engine import generate_recommendation_report
 from hpcopt.simulate.core import SUPPORTED_POLICIES, run_simulation_from_trace
 from hpcopt.simulate.fidelity import run_baseline_fidelity_gate, run_candidate_fidelity_report
+from hpcopt.simulate.objective import evaluate_constraint_contract
 from hpcopt.simulate.batsim import (
     SUPPORTED_EDC_MODES,
     build_batsim_run_config,
@@ -166,17 +169,284 @@ def stress_run_cmd(
     scenario: str = typer.Option(..., help="Scenario previously generated"),
     policy: Path = typer.Option(..., exists=True, readable=True, help="Policy config"),
     model: str = typer.Option(..., help="Model version or artifact id"),
+    dataset: Optional[Path] = typer.Option(
+        None,
+        help="Optional stress dataset parquet override. Defaults to data/curated/stress_<scenario>.parquet",
+    ),
+    capacity_cpus: int = typer.Option(64, min=1, help="Cluster CPU capacity"),
+    baseline_policy: str = typer.Option(
+        "EASY_BACKFILL_BASELINE",
+        help="Baseline policy for stress comparison",
+    ),
+    out: Path = typer.Option(Path("outputs/simulations"), help="Simulation artifact output directory"),
+    report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
+    run_id: Optional[str] = typer.Option(None, help="Run identifier override"),
+    strict_invariants: bool = typer.Option(True, help="Fail on invariant violation"),
+    runtime_model_dir: Optional[Path] = typer.Option(
+        None,
+        help="Optional runtime model directory for ML policy prediction path",
+    ),
 ) -> None:
-    # Placeholder execution hook. Full simulation integration is part of P0-12+ work.
-    typer.echo("Stress run orchestration is scaffolded but not yet implemented.")
-    typer.echo(f"Scenario: {scenario}")
-    typer.echo(f"Policy: {policy}")
-    typer.echo(f"Model: {model}")
+    if baseline_policy not in SUPPORTED_POLICIES:
+        raise typer.BadParameter(
+            f"Unsupported baseline policy '{baseline_policy}'. Supported: {sorted(SUPPORTED_POLICIES)}"
+        )
+    ensure_dir(out)
+    ensure_dir(report_out)
+
+    resolved_dataset = dataset or (Path("data/curated") / f"stress_{scenario}.parquet")
+    if not resolved_dataset.exists():
+        raise typer.BadParameter(
+            f"Stress dataset does not exist: {resolved_dataset}. "
+            f"Generate it first via 'hpcopt stress gen --scenario {scenario}'."
+        )
+    if resolved_dataset.suffix.lower() != ".parquet":
+        raise typer.BadParameter("Stress dataset must be a parquet file.")
+
+    cfg = yaml.safe_load(policy.read_text(encoding="utf-8"))
+    if not isinstance(cfg, dict):
+        raise typer.BadParameter("Policy config must be a YAML mapping.")
+
+    policy_id = str(cfg.get("policy_id", "ML_BACKFILL_P50"))
+    if policy_id not in SUPPORTED_POLICIES:
+        raise typer.BadParameter(f"Unsupported candidate policy '{policy_id}'. Supported: {sorted(SUPPORTED_POLICIES)}")
+
+    runtime_guard_k = float(cfg.get("runtime_guard_k", 0.5))
+    strict_uncertainty_mode = bool(cfg.get("strict_uncertainty_mode", False))
+    starvation_wait_cap_sec = int(cfg.get("starvation_wait_cap_sec", 172800))
+    fairness_cfg = cfg.get("fairness")
+    if not isinstance(fairness_cfg, dict):
+        fairness_cfg = {}
+
+    resolved_run_id = run_id or f"stress_{scenario}_{policy_id.lower()}_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
+    trace_df = pd.read_parquet(resolved_dataset)
+
+    runtime_predictor = None
+    resolved_model_dir = None
+    if policy_id == "ML_BACKFILL_P50":
+        resolved_model_dir = resolve_runtime_model_dir(runtime_model_dir)
+        if resolved_model_dir is not None:
+            runtime_predictor = RuntimeQuantilePredictor(resolved_model_dir)
+
+    baseline_sim = run_simulation_from_trace(
+        trace_df=trace_df,
+        policy_id=baseline_policy,
+        capacity_cpus=capacity_cpus,
+        run_id=f"{resolved_run_id}_{baseline_policy.lower()}",
+        strict_invariants=strict_invariants,
+        starvation_wait_cap_sec=starvation_wait_cap_sec,
+    )
+    candidate_sim = run_simulation_from_trace(
+        trace_df=trace_df,
+        policy_id=policy_id,
+        capacity_cpus=capacity_cpus,
+        run_id=f"{resolved_run_id}_{policy_id.lower()}",
+        strict_invariants=strict_invariants,
+        runtime_predictor=runtime_predictor,
+        runtime_guard_k=runtime_guard_k,
+        strict_uncertainty_mode=strict_uncertainty_mode,
+        starvation_wait_cap_sec=starvation_wait_cap_sec,
+    )
+
+    baseline_jobs_path = out / f"{resolved_run_id}_{baseline_policy.lower()}_stress_jobs.parquet"
+    baseline_queue_path = out / f"{resolved_run_id}_{baseline_policy.lower()}_stress_queue.parquet"
+    baseline_inv_path = report_out / f"{resolved_run_id}_{baseline_policy.lower()}_stress_invariants.json"
+    baseline_sim_report_path = report_out / f"{resolved_run_id}_{baseline_policy.lower()}_stress_sim_report.json"
+
+    candidate_jobs_path = out / f"{resolved_run_id}_{policy_id.lower()}_stress_jobs.parquet"
+    candidate_queue_path = out / f"{resolved_run_id}_{policy_id.lower()}_stress_queue.parquet"
+    candidate_inv_path = report_out / f"{resolved_run_id}_{policy_id.lower()}_stress_invariants.json"
+    candidate_sim_report_path = report_out / f"{resolved_run_id}_{policy_id.lower()}_stress_sim_report.json"
+
+    baseline_sim.jobs_df.to_parquet(baseline_jobs_path, index=False)
+    baseline_sim.queue_series_df.to_parquet(baseline_queue_path, index=False)
+    write_json(baseline_inv_path, baseline_sim.invariant_report)
+    write_json(
+        baseline_sim_report_path,
+        {
+            "run_id": resolved_run_id,
+            "scenario": scenario,
+            "policy_id": baseline_policy,
+            "status": "ok",
+            "metrics": baseline_sim.metrics,
+            "objective_metrics": baseline_sim.objective_metrics,
+            "fallback_accounting": baseline_sim.fallback_accounting,
+            "jobs_artifact": str(baseline_jobs_path),
+            "queue_artifact": str(baseline_queue_path),
+        },
+    )
+
+    candidate_sim.jobs_df.to_parquet(candidate_jobs_path, index=False)
+    candidate_sim.queue_series_df.to_parquet(candidate_queue_path, index=False)
+    write_json(candidate_inv_path, candidate_sim.invariant_report)
+    write_json(
+        candidate_sim_report_path,
+        {
+            "run_id": resolved_run_id,
+            "scenario": scenario,
+            "policy_id": policy_id,
+            "status": "ok",
+            "metrics": candidate_sim.metrics,
+            "objective_metrics": candidate_sim.objective_metrics,
+            "fallback_accounting": candidate_sim.fallback_accounting,
+            "model_id": model,
+            "model_dir": str(resolved_model_dir) if resolved_model_dir is not None else None,
+            "jobs_artifact": str(candidate_jobs_path),
+            "queue_artifact": str(candidate_queue_path),
+        },
+    )
+
+    constraints = evaluate_constraint_contract(
+        candidate=candidate_sim.objective_metrics,
+        baseline=baseline_sim.objective_metrics,
+        starvation_rate_max=float(fairness_cfg.get("starvation_rate_max", 0.02)),
+        fairness_dev_delta_max=float(fairness_cfg.get("fairness_dev_delta_max", 0.05)),
+        jain_delta_max=float(fairness_cfg.get("jain_delta_max", 0.03)),
+    )
+    p95_bsld_delta = float(
+        baseline_sim.objective_metrics["p95_bsld"] - candidate_sim.objective_metrics["p95_bsld"]
+    )
+    utilization_delta = float(
+        candidate_sim.objective_metrics["utilization_cpu"] - baseline_sim.objective_metrics["utilization_cpu"]
+    )
+    p95_wait_delta = float(
+        baseline_sim.objective_metrics["p95_wait_sec"] - candidate_sim.objective_metrics["p95_wait_sec"]
+    )
+
+    degrade_signatures: list[str] = []
+    if p95_bsld_delta <= 0.0:
+        degrade_signatures.append("primary_kpi_not_improved")
+    if utilization_delta < 0.0:
+        degrade_signatures.append("utilization_regression")
+    if scenario == "heavy_tail" and p95_bsld_delta <= 0.0:
+        degrade_signatures.append("heavy_tail_limited_backfill_gain")
+    if scenario == "low_congestion" and abs(p95_wait_delta) < 1e-6:
+        degrade_signatures.append("low_congestion_near_zero_effect")
+    if scenario == "user_skew" and (
+        candidate_sim.objective_metrics["fairness_dev"] - baseline_sim.objective_metrics["fairness_dev"]
+    ) > 0.0:
+        degrade_signatures.append("user_skew_fairness_pressure")
+    if scenario == "burst_shock" and p95_wait_delta < 0.0:
+        degrade_signatures.append("burst_shock_tail_wait_regression")
+
+    stress_status = "pass" if constraints["constraints_passed"] else "fail"
+    stress_report_path = report_out / f"{resolved_run_id}_stress_report.json"
+    write_json(
+        stress_report_path,
+        {
+            "run_id": resolved_run_id,
+            "scenario": scenario,
+            "dataset_path": str(resolved_dataset),
+            "capacity_cpus": capacity_cpus,
+            "candidate_policy_id": policy_id,
+            "baseline_policy_id": baseline_policy,
+            "status": stress_status,
+            "constraints": constraints,
+            "deltas": {
+                "p95_bsld_delta": p95_bsld_delta,
+                "utilization_delta": utilization_delta,
+                "p95_wait_sec_delta": p95_wait_delta,
+            },
+            "degrade_signatures": degrade_signatures,
+            "baseline_report_path": str(baseline_sim_report_path),
+            "candidate_report_path": str(candidate_sim_report_path),
+            "candidate_fallback_accounting": candidate_sim.fallback_accounting,
+            "model_id": model,
+            "model_dir": str(resolved_model_dir) if resolved_model_dir is not None else None,
+        },
+    )
+
+    manifest = build_manifest(
+        command="hpcopt stress run",
+        inputs=[resolved_dataset, policy],
+        outputs=[
+            baseline_jobs_path,
+            baseline_queue_path,
+            baseline_inv_path,
+            baseline_sim_report_path,
+            candidate_jobs_path,
+            candidate_queue_path,
+            candidate_inv_path,
+            candidate_sim_report_path,
+            stress_report_path,
+        ],
+        params={
+            "run_id": resolved_run_id,
+            "scenario": scenario,
+            "capacity_cpus": capacity_cpus,
+            "baseline_policy": baseline_policy,
+            "candidate_policy": policy_id,
+            "model_id": model,
+            "model_dir": str(resolved_model_dir) if resolved_model_dir is not None else None,
+            "runtime_guard_k": runtime_guard_k,
+            "strict_uncertainty_mode": strict_uncertainty_mode,
+            "strict_invariants": strict_invariants,
+            "fairness_thresholds": constraints["thresholds"],
+        },
+        config_paths=[policy],
+        seeds=[],
+    )
+    manifest_path = report_out / f"{resolved_run_id}_stress_manifest.json"
+    write_manifest(manifest_path, manifest)
+
+    typer.echo(f"Stress status: {stress_status}")
+    typer.echo(f"Stress report: {stress_report_path}")
+    typer.echo(f"Stress manifest: {manifest_path}")
+    typer.echo(f"Baseline sim report: {baseline_sim_report_path}")
+    typer.echo(f"Candidate sim report: {candidate_sim_report_path}")
 
 
 @features_app.command("build")
-def features_build_cmd() -> None:
-    typer.echo("Feature pipeline CLI is scaffolded; implementation follows P0-08/P0-09.")
+def features_build_cmd(
+    dataset: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset"),
+    out: Path = typer.Option(Path("data/curated"), help="Feature dataset output directory"),
+    report_out: Path = typer.Option(Path("outputs/reports"), help="Feature report output directory"),
+    dataset_id: Optional[str] = typer.Option(None, help="Dataset ID override"),
+    n_folds: int = typer.Option(3, min=1, max=20, help="Number of chronological folds"),
+    train_fraction: float = typer.Option(0.70, min=0.1, max=0.95, help="Train fraction per fold"),
+    val_fraction: float = typer.Option(0.15, min=0.01, max=0.49, help="Validation fraction per fold"),
+) -> None:
+    if train_fraction + val_fraction >= 1.0:
+        raise typer.BadParameter("train_fraction + val_fraction must be < 1.0")
+
+    ds_id = dataset_id or dataset.stem
+    result = build_feature_dataset(
+        dataset_path=dataset,
+        out_dir=out,
+        report_dir=report_out,
+        dataset_id=ds_id,
+        n_folds=n_folds,
+        train_fraction=train_fraction,
+        val_fraction=val_fraction,
+    )
+
+    manifest = build_manifest(
+        command="hpcopt features build",
+        inputs=[dataset],
+        outputs=[
+            result.feature_dataset_path,
+            result.split_manifest_path,
+            result.feature_report_path,
+        ],
+        params={
+            "dataset_id": ds_id,
+            "feature_out_dir": str(out),
+            "report_out_dir": str(report_out),
+            "n_folds": n_folds,
+            "train_fraction": train_fraction,
+            "val_fraction": val_fraction,
+        },
+        seeds=[],
+    )
+    manifest_path = report_out / f"{ds_id}_features_manifest.json"
+    write_manifest(manifest_path, manifest)
+
+    typer.echo(f"Feature dataset: {result.feature_dataset_path}")
+    typer.echo(f"Split manifest: {result.split_manifest_path}")
+    typer.echo(f"Feature report: {result.feature_report_path}")
+    typer.echo(f"Features manifest: {manifest_path}")
+    typer.echo(f"Rows: {result.row_count}")
+    typer.echo(f"Folds: {result.fold_count}")
 
 
 @train_app.command("runtime")

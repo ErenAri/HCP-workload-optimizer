@@ -29,8 +29,6 @@ Substantial completed elements:
 
 Partially implemented or deferred:
 
-- full features pipeline (`hpcopt features build` scaffold),
-- stress execution orchestrator (`hpcopt stress run` scaffold),
 - production scheduler integration (shadow mode or online mode),
 - GPU-aware resource and energy models.
 
@@ -81,4 +79,3 @@ For a research-grade release:
 - fidelity and recommendation reports archived for each trace,
 - failure cases documented alongside successful outcomes,
 - complexity and determinism claims bounded to owned modules.
-

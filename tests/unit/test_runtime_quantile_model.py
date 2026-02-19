@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import json
+
 from hpcopt.models.runtime_quantile import RuntimeQuantilePredictor, train_runtime_quantile_models
 from hpcopt.simulate.stress import generate_stress_scenario
 
@@ -24,6 +26,17 @@ def test_runtime_quantile_training_and_inference(tmp_path: Path) -> None:
     assert (train.model_dir / "p90.joblib").exists()
     assert train.metrics_path.exists()
     assert train.metadata_path.exists()
+    metrics = json.loads(train.metrics_path.read_text(encoding="utf-8"))
+    assert set(metrics["naive_baselines"].keys()) == {
+        "global_median",
+        "global_mean",
+        "user_history_median",
+    }
+    assert set(metrics["p50_lift_vs_naive"].keys()) == {
+        "global_median",
+        "global_mean",
+        "user_history_median",
+    }
 
     predictor = RuntimeQuantilePredictor(train.model_dir)
     pred = predictor.predict_one(

@@ -44,6 +44,23 @@ Outputs:
 - trace profile JSON,
 - profile manifest.
 
+### Feature Pipeline
+
+```bash
+hpcopt features build \
+  --dataset <dataset.parquet> \
+  --out data/curated \
+  --report-out outputs/reports \
+  --n-folds 3
+```
+
+Outputs:
+
+- feature dataset parquet,
+- chronological split manifest,
+- feature quality report,
+- features manifest.
+
 ### Runtime Model Training
 
 ```bash
@@ -55,6 +72,24 @@ Outputs:
 - quantile model artifacts (`p10/p50/p90`),
 - metrics and metadata,
 - training manifest.
+
+### Stress Scenario Generation and Execution
+
+```bash
+hpcopt stress gen --scenario heavy_tail --out data/curated --n-jobs 5000
+hpcopt stress run \
+  --scenario heavy_tail \
+  --policy configs/simulation/policy_ml_backfill.yaml \
+  --model runtime_latest \
+  --capacity-cpus 64
+```
+
+Outputs:
+
+- generated stress dataset and metadata (`stress gen`),
+- baseline/candidate stress simulation artifacts (`stress run`),
+- stress report with constraint pass/fail and degrade signatures,
+- stress run manifest.
 
 ### Simulation
 
@@ -152,14 +187,7 @@ Outputs:
 hpcopt data lock-reference-suite --config configs/data/reference_suite.yaml --raw-dir data/raw
 ```
 
-## 3. Scaffolded Commands (Not Fully Implemented)
-
-- `hpcopt features build` (placeholder)
-- `hpcopt stress run` (placeholder orchestration)
-
-These commands are intentionally present as interface stubs pending deeper implementation.
-
-## 4. API Overview
+## 3. API Overview
 
 Service entrypoint:
 
@@ -170,7 +198,7 @@ hpcopt serve api --host 0.0.0.0 --port 8080
 Implementation:
 - `python/hpcopt/api/app.py`
 
-## 5. API Endpoints
+## 4. API Endpoints
 
 ### Health
 
@@ -198,14 +226,13 @@ Behavior:
 - deterministic capacity-fit baseline over provided candidate node CPU sizes,
 - returns fragmentation risk category (`low`, `medium`, `high`).
 
-## 6. API Documentation
+## 5. API Documentation
 
 When API is running:
 
 - OpenAPI UI: `http://localhost:8080/docs`
 
-## 7. Interface Stability Notes
+## 6. Interface Stability Notes
 
 - CLI commands and report schemas are treated as contract-bearing interfaces.
 - Artifact keys used by evaluation/recommendation pipelines should be considered stable unless versioned migration is introduced.
-
