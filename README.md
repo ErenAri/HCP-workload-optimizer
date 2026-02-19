@@ -99,7 +99,7 @@ schemas/
   run_manifest + fidelity + invariant + adapter schemas
 docs/
   formal technical documentation corpus
-claudedocs/
+design_docs/
   planning contracts and research appendix
 ```
 
@@ -301,8 +301,8 @@ Primary docs:
 
 Design and contract history:
 
-- `claudedocs/mvp_design_plan_python_rust_batsim.md`
-- `claudedocs/policy_spec_baselines_mvp.md`
-- `claudedocs/mvp_backlog_p0_p1_p2.md`
-- `claudedocs/systems_first_research_appendix.md`
+- `design_docs/mvp_design_plan_python_rust_batsim.md`
+- `design_docs/policy_spec_baselines_mvp.md`
+- `design_docs/mvp_backlog_p0_p1_p2.md`
+- `design_docs/systems_first_research_appendix.md`
 

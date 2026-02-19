@@ -143,7 +143,7 @@ This mode preserves a single downstream report interface regardless of simulator
 ## 8. Architectural Risks and Mitigations
 
 Risk: policy ambiguity during comparison.  
-Mitigation: formal policy contract (`claudedocs/policy_spec_baselines_mvp.md`) and adapter schemas.
+Mitigation: formal policy contract (`design_docs/policy_spec_baselines_mvp.md`) and adapter schemas.
 
 Risk: simulator artifacts mistaken for performance gains.  
 Mitigation: baseline and candidate fidelity gating prior to recommendation acceptance.

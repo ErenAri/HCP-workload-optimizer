@@ -72,7 +72,7 @@ def build_manifest(
     inputs: list[Path],
     outputs: list[Path],
     params: dict[str, Any],
-    policy_spec_path: Path | None = Path("claudedocs/policy_spec_baselines_mvp.md"),
+    policy_spec_path: Path | None = Path("design_docs/policy_spec_baselines_mvp.md"),
     config_paths: list[Path] | None = None,
     seeds: list[int] | None = None,
 ) -> dict[str, Any]:

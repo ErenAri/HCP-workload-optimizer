@@ -34,16 +34,16 @@ The MVP must show:
 ## 4) Success criteria (MVP acceptance gates)
 
 Gate 0: Baseline fidelity
-- Baseline policies are defined by contract in `claudedocs/policy_spec_baselines_mvp.md`.
+- Baseline policies are defined by contract in `design_docs/policy_spec_baselines_mvp.md`.
 - Replay historical trace with baseline policy and compare to observed metrics.
 - Fail fidelity if divergence is greater than 20% on any core metric or greater than 15% on two or more core metrics.
 - Core metrics for fidelity: mean wait, p95 wait, throughput, and makespan.
-- Throughput must use the evaluation-window definition from `claudedocs/policy_spec_baselines_mvp.md` section 1.1.
+- Throughput must use the evaluation-window definition from `design_docs/policy_spec_baselines_mvp.md` section 1.1.
 - Distribution fidelity metrics are also required:
 - wait-time KL divergence <= 0.20,
 - slowdown KS statistic <= 0.15,
 - queue-length time-series correlation >= 0.85.
-- Queue-series construction and sampling are defined in `claudedocs/policy_spec_baselines_mvp.md` section 2.6 and must be used for both observed and simulated traces.
+- Queue-series construction and sampling are defined in `design_docs/policy_spec_baselines_mvp.md` section 2.6 and must be used for both observed and simulated traces.
 
 Gate A: Data and reproducibility
 - Parse SWF traces into canonical schema with validation reports.
@@ -169,7 +169,7 @@ Simulation strategy:
 - Use Batsim as simulation core for scheduling policy replay.
 - Feed predicted runtime distributions from Python outputs.
 - Compare baseline policy vs candidate policies under same arrival stream.
-- Use exact baseline definitions from `claudedocs/policy_spec_baselines_mvp.md`.
+- Use exact baseline definitions from `design_docs/policy_spec_baselines_mvp.md`.
 
 Policy scenarios:
 - Baseline FIFO strict.
@@ -239,7 +239,7 @@ Secondary KPI:
 Hard constraints:
 - Fairness deviation and starvation must stay within configured thresholds.
 - Recommendations violating hard constraints are rejected.
-- Constraint formulas and thresholds are normatively defined in `claudedocs/policy_spec_baselines_mvp.md` section 2.7.
+- Constraint formulas and thresholds are normatively defined in `design_docs/policy_spec_baselines_mvp.md` section 2.7.
 
 Anti-cherry-picking rule:
 - The recommendation engine ranks candidates by primary KPI first, then secondary KPI, subject to hard constraints.
@@ -311,7 +311,7 @@ API behavior:
 
 ```text
 repo/
-  claudedocs/
+  design_docs/
   rust/
     swf-parser/
     sim-runner/
@@ -436,7 +436,7 @@ Phase 3:
 ## 19) Systems-first research artifact
 
 For research-grade systems presentation, use:
-- `claudedocs/systems_first_research_appendix.md`
+- `design_docs/systems_first_research_appendix.md`
 
 This appendix provides:
 - Formal model summary and transition obligations.

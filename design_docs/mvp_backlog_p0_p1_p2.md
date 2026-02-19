@@ -1,7 +1,7 @@
 # HPC Workload Optimizer Backlog (P0/P1/P2, Gate-Driven)
 
 Date: 2026-02-19  
-Applies to: `claudedocs/mvp_design_plan_python_rust_batsim.md`, `claudedocs/policy_spec_baselines_mvp.md`
+Applies to: `design_docs/mvp_design_plan_python_rust_batsim.md`, `design_docs/policy_spec_baselines_mvp.md`
 
 ## 1) Execution mode
 
@@ -52,7 +52,7 @@ Each run manifest must record the exact trace file hash and suite member ID.
 
 | ID | Task | Depends on | Complexity | Blocking risk | Output / DoD |
 |---|---|---|---|---|---|
-| P0-01 | Write baseline policy spec contract | - | S | Baseline policy disputes | `claudedocs/policy_spec_baselines_mvp.md` is normative and complete |
+| P0-01 | Write baseline policy spec contract | - | S | Baseline policy disputes | `design_docs/policy_spec_baselines_mvp.md` is normative and complete |
 | P0-27 | Lock reference trace suite metadata and hashes | P0-01 | S | Non-comparable benchmark claims | Reference-suite IDs, sources, and file hashes are committed and manifest-checked |
 | P0-02 | Define simulator state machine and invariant contract | P0-01 | S | Non-deterministic behavior | Formal transition and invariant contract exists |
 | P0-03 | Define canonical schema v1 with nullable `requested_mem` | - | S | Schema mismatch across stages | Canonical schema with explicit nullability/fallback rules |

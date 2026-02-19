@@ -1,7 +1,7 @@
 # Systems-First Research Appendix
 
 Date: 2026-02-19  
-Applies to: `claudedocs/mvp_design_plan_python_rust_batsim.md`, `claudedocs/policy_spec_baselines_mvp.md`
+Applies to: `design_docs/mvp_design_plan_python_rust_batsim.md`, `design_docs/policy_spec_baselines_mvp.md`
 
 ## 1) Formal model summary
 
@@ -36,7 +36,7 @@ For each transition, implementation must enforce:
 - Explicit state delta.
 
 Reference contract:
-- `claudedocs/policy_spec_baselines_mvp.md` section 2.3.
+- `design_docs/policy_spec_baselines_mvp.md` section 2.3.
 
 ## 3) Complexity analysis (expected)
 

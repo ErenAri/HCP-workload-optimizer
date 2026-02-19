@@ -30,12 +30,12 @@ The intent is to present the system as an engineering artifact, not only as an M
 
 ## Relation to Existing Design Files
 
-The `claudedocs/` directory retains original planning artifacts and policy contracts:
+The `design_docs/` directory retains original planning artifacts and policy contracts:
 
-- `claudedocs/mvp_design_plan_python_rust_batsim.md`
-- `claudedocs/policy_spec_baselines_mvp.md`
-- `claudedocs/mvp_backlog_p0_p1_p2.md`
-- `claudedocs/systems_first_research_appendix.md`
+- `design_docs/mvp_design_plan_python_rust_batsim.md`
+- `design_docs/policy_spec_baselines_mvp.md`
+- `design_docs/mvp_backlog_p0_p1_p2.md`
+- `design_docs/systems_first_research_appendix.md`
 
 These files remain authoritative for design history and contract evolution.  
 The `docs/` corpus consolidates that material into implementation-aligned technical documentation.
