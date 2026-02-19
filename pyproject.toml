@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hpc-workload-optimizer"
+version = "0.1.0"
+description = "Systems-first HPC workload optimizer (Python + Rust scaffolding)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [
+  { name = "HPC Workload Optimizer Team" }
+]
+dependencies = [
+  "typer>=0.12.3",
+  "pydantic>=2.8.2",
+  "pandas>=2.2.2",
+  "pyarrow>=16.1.0",
+  "pyyaml>=6.0.1",
+  "fastapi>=0.112.0",
+  "uvicorn>=0.30.0",
+  "scikit-learn>=1.5.0",
+  "joblib>=1.4.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.2"
+]
+
+[project.scripts]
+hpcopt = "hpcopt.cli.main:run"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-dir]
+"" = "python"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

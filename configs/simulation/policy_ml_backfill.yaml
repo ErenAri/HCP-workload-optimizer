@@ -1,0 +1,7 @@
+policy_id: ML_BACKFILL_P50
+runtime_guard_k: 0.5
+strict_uncertainty_mode: false
+starvation_wait_cap_sec: 172800
+fairness:
+  fairness_dev_delta_max: 0.05
+  jain_delta_max: 0.03

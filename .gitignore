@@ -1,0 +1,36 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+.claude/
+.docx_extract_*/
+._docx_*/
+._*.zip
+*.tmp
+*.docx
+
+# Data/artifacts
+data/raw/*
+!data/raw/.gitkeep
+data/curated/*
+!data/curated/.gitkeep
+outputs/*
+!outputs/batsim_README.rst
+!outputs/models/
+outputs/models/*
+!outputs/models/.gitkeep
+!outputs/simulations/
+outputs/simulations/*
+!outputs/simulations/.gitkeep
+!outputs/reports/
+outputs/reports/*
+!outputs/reports/.gitkeep
+
+# Rust
+target/
+Cargo.lock
+
+# Packaging artifacts
+python/hpc_workload_optimizer.egg-info/

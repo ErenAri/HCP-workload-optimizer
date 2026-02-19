@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hpcopt.local/schemas/adapter_decision.schema.json",
+  "title": "SchedulerAdapterDecision",
+  "type": "object",
+  "required": [
+    "policy_id",
+    "reservation_ts",
+    "decisions"
+  ],
+  "properties": {
+    "policy_id": {
+      "type": "string"
+    },
+    "reservation_ts": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "requested_cpus",
+          "runtime_estimate_sec",
+          "estimated_completion_ts",
+          "reason"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "integer"
+          },
+          "requested_cpus": {
+            "type": "integer"
+          },
+          "runtime_estimate_sec": {
+            "type": "integer"
+          },
+          "estimated_completion_ts": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

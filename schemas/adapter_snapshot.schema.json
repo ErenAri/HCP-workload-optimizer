@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hpcopt.local/schemas/adapter_snapshot.schema.json",
+  "title": "SchedulerAdapterSnapshot",
+  "type": "object",
+  "required": [
+    "clock_ts",
+    "capacity_cpus",
+    "free_cpus",
+    "queued_jobs",
+    "running_jobs"
+  ],
+  "properties": {
+    "clock_ts": {
+      "type": "integer"
+    },
+    "capacity_cpus": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "free_cpus": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "queued_jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "submit_ts",
+          "requested_cpus",
+          "runtime_estimate_sec"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "integer"
+          },
+          "submit_ts": {
+            "type": "integer"
+          },
+          "requested_cpus": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "runtime_estimate_sec": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "runtime_p90_sec": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "runtime_guard_sec": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "estimate_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "running_jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "job_id",
+          "end_ts",
+          "allocated_cpus"
+        ],
+        "properties": {
+          "job_id": {
+            "type": "integer"
+          },
+          "end_ts": {
+            "type": "integer"
+          },
+          "allocated_cpus": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

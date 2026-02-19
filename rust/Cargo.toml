@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "swf-parser",
+  "sim-runner",
+]
+resolver = "2"

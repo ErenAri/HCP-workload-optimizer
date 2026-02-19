@@ -1,0 +1,20 @@
+[
+  {
+    "job_id": 1,
+    "submit_ts": 0,
+    "runtime_actual_sec": 30,
+    "requested_cpus": 8
+  },
+  {
+    "job_id": 2,
+    "submit_ts": 5,
+    "runtime_actual_sec": 20,
+    "requested_cpus": 4
+  },
+  {
+    "job_id": 3,
+    "submit_ts": 5,
+    "runtime_actual_sec": 90,
+    "requested_cpus": 32
+  }
+]

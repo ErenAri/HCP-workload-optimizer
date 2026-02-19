@@ -1,0 +1,41 @@
+{
+  "clock_ts": 0,
+  "capacity_cpus": 8,
+  "free_cpus": 2,
+  "queued_jobs": [
+    {
+      "job_id": 100,
+      "submit_ts": 0,
+      "requested_cpus": 8,
+      "runtime_estimate_sec": 30,
+      "runtime_p90_sec": 30,
+      "runtime_guard_sec": 30,
+      "estimate_source": "prediction"
+    },
+    {
+      "job_id": 101,
+      "submit_ts": 1,
+      "requested_cpus": 2,
+      "runtime_estimate_sec": 5,
+      "runtime_p90_sec": 8,
+      "runtime_guard_sec": 6,
+      "estimate_source": "prediction"
+    },
+    {
+      "job_id": 102,
+      "submit_ts": 2,
+      "requested_cpus": 2,
+      "runtime_estimate_sec": 12,
+      "runtime_p90_sec": 15,
+      "runtime_guard_sec": 12,
+      "estimate_source": "requested_fallback"
+    }
+  ],
+  "running_jobs": [
+    {
+      "job_id": 200,
+      "end_ts": 10,
+      "allocated_cpus": 6
+    }
+  ]
+}

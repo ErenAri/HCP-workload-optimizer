@@ -1,0 +1,14 @@
+suite_id: pwa_reference_suite_v1
+traces:
+- id: ctc_sp2_1996
+  filename: CTC-SP2-1996-3.1-cln.swf.gz
+  source: https://www.cs.huji.ac.il/labs/parallel/workload/
+  sha256: 9fa28ac16c4386fb81b72a91d8bd8888281df2948a9d912769d387c5ee285bb4
+- id: sdsc_sp2_1998
+  filename: SDSC-SP2-1998-4.2-cln.swf.gz
+  source: https://www.cs.huji.ac.il/labs/parallel/workload/
+  sha256: e03fe48be50c4ab04d6bb2285296d9c3399e9c1f27ee79b754ad32a14abd9bac
+- id: hpc2n_2002
+  filename: HPC2N-2002-2.2-cln.swf.gz
+  source: https://www.cs.huji.ac.il/labs/parallel/workload/
+  sha256: 3c534857d6065cfd9cc35aac8d064c9c17172be7acf336de835006f43a626e64

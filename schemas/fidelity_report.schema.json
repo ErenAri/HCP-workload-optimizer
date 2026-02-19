@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hpcopt.local/schemas/fidelity_report.schema.json",
+  "title": "FidelityReport",
+  "type": "object",
+  "required": [
+    "run_id",
+    "status",
+    "aggregate_metrics",
+    "distribution_metrics"
+  ],
+  "properties": {
+    "run_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail"
+      ]
+    },
+    "aggregate_metrics": {
+      "type": "object"
+    },
+    "distribution_metrics": {
+      "type": "object"
+    },
+    "queue_series_contract": {
+      "type": "object"
+    },
+    "notes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,11 @@
+fidelity_gate:
+  aggregate:
+    single_metric_max_divergence: 0.20
+    two_metric_max_divergence: 0.15
+  distribution:
+    wait_kl_max: 0.20
+    slowdown_ks_max: 0.15
+    queue_corr_min: 0.85
+  queue_series:
+    mode: fixed_cadence
+    cadence_sec: 60
