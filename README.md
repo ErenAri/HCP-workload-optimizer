@@ -112,6 +112,120 @@ Language partition:
 - Python: orchestration, simulation logic, ML, fidelity, recommendations, CLI/API, observability.
 - Rust: SWF parser utility, deterministic runner scaffolding, adapter contract parity binary.
 
+### Architecture Diagrams
+
+#### 1) Component and language boundary view
+
+```mermaid
+flowchart LR
+  subgraph Inputs["Workload Inputs"]
+    SWF["SWF traces"]
+    SLURM["Slurm sacct --parsable2"]
+    PBS["PBS/Torque accounting logs"]
+  end
+
+  subgraph Py["Python platform (python/hpcopt)"]
+    ING["ingest/*"]
+    PROF["profile/*"]
+    FEAT["features/*"]
+    MOD["models/*"]
+    SIM["simulate/*"]
+    FID["fidelity + objective contracts"]
+    REC["recommend/engine.py"]
+    ART["artifacts/* + manifests"]
+    IFACE["cli/main.py + api/app.py"]
+    ORCH["orchestrate/credibility.py"]
+  end
+
+  subgraph Rs["Rust utilities (rust/)"]
+    RSWF["swf-parser"]
+    RADAPT["sim-runner adapter_contract"]
+    RBAT["sim-runner batsim_runner"]
+  end
+
+  SWF --> ING
+  SLURM --> ING
+  PBS --> ING
+  ING --> PROF --> FEAT --> MOD
+  ING --> SIM
+  MOD --> SIM --> FID --> REC --> ART
+  IFACE --> ING
+  IFACE --> SIM
+  IFACE --> REC
+  ORCH --> ING
+  ORCH --> MOD
+  ORCH --> SIM
+  ORCH --> FID
+  ORCH --> REC
+  RSWF --> ING
+  RADAPT --> SIM
+  RBAT --> SIM
+```
+
+#### 2) Policy evaluation and recommendation gate
+
+```mermaid
+flowchart TD
+  A["Canonical trace parquet"] --> B["Replay baselines<br/>FIFO_STRICT + EASY_BACKFILL_BASELINE"]
+  A --> C["Run candidate policy<br/>ML_BACKFILL_P50"]
+  A --> D["Run fidelity gate<br/>against observed trace"]
+
+  B --> E["Baseline sim report(s)"]
+  C --> F["Candidate sim report<br/>+ fallback accounting"]
+  D --> G["Fidelity report"]
+
+  E --> H["Recommendation engine"]
+  F --> H
+  G --> H
+
+  H --> I{"Primary KPI improved,<br/>constraints passed,<br/>and fidelity passed?"}
+  I -->|"Yes"| J["Accepted recommendation"]
+  I -->|"No"| K["Blocked recommendation<br/>+ failure narrative"]
+```
+
+#### 3) Deterministic simulation event loop
+
+```mermaid
+sequenceDiagram
+  participant T as Trace rows (sorted by submit_ts, job_id)
+  participant S as Simulation core
+  participant A as Policy adapter
+  participant I as Invariant checker
+
+  loop until all jobs complete
+    S->>S: next_ts = min(next_submit_ts, next_complete_ts)
+    S->>S: process completions at next_ts
+    S->>S: enqueue submissions at next_ts
+    S->>A: build SchedulerStateSnapshot
+    A-->>S: dispatch decisions
+    S->>S: start feasible jobs and update free CPUs
+    S->>I: validate invariants + state hash
+    I-->>S: pass or violation record
+  end
+```
+
+#### 4) Credibility suite orchestration path
+
+```mermaid
+flowchart LR
+  REF["configs/data/reference_suite.yaml"] --> SUITE["run_suite_credibility"]
+  SWEEP["configs/credibility/default_sweep.yaml"] --> SUITE
+  RAW["data/raw/*.swf.gz"] --> SUITE
+
+  SUITE --> LOOP{"for each reference trace"}
+  LOOP --> ING2["ingest_swf"]
+  ING2 --> PRO2["build_trace_profile"]
+  PRO2 --> FEAT2["build_feature_dataset"]
+  FEAT2 --> TRAIN2["train_runtime_quantile_models"]
+  TRAIN2 --> BASE2["simulate FIFO/EASY baselines"]
+  BASE2 --> CAND2["simulate ML candidate"]
+  CAND2 --> FID2["run_baseline_fidelity_gate"]
+  FID2 --> REC2["generate_recommendation_report"]
+  REC2 --> MAN2["build_manifest"]
+  MAN2 --> OUT2["outputs/credibility/[trace_id]/..."]
+  OUT2 --> SUM2["credibility_suite_summary.json"]
+```
+
 ## Repository Map
 
 ```text
