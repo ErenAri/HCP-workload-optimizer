@@ -55,7 +55,6 @@ _SHUTDOWN_REQUESTED = False
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager with SIGTERM/SIGINT handling."""
-    global _SHUTDOWN_REQUESTED
 
     def _signal_handler(signum, frame):
         global _SHUTDOWN_REQUESTED
