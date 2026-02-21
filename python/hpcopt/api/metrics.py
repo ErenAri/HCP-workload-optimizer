@@ -144,7 +144,10 @@ def get_metrics_response() -> str:
     """
     if not _ensure_metrics():
         return ""
-    return generate_latest().decode("utf-8")
+    payload = generate_latest()
+    if isinstance(payload, bytes):
+        return payload.decode("utf-8")
+    return str(payload)
 
 
 def is_available() -> bool:

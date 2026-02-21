@@ -63,26 +63,30 @@ def _queue_at_submit_features(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
     queue_cpu_map: dict[int, int] = {}
     events: list[tuple[int, int, int, int]] = []
     row_ids = np.arange(len(df), dtype=int)
-    for row_id, submit_ts, start_ts, requested_cpus in zip(
+    for row_idx, submit_ts, start_ts, requested_cpus in zip(
         row_ids,
         df["submit_ts"].to_numpy(dtype=int),
         df["start_ts"].to_numpy(dtype=int),
         df["requested_cpus"].to_numpy(dtype=int),
         strict=False,
     ):
-        events.append((int(submit_ts), 0, int(row_id), int(requested_cpus)))
-        events.append((int(start_ts), 1, int(row_id), int(requested_cpus)))
+        row_id = int(row_idx)
+        req_cpus = int(requested_cpus)
+        events.append((int(submit_ts), 0, row_id, req_cpus))
+        events.append((int(start_ts), 1, row_id, req_cpus))
 
     events.sort(key=lambda item: (item[0], item[1], item[2]))
     for _, event_type, row_id, requested_cpus in events:
+        rid = int(row_id)
+        req_cpus = int(requested_cpus)
         if event_type == 0:
-            queue_len_map[row_id] = queue_len
-            queue_cpu_map[row_id] = queue_cpu
+            queue_len_map[rid] = int(queue_len)
+            queue_cpu_map[rid] = int(queue_cpu)
             queue_len += 1
-            queue_cpu += requested_cpus
+            queue_cpu += req_cpus
         else:
             queue_len = max(0, queue_len - 1)
-            queue_cpu = max(0, queue_cpu - requested_cpus)
+            queue_cpu = max(0, queue_cpu - req_cpus)
 
     queue_len_series = pd.Series([queue_len_map.get(int(i), 0) for i in row_ids], index=df.index, dtype="int64")
     queue_cpu_series = pd.Series([queue_cpu_map.get(int(i), 0) for i in row_ids], index=df.index, dtype="int64")
@@ -348,4 +352,3 @@ def build_feature_dataset(
         row_count=int(len(features_df)),
         fold_count=int(len(folds)),
     )
-
