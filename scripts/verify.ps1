@@ -10,7 +10,9 @@ param(
     [switch]$SkipBenchmark,
     [switch]$SkipLoad,
     [switch]$SkipScience,
-    [switch]$SkipRepro
+    [switch]$SkipRepro,
+    [switch]$SkipApiCompat,
+    [switch]$SkipDrill
 )
 
 Set-StrictMode -Version Latest
@@ -216,6 +218,16 @@ try {
         }
     }
 
+    if (-not $SkipApiCompat) {
+        Invoke-Gate -Name "API compatibility (OpenAPI baseline)" -Action {
+            Invoke-CheckedCommand -Label "OpenAPI compatibility check" -Exe "python" -Args @(
+                "scripts/check_openapi_compat.py",
+                "--baseline",
+                "schemas/openapi_baseline.json"
+            )
+        }
+    }
+
     if (-not $SkipScience) {
         Invoke-Gate -Name "Scientific credibility (fidelity + recommendation)" -Action {
             $baselineRunId = "verify_${stamp}_baseline"
@@ -277,6 +289,14 @@ try {
         Invoke-Gate -Name "Reproducibility (suite test)" -Action {
             Invoke-CheckedCommand -Label "Tests (reproducibility)" -Exe "python" -Args @(
                 "-m", "pytest", "tests/unit/test_reproducibility_suite.py", "-q"
+            )
+        }
+    }
+
+    if (-not $SkipDrill) {
+        Invoke-Gate -Name "Disaster recovery drill (local backup/restore)" -Action {
+            Invoke-CheckedCommand -Label "DR backup/restore drill" -Exe "python" -Args @(
+                "scripts/dr_backup_restore_drill.py"
             )
         }
     }

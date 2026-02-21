@@ -1,0 +1,39 @@
+groups:
+  - name: hpcopt-slo-alerts
+    rules:
+      - alert: HPCOptHigh5xxRate
+        expr: sum(rate(hpcopt_requests_total{status=~"5.."}[5m])) / sum(rate(hpcopt_requests_total[5m])) > 0.02
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HPCOpt 5xx rate above threshold"
+          description: "HTTP 5xx ratio has exceeded 2% for 10 minutes."
+
+      - alert: HPCOptPredictionLatencyP95
+        expr: histogram_quantile(0.95, sum(rate(hpcopt_request_duration_seconds_bucket{endpoint=~"/v1/runtime/predict|/v1/resource-fit/predict"}[5m])) by (le, endpoint)) > 1.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HPCOpt prediction p95 latency high"
+          description: "Prediction endpoint p95 latency exceeded 1.5s."
+
+      - alert: HPCOptFallbackSpike
+        expr: rate(hpcopt_fallback_total[15m]) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HPCOpt fallback usage spike"
+          description: "Fallback usage exceeds expected envelope."
+
+      - alert: HPCOptModelNotLoaded
+        expr: hpcopt_model_loaded < 1
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HPCOpt model not loaded"
+          description: "Runtime model has not been loaded for 10 minutes."
+

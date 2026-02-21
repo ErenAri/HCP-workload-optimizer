@@ -1,0 +1,39 @@
+name: Staging Verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      trace_dataset:
+        description: "Optional canonical trace parquet path"
+        required: false
+        type: string
+      raw_trace:
+        description: "Optional raw SWF trace path"
+        required: false
+        type: string
+      strict_quality:
+        description: "Require fidelity=pass and recommendation=accepted"
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  verify:
+    name: Run staging verification gates
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Run verify script
+        shell: powershell
+        run: |
+          $args = @("-ExecutionPolicy", "Bypass", "-File", "scripts/verify.ps1")
+          if ("${{ inputs.trace_dataset }}") { $args += @("-TraceDataset", "${{ inputs.trace_dataset }}") }
+          if ("${{ inputs.raw_trace }}") { $args += @("-RawTrace", "${{ inputs.raw_trace }}") }
+          if ("${{ inputs.strict_quality }}" -eq "true") { $args += @("-StrictQuality") }
+          powershell @args
+

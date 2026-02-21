@@ -4,6 +4,8 @@ This project uses a machine-validated release checklist:
 
 - canonical checklist file: `configs/release/production_readiness.yaml`
 - validator script: `scripts/production_readiness_gate.py`
+- staging verification workflow: `.github/workflows/staging-verify.yml`
+- recurring ops drills: `.github/workflows/ops-drill.yml`
 
 Validation modes:
 
@@ -34,3 +36,13 @@ Before cutting a release tag:
 4. Push the checklist update before creating the release tag.
 
 If any required item is `todo` or has empty evidence, the release workflow will fail.
+
+## Operational Evidence
+
+Controls are evidenced by repository artifacts and automated gates, including:
+
+- runbooks in `docs/runbooks/`,
+- SLO/ownership/DR docs in `docs/ops/`,
+- security policies in `docs/security/`,
+- API compatibility policy in `docs/api/versioning-and-deprecation.md`,
+- OpenAPI baseline and checker (`schemas/openapi_baseline.json`, `scripts/check_openapi_compat.py`).

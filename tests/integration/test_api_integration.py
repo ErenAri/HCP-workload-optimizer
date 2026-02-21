@@ -75,7 +75,6 @@ def test_resource_fit_predict(client: TestClient) -> None:
 def test_auth_enforcement() -> None:
     """Test that auth middleware blocks requests when HPCOPT_API_KEYS is set."""
     with patch.dict(os.environ, {"HPCOPT_API_KEYS": "test-key-1,test-key-2"}):
-        # Need to reimport to pick up env change - test pattern
         client = TestClient(app)
 
         # Health should be exempt
@@ -88,8 +87,11 @@ def test_auth_enforcement() -> None:
             "/v1/runtime/predict",
             json=payload,
         )
-        # Note: Without middleware wired, this may pass. This tests the intent.
-        # Full auth testing requires middleware integration.
+        assert response.status_code == 401
+        body = response.json()
+        assert body["error"]["code"] == "UNAUTHORIZED"
+        assert "trace_id" in body["error"]
+        assert "X-Trace-ID" in response.headers
 
 
 def test_runtime_predict_validation(client: TestClient) -> None:

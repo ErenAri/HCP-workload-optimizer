@@ -645,12 +645,39 @@ Use an existing canonical dataset:
 powershell -ExecutionPolicy Bypass -File scripts/verify.ps1 -TraceDataset data/curated/ctc_sp2_1996.parquet
 ```
 
+API compatibility check:
+
+```bash
+python scripts/check_openapi_compat.py --baseline schemas/openapi_baseline.json
+```
+
+Disaster recovery drill (local backup/restore rehearsal):
+
+```bash
+python scripts/dr_backup_restore_drill.py
+```
+
 ## Documentation
 
 Primary docs:
 
 - `docs/README.md`
 - `docs/production-readiness-checklist.md`
+- `docs/ops/slo-and-error-budget.md`
+- `docs/ops/ownership-matrix.md`
+- `docs/ops/model-acceptance.md`
+- `docs/ops/deployment-safety.md`
+- `docs/ops/disaster-recovery.md`
+- `docs/runbooks/incident-response.md`
+- `docs/runbooks/api-latency-degradation.md`
+- `docs/runbooks/high-5xx-rate.md`
+- `docs/runbooks/model-fallback-spike.md`
+- `docs/runbooks/release-rollback.md`
+- `docs/security/secrets-management.md`
+- `docs/security/vulnerability-management.md`
+- `docs/security/access-control.md`
+- `docs/mlops/model-lifecycle.md`
+- `docs/api/versioning-and-deprecation.md`
 - `docs/01-project-charter.md`
 - `docs/02-system-architecture.md`
 - `docs/03-data-model-and-ingestion.md`
@@ -679,3 +706,7 @@ Production release tags are gated by `scripts/production_readiness_gate.py` agai
   - every required check marked `done`,
   - non-empty evidence for each required check,
   - recent `metadata.reviewed_at_utc` (<=30 days old).
+- CI also runs:
+  - OpenAPI compatibility baseline check (`scripts/check_openapi_compat.py`),
+  - security dependency audit (`pip-audit`),
+  - secret scanning (`gitleaks`).

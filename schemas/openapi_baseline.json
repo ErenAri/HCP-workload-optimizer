@@ -1,0 +1,441 @@
+{
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "ResourceFitRequest": {
+        "properties": {
+          "candidate_node_cpus": {
+            "items": {
+              "type": "integer"
+            },
+            "minItems": 1,
+            "title": "Candidate Node Cpus",
+            "type": "array"
+          },
+          "queue_depth_jobs": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Depth Jobs"
+          },
+          "requested_cpus": {
+            "minimum": 1.0,
+            "title": "Requested Cpus",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "requested_cpus",
+          "candidate_node_cpus"
+        ],
+        "title": "ResourceFitRequest",
+        "type": "object"
+      },
+      "ResourceFitResponse": {
+        "properties": {
+          "fragmentation_risk": {
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Fragmentation Risk",
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "recommendation": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                }
+              ]
+            },
+            "title": "Recommendation",
+            "type": "object"
+          }
+        },
+        "required": [
+          "recommendation",
+          "fragmentation_risk",
+          "notes"
+        ],
+        "title": "ResourceFitResponse",
+        "type": "object"
+      },
+      "RuntimePredictRequest": {
+        "properties": {
+          "group_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Id"
+          },
+          "partition_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Partition Id"
+          },
+          "queue_depth_jobs": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Depth Jobs"
+          },
+          "queue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Id"
+          },
+          "requested_cpus": {
+            "minimum": 1.0,
+            "title": "Requested Cpus",
+            "type": "integer"
+          },
+          "requested_mem": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Mem"
+          },
+          "requested_runtime_sec": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Runtime Sec"
+          },
+          "runtime_guard_k": {
+            "default": 0.5,
+            "maximum": 2.0,
+            "minimum": 0.0,
+            "title": "Runtime Guard K",
+            "type": "number"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "User id when available",
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "requested_cpus"
+        ],
+        "title": "RuntimePredictRequest",
+        "type": "object"
+      },
+      "RuntimePredictResponse": {
+        "properties": {
+          "fallback_used": {
+            "title": "Fallback Used",
+            "type": "boolean"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "predictor_version": {
+            "title": "Predictor Version",
+            "type": "string"
+          },
+          "runtime_guard_sec": {
+            "title": "Runtime Guard Sec",
+            "type": "integer"
+          },
+          "runtime_p50_sec": {
+            "title": "Runtime P50 Sec",
+            "type": "integer"
+          },
+          "runtime_p90_sec": {
+            "title": "Runtime P90 Sec",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "predictor_version",
+          "runtime_p50_sec",
+          "runtime_p90_sec",
+          "runtime_guard_sec",
+          "fallback_used",
+          "notes"
+        ],
+        "title": "RuntimePredictResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Systems-first API for runtime/resource-fit predictions and HPC advisory.",
+    "title": "HPC Workload Optimizer API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/health": {
+      "get": {
+        "description": "Health check with model staleness, disk, memory, config validation.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/metrics": {
+      "get": {
+        "description": "Prometheus metrics endpoint.",
+        "operationId": "metrics_metrics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Metrics"
+      }
+    },
+    "/ready": {
+      "get": {
+        "description": "Kubernetes readiness probe.",
+        "operationId": "ready_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Ready Ready Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready"
+      }
+    },
+    "/v1/resource-fit/predict": {
+      "post": {
+        "operationId": "predict_resource_fit_v1_resource_fit_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResourceFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResourceFitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Predict Resource Fit"
+      }
+    },
+    "/v1/runtime/predict": {
+      "post": {
+        "operationId": "predict_runtime_v1_runtime_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuntimePredictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimePredictResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Predict Runtime"
+      }
+    },
+    "/v1/system/status": {
+      "get": {
+        "operationId": "system_status_v1_system_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response System Status V1 System Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "System Status"
+      }
+    }
+  }
+}

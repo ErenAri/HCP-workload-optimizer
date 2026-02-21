@@ -27,6 +27,26 @@ The intent is to present the system as an engineering artifact, not only as an M
    Gate-driven roadmap and research extensions.
 11. `docs/paper_outline.md`  
    Publication-oriented manuscript structure, contribution framing, and results checklist.
+12. `docs/production-readiness-checklist.md`
+    Release gating process and production checklist workflow.
+
+## Operational Documentation
+
+- `docs/ops/slo-and-error-budget.md`
+- `docs/ops/ownership-matrix.md`
+- `docs/ops/model-acceptance.md`
+- `docs/ops/deployment-safety.md`
+- `docs/ops/disaster-recovery.md`
+- `docs/runbooks/incident-response.md`
+- `docs/runbooks/api-latency-degradation.md`
+- `docs/runbooks/high-5xx-rate.md`
+- `docs/runbooks/model-fallback-spike.md`
+- `docs/runbooks/release-rollback.md`
+- `docs/security/secrets-management.md`
+- `docs/security/vulnerability-management.md`
+- `docs/security/access-control.md`
+- `docs/mlops/model-lifecycle.md`
+- `docs/api/versioning-and-deprecation.md`
 
 ## Relation to Existing Design Files
 
