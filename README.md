@@ -558,6 +558,7 @@ Available endpoints:
 
 - `GET /health` -- service health
 - `GET /ready` -- readiness check (model availability)
+- `GET /v1/system/status` -- process uptime + model/metrics availability status
 - `POST /v1/runtime/predict` -- runtime quantile predictions
 - `POST /v1/resource-fit/predict` -- resource fit and fragmentation risk
 - `GET /metrics` -- Prometheus metrics (when `prometheus_client` is installed)
@@ -567,6 +568,12 @@ OpenAPI docs: `http://localhost:8080/docs`
 Authentication: set `HPCOPT_API_KEYS` environment variable (comma-separated) to enable API key authentication via `X-API-Key` header. Health and readiness endpoints are always exempt.
 
 Runtime prediction endpoint automatically uses trained model artifacts when available; otherwise it falls back to deterministic heuristic behavior.
+
+API response contract:
+
+- every response includes `X-Trace-ID` and `X-Correlation-ID`,
+- prediction responses include `X-Model-Version` and `X-Fallback-Used`,
+- validation/auth/rate-limit/internal failures return an `error` object with `code`, `message`, and `trace_id`.
 
 ## Reproducibility and Contracts
 

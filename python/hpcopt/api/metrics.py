@@ -7,7 +7,7 @@ becomes a no-op.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, cast
 
 # ---------------------------------------------------------------------------
 # Graceful import – metrics are entirely optional.
@@ -144,7 +144,7 @@ def get_metrics_response() -> str:
     """
     if not _ensure_metrics():
         return ""
-    payload = generate_latest()
+    payload = cast(bytes | str, generate_latest())
     if isinstance(payload, bytes):
         return payload.decode("utf-8")
     return str(payload)

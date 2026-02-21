@@ -15,6 +15,7 @@ def test_health_endpoint() -> None:
     payload = response.json()
     assert payload["status"] == "ok"
     assert payload["service"] == "hpcopt-api"
+    assert "X-Trace-ID" in response.headers
 
 
 def test_runtime_predict_endpoint() -> None:
@@ -32,6 +33,10 @@ def test_runtime_predict_endpoint() -> None:
     assert payload["runtime_p50_sec"] > 0
     assert payload["runtime_p90_sec"] >= payload["runtime_p50_sec"]
     assert payload["runtime_guard_sec"] >= payload["runtime_p50_sec"]
+    assert "X-Trace-ID" in response.headers
+    assert response.headers["X-Correlation-ID"] == response.headers["X-Trace-ID"]
+    assert "X-Model-Version" in response.headers
+    assert response.headers["X-Fallback-Used"] in {"true", "false"}
 
 
 def test_resource_fit_endpoint() -> None:
@@ -45,6 +50,16 @@ def test_resource_fit_endpoint() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["recommendation"]["recommended_node_cpus"] == 16
+
+
+def test_system_status_endpoint() -> None:
+    response = client.get("/v1/system/status")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["service"] == "hpcopt-api"
+    assert "uptime_seconds" in payload
+    assert isinstance(payload["shutdown_requested"], bool)
 
 
 def test_runtime_predict_uses_trained_model_when_available(tmp_path, monkeypatch) -> None:

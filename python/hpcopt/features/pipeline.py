@@ -62,7 +62,7 @@ def _queue_at_submit_features(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
     queue_len_map: dict[int, int] = {}
     queue_cpu_map: dict[int, int] = {}
     events: list[tuple[int, int, int, int]] = []
-    row_ids = np.arange(len(df), dtype=int)
+    row_ids = list(range(len(df)))
     for row_idx, submit_ts, start_ts, requested_cpus in zip(
         row_ids,
         df["submit_ts"].to_numpy(dtype=int),
@@ -70,7 +70,7 @@ def _queue_at_submit_features(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
         df["requested_cpus"].to_numpy(dtype=int),
         strict=False,
     ):
-        row_id = int(row_idx)
+        row_id = row_idx
         req_cpus = int(requested_cpus)
         events.append((int(submit_ts), 0, row_id, req_cpus))
         events.append((int(start_ts), 1, row_id, req_cpus))
@@ -88,8 +88,8 @@ def _queue_at_submit_features(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
             queue_len = max(0, queue_len - 1)
             queue_cpu = max(0, queue_cpu - req_cpus)
 
-    queue_len_series = pd.Series([queue_len_map.get(int(i), 0) for i in row_ids], index=df.index, dtype="int64")
-    queue_cpu_series = pd.Series([queue_cpu_map.get(int(i), 0) for i in row_ids], index=df.index, dtype="int64")
+    queue_len_series = pd.Series([queue_len_map.get(i, 0) for i in row_ids], index=df.index, dtype="int64")
+    queue_cpu_series = pd.Series([queue_cpu_map.get(i, 0) for i in row_ids], index=df.index, dtype="int64")
     return queue_len_series, queue_cpu_series
 
 

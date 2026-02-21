@@ -43,6 +43,21 @@ def test_runtime_predict_fallback(client: TestClient) -> None:
     assert data["fallback_used"] is True
     assert data["runtime_p50_sec"] > 0
     assert data["runtime_p90_sec"] >= data["runtime_p50_sec"]
+    assert response.headers["X-Fallback-Used"] == "true"
+    assert "X-Trace-ID" in response.headers
+
+
+def test_runtime_predict_response_headers(client: TestClient) -> None:
+    payload = {
+        "requested_cpus": 8,
+        "requested_runtime_sec": 1200,
+    }
+    response = client.post("/v1/runtime/predict", json=payload)
+    assert response.status_code == 200
+    assert "X-Trace-ID" in response.headers
+    assert response.headers["X-Correlation-ID"] == response.headers["X-Trace-ID"]
+    assert "X-Model-Version" in response.headers
+    assert response.headers["X-Fallback-Used"] in ("true", "false")
 
 
 def test_resource_fit_predict(client: TestClient) -> None:
@@ -82,3 +97,6 @@ def test_runtime_predict_validation(client: TestClient) -> None:
     payload = {"requested_cpus": -1}
     response = client.post("/v1/runtime/predict", json=payload)
     assert response.status_code == 422
+    body = response.json()
+    assert body["error"]["code"] == "VALIDATION_ERROR"
+    assert "trace_id" in body["error"]
