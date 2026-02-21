@@ -55,7 +55,7 @@ def compute_permutation_importance(
         scoring="neg_mean_absolute_error",
     )
 
-    ranked = []
+    ranked: list[dict[str, Any]] = []
     for i, col in enumerate(FEATURE_COLUMNS):
         ranked.append(
             {
@@ -70,7 +70,7 @@ def compute_permutation_importance(
                 ),
             }
         )
-    ranked.sort(key=lambda x: x["importance_mean"], reverse=True)
+    ranked.sort(key=lambda x: float(x["importance_mean"]), reverse=True)
     return {
         "quantile": quantile_name,
         "n_repeats": n_repeats,
@@ -118,7 +118,7 @@ def _try_shap_importance(
             feature_names = [f"feature_{i}" for i in range(X_transformed.shape[1])]
 
         mean_abs_shap = np.abs(shap_values).mean(axis=0)
-        features = []
+        features: list[dict[str, Any]] = []
         for i, name in enumerate(feature_names):
             features.append(
                 {
@@ -126,7 +126,7 @@ def _try_shap_importance(
                     "mean_abs_shap": float(mean_abs_shap[i]),
                 }
             )
-        features.sort(key=lambda x: x["mean_abs_shap"], reverse=True)
+        features.sort(key=lambda x: float(x["mean_abs_shap"]), reverse=True)
 
         return {
             "quantile": quantile_name,

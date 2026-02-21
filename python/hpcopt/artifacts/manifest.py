@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import json
 import logging
 import platform
 import subprocess
@@ -11,7 +10,8 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
-from hpcopt.utils.io import sha256_path as _sha256_path, write_json
+from hpcopt.utils.io import sha256_path as _sha256_path
+from hpcopt.utils.io import write_json
 
 logger = logging.getLogger(__name__)
 

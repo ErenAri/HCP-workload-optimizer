@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
-import hashlib
-import logging
 
 import joblib
 import numpy as np
@@ -357,7 +356,14 @@ def _load_model_hashes(model_dir: Path) -> dict[str, str] | None:
         return None
     try:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        return metadata.get("model_hashes")
+        hashes = metadata.get("model_hashes") if isinstance(metadata, dict) else None
+        if not isinstance(hashes, dict):
+            return None
+        out: dict[str, str] = {}
+        for key, value in hashes.items():
+            if isinstance(key, str) and isinstance(value, str):
+                out[key] = value
+        return out or None
     except (json.JSONDecodeError, OSError) as exc:
         logger.warning("Could not load model metadata for hash verification: %s", exc)
         return None

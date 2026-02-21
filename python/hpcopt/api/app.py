@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime as dt
+import json
 import logging
 import os
 import signal
@@ -7,7 +9,7 @@ import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Literal, cast
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -117,7 +119,7 @@ async def request_middleware(request: Request, call_next) -> Response:
             )
 
     # Process request
-    response = await call_next(request)
+    response = cast(Response, await call_next(request))
     duration = time.time() - start_time
 
     # Add correlation ID to response
@@ -216,21 +218,21 @@ def health() -> dict[str, object]:
 
     # Model check
     model_dir = resolve_runtime_model_dir()
-    model_loaded = model_dir is not None and model_dir.exists()
+    model_loaded = bool(model_dir is not None and model_dir.exists())
     if not model_loaded:
         checks.append("runtime_model_not_loaded")
 
     model_staleness_sec = None
-    if model_loaded:
+    if model_dir is not None:
         metadata_path = model_dir / "metadata.json"
         if metadata_path.exists():
-            import json
-            import datetime as dt
             try:
                 meta = json.loads(metadata_path.read_text(encoding="utf-8"))
                 trained_at = meta.get("trained_at_utc")
                 if trained_at:
                     trained_dt = dt.datetime.fromisoformat(trained_at)
+                    if trained_dt.tzinfo is None:
+                        trained_dt = trained_dt.replace(tzinfo=dt.UTC)
                     model_staleness_sec = (dt.datetime.now(tz=dt.UTC) - trained_dt).total_seconds()
                     if model_staleness_sec > 86400 * 30:
                         checks.append("model_stale_over_30d")
@@ -251,9 +253,6 @@ def health() -> dict[str, object]:
     config_ok = Path("configs/simulation/fidelity_gate.yaml").exists()
     if not config_ok:
         checks.append("fidelity_gate_config_missing")
-
-    if checks and status == "ok":
-        status = "degraded"
 
     return {
         "status": status,
@@ -357,6 +356,7 @@ def predict_resource_fit(payload: ResourceFitRequest) -> ResourceFitResponse:
 
     waste = max(fit_cpu - payload.requested_cpus, 0)
     waste_ratio = waste / fit_cpu if fit_cpu else 0.0
+    risk: Literal["low", "medium", "high"]
     if waste_ratio <= 0.15:
         risk = "low"
     elif waste_ratio <= 0.35:

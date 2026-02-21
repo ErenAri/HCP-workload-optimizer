@@ -22,7 +22,10 @@ class DossierResult:
 
 def _safe_load_json(path: Path) -> dict[str, Any] | None:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            return payload
+        return None
     except (json.JSONDecodeError, OSError):
         return None
 

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-from hpcopt.utils.io import ensure_dir, sha256_path as _sha256_path, write_json
+from hpcopt.utils.io import ensure_dir, write_json
+from hpcopt.utils.io import sha256_path as _sha256_path
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +124,7 @@ def _parse_reqmem(value: str) -> int | None:
     unit_suffix = value[-1] if value[-1] in ("c", "n") else ""
     numeric_part = value[: -1] if unit_suffix else value
 
-    multiplier = 1  # assume megabytes
+    multiplier: float = 1.0  # assume megabytes
     if numeric_part.endswith("G") or numeric_part.endswith("g"):
         multiplier = 1024
         numeric_part = numeric_part[:-1]

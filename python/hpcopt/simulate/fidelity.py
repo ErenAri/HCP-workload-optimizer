@@ -26,7 +26,6 @@ from hpcopt.simulate.objective import (
 )
 from hpcopt.utils.io import write_json
 
-
 DEFAULT_FIDELITY_THRESHOLDS: dict[str, Any] = {
     "fidelity_gate": {
         "aggregate": {

@@ -9,8 +9,8 @@ import pandas as pd
 import typer
 import yaml
 
-from hpcopt.artifacts.manifest import build_manifest, write_manifest
 from hpcopt.artifacts.benchmark import run_benchmark_suite
+from hpcopt.artifacts.manifest import build_manifest, write_manifest
 from hpcopt.artifacts.report_export import export_run_report
 from hpcopt.data.reference_suite import (
     assert_reference_by_filename_and_hash,
@@ -26,15 +26,14 @@ from hpcopt.models.runtime_quantile import (
 )
 from hpcopt.profile.trace_profile import build_trace_profile
 from hpcopt.recommend.engine import generate_recommendation_report
-from hpcopt.simulate.core import SUPPORTED_POLICIES, run_simulation_from_trace
-from hpcopt.simulate.fidelity import run_baseline_fidelity_gate, run_candidate_fidelity_report
-from hpcopt.simulate.objective import evaluate_constraint_contract
 from hpcopt.simulate.batsim import (
     SUPPORTED_EDC_MODES,
     build_batsim_run_config,
     invoke_batsim_run,
-    normalize_batsim_run_outputs,
 )
+from hpcopt.simulate.core import SUPPORTED_POLICIES, run_simulation_from_trace
+from hpcopt.simulate.fidelity import run_baseline_fidelity_gate
+from hpcopt.simulate.objective import evaluate_constraint_contract
 from hpcopt.simulate.stress import generate_stress_scenario
 from hpcopt.utils.io import ensure_dir, write_json
 
@@ -218,7 +217,12 @@ def features_build_cmd(
         command="hpcopt features build",
         inputs=[dataset],
         outputs=[result.feature_dataset_path, result.split_manifest_path, result.feature_report_path],
-        params={"dataset_id": ds_id, "n_folds": n_folds, "train_fraction": train_fraction, "val_fraction": val_fraction},
+        params={
+            "dataset_id": ds_id,
+            "n_folds": n_folds,
+            "train_fraction": train_fraction,
+            "val_fraction": val_fraction,
+        },
         seeds=[],
     )
     manifest_path = report_out / f"{ds_id}_features_manifest.json"
@@ -509,7 +513,15 @@ def simulate_replay_baselines_cmd(
         }
 
     summary_path = report_out / f"{resolved_run_id}_baseline_replay_report.json"
-    write_json(summary_path, {"run_id": resolved_run_id, "trace": str(trace), "capacity_cpus": capacity_cpus, "policies": combined})
+    write_json(
+        summary_path,
+        {
+            "run_id": resolved_run_id,
+            "trace": str(trace),
+            "capacity_cpus": capacity_cpus,
+            "policies": combined,
+        },
+    )
     manifest = build_manifest(
         command="hpcopt simulate replay-baselines", inputs=[trace, reference_suite_config],
         outputs=outputs + [summary_path], params={"run_id": resolved_run_id, "capacity_cpus": capacity_cpus},
@@ -565,7 +577,10 @@ def stress_run_cmd(
     cfg = yaml.safe_load(policy.read_text(encoding="utf-8"))
     policy_id = str(cfg.get("policy_id", "ML_BACKFILL_P50"))
     runtime_guard_k = float(cfg.get("runtime_guard_k", 0.5))
-    resolved_run_id = run_id or f"stress_{scenario}_{policy_id.lower()}_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
+    resolved_run_id = (
+        run_id
+        or f"stress_{scenario}_{policy_id.lower()}_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
+    )
     trace_df = pd.read_parquet(resolved_dataset)
 
     runtime_predictor = None
@@ -774,7 +789,7 @@ def analysis_sensitivity_sweep_cmd(
     seed: int = typer.Option(42),
     k_values: str = typer.Option("0.0,0.25,0.5,0.75,1.0,1.5", help="Comma-separated k values"),
 ) -> None:
-    from hpcopt.analysis.sensitivity import run_guard_k_sweep, build_sensitivity_report
+    from hpcopt.analysis.sensitivity import build_sensitivity_report, run_guard_k_sweep
     ensure_dir(out)
     trace_df = pd.read_parquet(trace)
     k_list = [float(k.strip()) for k in k_values.split(",")]
@@ -889,7 +904,12 @@ def lock_reference_suite_cmd(
     out: Path = typer.Option(Path("outputs/reports/reference_suite_lock_report.json")),
     strict_missing: bool = typer.Option(False),
 ) -> None:
-    report = lock_reference_suite_hashes(config_path=config, raw_dir=raw_dir, out_report_path=out, strict_missing=strict_missing)
+    report = lock_reference_suite_hashes(
+        config_path=config,
+        raw_dir=raw_dir,
+        out_report_path=out,
+        strict_missing=strict_missing,
+    )
     typer.echo(f"Suite lock updated: {report['updated']}")
     typer.echo(f"Missing files: {len(report['missing_files'])}")
 

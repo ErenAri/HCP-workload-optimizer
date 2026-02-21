@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import random
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -70,14 +70,20 @@ class TuningResult:
     payload: dict[str, Any]
 
 
-# Default hyperparams range for search
+# Default hyperparameter ranges for search.
+N_ESTIMATORS_CHOICES = [50, 80, 100, 120, 150, 200, 300]
+LEARNING_RATE_CHOICES = [0.01, 0.02, 0.05, 0.08, 0.1, 0.15]
+MAX_DEPTH_CHOICES = [2, 3, 4, 5, 6]
+SUBSAMPLE_CHOICES = [0.6, 0.7, 0.8, 0.9, 1.0]
+MIN_SAMPLES_LEAF_CHOICES = [5, 10, 20, 30]
+MIN_SAMPLES_SPLIT_CHOICES = [10, 20, 30, 50]
 SEARCH_SPACE = {
-    "n_estimators": [50, 80, 100, 120, 150, 200, 300],
-    "learning_rate": [0.01, 0.02, 0.05, 0.08, 0.1, 0.15],
-    "max_depth": [2, 3, 4, 5, 6],
-    "subsample": [0.6, 0.7, 0.8, 0.9, 1.0],
-    "min_samples_leaf": [5, 10, 20, 30],
-    "min_samples_split": [10, 20, 30, 50],
+    "n_estimators": N_ESTIMATORS_CHOICES,
+    "learning_rate": LEARNING_RATE_CHOICES,
+    "max_depth": MAX_DEPTH_CHOICES,
+    "subsample": SUBSAMPLE_CHOICES,
+    "min_samples_leaf": MIN_SAMPLES_LEAF_CHOICES,
+    "min_samples_split": MIN_SAMPLES_SPLIT_CHOICES,
 }
 
 
@@ -166,12 +172,12 @@ def _random_search(
 
     for trial_idx in range(n_trials):
         params = HyperParams(
-            n_estimators=rng.choice(SEARCH_SPACE["n_estimators"]),
-            learning_rate=rng.choice(SEARCH_SPACE["learning_rate"]),
-            max_depth=rng.choice(SEARCH_SPACE["max_depth"]),
-            subsample=rng.choice(SEARCH_SPACE["subsample"]),
-            min_samples_leaf=rng.choice(SEARCH_SPACE["min_samples_leaf"]),
-            min_samples_split=rng.choice(SEARCH_SPACE["min_samples_split"]),
+            n_estimators=rng.choice(N_ESTIMATORS_CHOICES),
+            learning_rate=rng.choice(LEARNING_RATE_CHOICES),
+            max_depth=rng.choice(MAX_DEPTH_CHOICES),
+            subsample=rng.choice(SUBSAMPLE_CHOICES),
+            min_samples_leaf=rng.choice(MIN_SAMPLES_LEAF_CHOICES),
+            min_samples_split=rng.choice(MIN_SAMPLES_SPLIT_CHOICES),
         )
         try:
             score = _chronological_cv_score(
@@ -219,17 +225,20 @@ def _optuna_search(
 
     def objective(trial: optuna.Trial) -> float:
         params = HyperParams(
-            n_estimators=trial.suggest_categorical("n_estimators", SEARCH_SPACE["n_estimators"]),
+            n_estimators=trial.suggest_categorical("n_estimators", N_ESTIMATORS_CHOICES),
             learning_rate=trial.suggest_categorical(
-                "learning_rate", SEARCH_SPACE["learning_rate"]
+                "learning_rate",
+                LEARNING_RATE_CHOICES,
             ),
-            max_depth=trial.suggest_categorical("max_depth", SEARCH_SPACE["max_depth"]),
-            subsample=trial.suggest_categorical("subsample", SEARCH_SPACE["subsample"]),
+            max_depth=trial.suggest_categorical("max_depth", MAX_DEPTH_CHOICES),
+            subsample=trial.suggest_categorical("subsample", SUBSAMPLE_CHOICES),
             min_samples_leaf=trial.suggest_categorical(
-                "min_samples_leaf", SEARCH_SPACE["min_samples_leaf"]
+                "min_samples_leaf",
+                MIN_SAMPLES_LEAF_CHOICES,
             ),
             min_samples_split=trial.suggest_categorical(
-                "min_samples_split", SEARCH_SPACE["min_samples_split"]
+                "min_samples_split",
+                MIN_SAMPLES_SPLIT_CHOICES,
             ),
         )
         score = _chronological_cv_score(

@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 from hpcopt.models.runtime_quantile import RuntimeQuantilePredictor

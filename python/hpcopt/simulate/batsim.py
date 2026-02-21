@@ -688,10 +688,10 @@ def build_batsim_run_config(
     if capacity_cpus is None:
         if trace_path.suffix.lower() == ".json":
             try:
-                payload = json.loads(trace_path.read_text(encoding="utf-8"))
+                trace_payload = json.loads(trace_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
-                payload = {}
-            capacity_cpus = _coerce_positive_int(payload.get("nb_res"), fallback=64)
+                trace_payload = {}
+            capacity_cpus = _coerce_positive_int(trace_payload.get("nb_res"), fallback=64)
         else:
             trace_df = pd.read_parquet(trace_path)
             capacity_cpus = _infer_capacity(trace_df)

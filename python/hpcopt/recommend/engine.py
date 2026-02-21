@@ -11,9 +11,6 @@ from hpcopt.simulate.objective import (
 from hpcopt.utils.io import write_json
 
 
-import numpy as np
-
-
 def _load_json(path: Path) -> dict[str, Any]:
     import json
 
@@ -162,7 +159,10 @@ def workload_regime_analysis(
                 f"Low queue congestion (mean queue length={queue_mean:.1f}). "
                 "Little room for backfill improvement when queue is rarely deep."
             )
-            sensitivity_hint = "Benefits emerge only under higher load; consider testing with more concurrent submissions."
+            sensitivity_hint = (
+                "Benefits emerge only under higher load; "
+                "consider testing with more concurrent submissions."
+            )
             suggested_next_step = "Validate with stress scenarios: hpcopt stress gen --scenario low_congestion."
         elif top_user_share > 0.5:
             regime = "user_skew"

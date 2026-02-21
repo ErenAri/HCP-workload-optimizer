@@ -19,7 +19,6 @@ import yaml
 
 from hpcopt.artifacts.manifest import build_manifest, write_manifest
 from hpcopt.data.reference_suite import (
-    assert_reference_by_filename_and_hash,
     assert_reference_trace_hash_match,
     load_reference_suite,
 )
@@ -27,14 +26,12 @@ from hpcopt.features.pipeline import build_feature_dataset
 from hpcopt.ingest.swf import ingest_swf
 from hpcopt.models.runtime_quantile import (
     RuntimeQuantilePredictor,
-    resolve_runtime_model_dir,
     train_runtime_quantile_models,
 )
 from hpcopt.profile.trace_profile import build_trace_profile
 from hpcopt.recommend.engine import generate_recommendation_report
 from hpcopt.simulate.core import run_simulation_from_trace
 from hpcopt.simulate.fidelity import run_baseline_fidelity_gate
-from hpcopt.simulate.objective import evaluate_constraint_contract
 from hpcopt.utils.io import ensure_dir, write_json
 
 logger = logging.getLogger(__name__)
@@ -242,6 +239,8 @@ def run_credibility_protocol(
         logger.info("[%s] Step 8: Generating recommendation", trace_id)
         recommendation_path = reports_dir / f"{run_id}_recommendation_report.json"
         easy_baseline = baseline_reports.get("EASY_BACKFILL_BASELINE")
+        if easy_baseline is None:
+            raise RuntimeError("missing EASY_BACKFILL_BASELINE report for recommendation step")
         rec_result = generate_recommendation_report(
             baseline_report_path=easy_baseline,
             candidate_report_paths=[ml_report_path],

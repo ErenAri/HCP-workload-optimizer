@@ -5,7 +5,6 @@ import json
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
-
 EventType = Literal["job_complete", "job_submit", "dispatch"]
 
 _EVENT_ORDER: dict[EventType, int] = {
@@ -330,11 +329,15 @@ def choose_ml_backfill_p50(
         if job.requested_cpus > available:
             continue
 
-        runtime_for_gate = (
-            job.runtime_p90_sec
-            if strict_uncertainty_mode
-            else (job.runtime_guard_sec or job.runtime_estimate_sec)
-        )
+        if strict_uncertainty_mode:
+            runtime_for_gate = (
+                job.runtime_p90_sec
+                or job.runtime_guard_sec
+                or job.runtime_estimate_sec
+            )
+        else:
+            runtime_for_gate = job.runtime_guard_sec or job.runtime_estimate_sec
+        runtime_for_gate = max(0, int(runtime_for_gate))
         completion_ts = snapshot.clock_ts + runtime_for_gate
         if completion_ts <= reservation_ts:
             decisions.append(

@@ -4,11 +4,12 @@ import gzip
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import pandas as pd
 
-from hpcopt.utils.io import ensure_dir, sha256_path as _sha256_path, write_json
+from hpcopt.utils.io import ensure_dir, write_json
+from hpcopt.utils.io import sha256_path as _sha256_path
 
 SWF_FIELDS = [
     "job_number",
@@ -96,23 +97,41 @@ def _iter_rows(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
             allocated_cpus = _as_int(raw["allocated_processors"])
             requested_cpus = _as_int(raw["requested_processors"])
 
-            if None in {submit_ts, wait_sec, runtime_actual_sec, job_id, allocated_cpus}:
+            if (
+                submit_ts is None
+                or wait_sec is None
+                or runtime_actual_sec is None
+                or job_id is None
+                or allocated_cpus is None
+            ):
                 stats["malformed_lines"] += 1
                 continue
 
-            start_ts = submit_ts + max(wait_sec, 0)
-            end_ts = start_ts + max(runtime_actual_sec, 0)
+            submit_ts_i = int(submit_ts)
+            wait_sec_i = max(int(wait_sec), 0)
+            runtime_actual_sec_i = max(int(runtime_actual_sec), 0)
+            job_id_i = int(job_id)
+            allocated_cpus_i = int(allocated_cpus)
+            requested_cpus_i = (
+                int(requested_cpus)
+                if requested_cpus is not None
+                else allocated_cpus_i
+            )
 
-            row = {
-                "job_id": job_id,
-                "submit_ts": submit_ts,
+            start_ts = submit_ts_i + wait_sec_i
+            end_ts = start_ts + runtime_actual_sec_i
+            runtime_requested_sec = _as_int(raw["requested_time"])
+
+            row: dict[str, Any] = {
+                "job_id": job_id_i,
+                "submit_ts": submit_ts_i,
                 "start_ts": start_ts,
                 "end_ts": end_ts,
-                "wait_sec": max(wait_sec, 0),
-                "runtime_actual_sec": max(runtime_actual_sec, 0),
-                "runtime_requested_sec": _as_int(raw["requested_time"]),
-                "allocated_cpus": allocated_cpus,
-                "requested_cpus": requested_cpus if requested_cpus is not None else allocated_cpus,
+                "wait_sec": wait_sec_i,
+                "runtime_actual_sec": runtime_actual_sec_i,
+                "runtime_requested_sec": runtime_requested_sec,
+                "allocated_cpus": allocated_cpus_i,
+                "requested_cpus": requested_cpus_i,
                 "requested_mem": _as_int(raw["requested_memory"]),
                 "status": _as_int(raw["status"]),
                 "user_id": _as_int(raw["user_id"]),
@@ -121,9 +140,9 @@ def _iter_rows(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 "partition_id": _as_int(raw["partition_number"]),
                 "runtime_overrequest_ratio": None,
             }
-            if row["runtime_requested_sec"] and row["runtime_actual_sec"] > 0:
+            if runtime_requested_sec is not None and runtime_actual_sec_i > 0:
                 row["runtime_overrequest_ratio"] = (
-                    row["runtime_requested_sec"] / row["runtime_actual_sec"]
+                    runtime_requested_sec / runtime_actual_sec_i
                 )
 
             rows.append(row)

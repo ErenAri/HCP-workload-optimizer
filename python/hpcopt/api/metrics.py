@@ -7,7 +7,6 @@ becomes a no-op.
 
 from __future__ import annotations
 
-import time
 from typing import Optional
 
 # ---------------------------------------------------------------------------
@@ -20,7 +19,6 @@ try:
         Gauge,
         Histogram,
         generate_latest,
-        CONTENT_TYPE_LATEST,
     )
 
     _PROMETHEUS_AVAILABLE = True

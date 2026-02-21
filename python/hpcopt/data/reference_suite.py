@@ -6,7 +6,8 @@ from typing import Any
 
 import yaml
 
-from hpcopt.utils.io import sha256_path as _sha256_path, write_json
+from hpcopt.utils.io import sha256_path as _sha256_path
+from hpcopt.utils.io import write_json
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,7 @@ def lock_reference_suite_hashes(
     updated = False
     locked: list[dict[str, Any]] = []
     missing_files: list[str] = []
-    mismatch_files: list[dict[str, str]] = []
+    mismatch_files: list[dict[str, str | None]] = []
 
     for idx, trace in enumerate(suite.traces):
         file_path = raw_dir / trace.filename

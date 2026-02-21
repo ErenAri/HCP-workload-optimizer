@@ -105,7 +105,7 @@ def compute_weighted_analysis_score(
     w1: float = 1.0,
     w2: float = 0.3,
     w3: float = 2.0,
-) -> dict[str, float]:
+) -> dict[str, Any]:
     delta_p95_bsld = float(baseline["p95_bsld"] - candidate["p95_bsld"])
     delta_utilization = float(candidate["utilization_cpu"] - baseline["utilization_cpu"])
     fairness_penalty = float(

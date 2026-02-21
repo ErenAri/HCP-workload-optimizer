@@ -6,8 +6,6 @@ from typing import Any
 
 import pandas as pd
 
-logger = logging.getLogger(__name__)
-
 from hpcopt.simulate.adapter import (
     AdapterQueuedJob,
     AdapterRunningJob,
@@ -20,6 +18,7 @@ from hpcopt.simulate.adapter import (
 from hpcopt.simulate.metrics import compute_job_metrics
 from hpcopt.simulate.objective import compute_objective_contract_metrics
 
+logger = logging.getLogger(__name__)
 
 SUPPORTED_POLICIES = {"FIFO_STRICT", "EASY_BACKFILL_BASELINE", "ML_BACKFILL_P50"}
 

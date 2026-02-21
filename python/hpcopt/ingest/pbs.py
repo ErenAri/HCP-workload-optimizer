@@ -9,7 +9,8 @@ from typing import Any
 import pandas as pd
 
 from hpcopt.ingest.swf import IngestResult
-from hpcopt.utils.io import ensure_dir, sha256_path as _sha256_path, write_json
+from hpcopt.utils.io import ensure_dir, write_json
+from hpcopt.utils.io import sha256_path as _sha256_path
 
 logger = logging.getLogger(__name__)
 
