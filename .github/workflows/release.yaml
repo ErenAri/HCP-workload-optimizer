@@ -10,9 +10,23 @@ permissions:
   packages: write
 
 jobs:
+  production-readiness-gate:
+    name: Production readiness gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install checker dependency
+        run: pip install pyyaml
+      - name: Validate strict production readiness
+        run: python scripts/production_readiness_gate.py --mode release
+
   build-and-push:
     name: Build & push Docker image
     runs-on: ubuntu-latest
+    needs: production-readiness-gate
     steps:
       - uses: actions/checkout@v4
         with:

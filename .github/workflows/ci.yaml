@@ -7,6 +7,19 @@ on:
     branches: [main]
 
 jobs:
+  readiness-checklist:
+    name: Production checklist (validate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install checker dependency
+        run: pip install pyyaml
+      - name: Validate production readiness checklist shape
+        run: python scripts/production_readiness_gate.py --mode validate
+
   lint:
     name: Lint (ruff)
     runs-on: ubuntu-latest

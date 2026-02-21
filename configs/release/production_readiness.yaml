@@ -1,0 +1,73 @@
+metadata:
+  release_target: "v0.1.0"
+  reviewed_at_utc: "2026-02-21T00:00:00Z"
+  owner: "platform-team"
+  notes: "Update statuses and evidence before tagging a release."
+
+checks:
+  - id: correctness_gates
+    title: "Lint, type-check, and tests are green in CI"
+    required: true
+    status: done
+    evidence: "CI workflows: ruff, mypy, pytest matrix"
+
+  - id: benchmark_regression
+    title: "Benchmark regression gate passed on representative workload"
+    required: true
+    status: done
+    evidence: "scripts/verify.ps1 efficiency gate"
+
+  - id: api_load_slo
+    title: "API load tests pass and SLO thresholds are met"
+    required: true
+    status: done
+    evidence: "tests/load/test_api_load.py"
+
+  - id: fidelity_and_recommendation
+    title: "Fidelity and recommendation gate executed on target dataset"
+    required: true
+    status: todo
+    evidence: ""
+    note: "Run on production-representative trace and attach report IDs."
+
+  - id: observability_runbooks
+    title: "SLOs, alerts, dashboards, and incident runbooks are complete"
+    required: true
+    status: todo
+    evidence: ""
+    note: "Need explicit runbook docs and alert response playbooks."
+
+  - id: security_controls
+    title: "Security scan and secret management checks are complete"
+    required: true
+    status: todo
+    evidence: ""
+    note: "Add vulnerability scan results and key/secret rotation policy."
+
+  - id: deployment_safety
+    title: "Canary/rollback strategy validated in staging"
+    required: true
+    status: todo
+    evidence: ""
+    note: "Document staged rollout and rollback rehearsal outcome."
+
+  - id: model_ops
+    title: "Drift monitoring and retraining trigger policy validated"
+    required: true
+    status: todo
+    evidence: ""
+    note: "Provide alert thresholds and retraining decision protocol."
+
+  - id: disaster_recovery
+    title: "Backup and restore drill completed"
+    required: true
+    status: todo
+    evidence: ""
+    note: "Need recovery-time test result and procedure owner."
+
+  - id: api_compatibility
+    title: "External API versioning and compatibility policy documented"
+    required: true
+    status: todo
+    evidence: ""
+    note: "Define versioning, deprecation window, and migration path."

@@ -625,11 +625,32 @@ Test suite covers:
 - integration tests (API endpoints, auth, credibility protocol, Slurm ingestion),
 - load tests (concurrent API predictions, health under load).
 
+### Unified Verification Gate (PowerShell)
+
+Run all industrial verification gates (correctness, benchmark regression, API load, fidelity/recommendation, reproducibility):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/verify.ps1
+```
+
+Strict policy acceptance mode (fails unless fidelity=`pass` and recommendation=`accepted`):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/verify.ps1 -StrictQuality
+```
+
+Use an existing canonical dataset:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/verify.ps1 -TraceDataset data/curated/ctc_sp2_1996.parquet
+```
+
 ## Documentation
 
 Primary docs:
 
 - `docs/README.md`
+- `docs/production-readiness-checklist.md`
 - `docs/01-project-charter.md`
 - `docs/02-system-architecture.md`
 - `docs/03-data-model-and-ingestion.md`
@@ -647,3 +668,14 @@ Design and contract history:
 - `design_docs/policy_spec_baselines_mvp.md`
 - `design_docs/mvp_backlog_p0_p1_p2.md`
 - `design_docs/systems_first_research_appendix.md`
+
+## Release Gate
+
+Production release tags are gated by `scripts/production_readiness_gate.py` against
+`configs/release/production_readiness.yaml`.
+
+- CI (`push`/`PR`) runs checklist structural validation (`--mode validate`).
+- Release workflow (`v*` tags) runs strict gate (`--mode release`), which requires:
+  - every required check marked `done`,
+  - non-empty evidence for each required check,
+  - recent `metadata.reviewed_at_utc` (<=30 days old).
