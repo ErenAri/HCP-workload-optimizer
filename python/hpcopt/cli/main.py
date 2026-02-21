@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 import typer
 import yaml
 
 from hpcopt.artifacts.manifest import build_manifest, write_manifest
+from hpcopt.artifacts.benchmark import run_benchmark_suite
 from hpcopt.artifacts.report_export import export_run_report
 from hpcopt.data.reference_suite import (
     assert_reference_by_filename_and_hash,
@@ -49,6 +50,10 @@ recommend_app = typer.Typer(help="Recommendation commands")
 report_app = typer.Typer(help="Reporting commands")
 serve_app = typer.Typer(help="Service commands")
 data_app = typer.Typer(help="Dataset contract commands")
+credibility_app = typer.Typer(help="Credibility protocol commands")
+analysis_app = typer.Typer(help="Analysis commands")
+model_app = typer.Typer(help="Model management commands")
+artifacts_app = typer.Typer(help="Artifact management commands")
 
 app.add_typer(ingest_app, name="ingest")
 app.add_typer(profile_app, name="profile")
@@ -60,13 +65,19 @@ app.add_typer(recommend_app, name="recommend")
 app.add_typer(report_app, name="report")
 app.add_typer(serve_app, name="serve")
 app.add_typer(data_app, name="data")
+app.add_typer(credibility_app, name="credibility")
+app.add_typer(analysis_app, name="analysis")
+app.add_typer(model_app, name="model")
+app.add_typer(artifacts_app, name="artifacts")
 
+
+# ──────────────────────── Ingest ────────────────────────
 
 @ingest_app.command("swf")
 def ingest_swf_cmd(
     input: Path = typer.Option(..., exists=True, readable=True, help="Input SWF or SWF.GZ path"),
     out: Path = typer.Option(Path("data/curated"), help="Output curated dataset directory"),
-    dataset_id: Optional[str] = typer.Option(None, help="Dataset ID override"),
+    dataset_id: str | None = typer.Option(None, help="Dataset ID override"),
     report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
     reference_suite_config: Path = typer.Option(
         Path("configs/data/reference_suite.yaml"),
@@ -110,15 +121,66 @@ def ingest_swf_cmd(
     typer.echo(f"Rows: {result.row_count}")
 
 
+@ingest_app.command("slurm")
+def ingest_slurm_cmd(
+    input: Path = typer.Option(..., exists=True, readable=True, help="sacct --parsable2 output file"),
+    out: Path = typer.Option(Path("data/curated"), help="Output curated dataset directory"),
+    dataset_id: str | None = typer.Option(None, help="Dataset ID override"),
+    report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
+) -> None:
+    from hpcopt.ingest.slurm import ingest_slurm
+    ds_id = dataset_id or input.stem
+    result = ingest_slurm(input_path=input, out_dir=out, dataset_id=ds_id, report_dir=report_out)
+    typer.echo(f"Dataset: {result.dataset_path}")
+    typer.echo(f"Rows: {result.row_count}")
+
+
+@ingest_app.command("pbs")
+def ingest_pbs_cmd(
+    input: Path = typer.Option(..., exists=True, readable=True, help="PBS/Torque accounting log"),
+    out: Path = typer.Option(Path("data/curated"), help="Output curated dataset directory"),
+    dataset_id: str | None = typer.Option(None, help="Dataset ID override"),
+    report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
+) -> None:
+    from hpcopt.ingest.pbs import ingest_pbs
+    ds_id = dataset_id or input.stem
+    result = ingest_pbs(input_path=input, out_dir=out, dataset_id=ds_id, report_dir=report_out)
+    typer.echo(f"Dataset: {result.dataset_path}")
+    typer.echo(f"Rows: {result.row_count}")
+
+
+@ingest_app.command("shadow-start")
+def ingest_shadow_start_cmd(
+    source_type: str = typer.Option("slurm", help="slurm|pbs"),
+    source_path: Path = typer.Option(..., help="sacct output or accounting log path"),
+    out: Path = typer.Option(Path("data/curated"), help="Output directory"),
+    interval_sec: int = typer.Option(300, min=10, help="Polling interval in seconds"),
+    watermark_path: Path = typer.Option(Path("outputs/shadow_watermark.json"), help="Watermark file"),
+) -> None:
+    from hpcopt.ingest.shadow import ShadowIngestionDaemon
+    daemon = ShadowIngestionDaemon(
+        out_dir=out,
+        report_dir=out / "reports",
+        watermark_path=watermark_path,
+    )
+    daemon.start(
+        interval_sec=interval_sec,
+        source_type=source_type,
+        source_path=source_path,
+        blocking=True,
+    )
+
+
+# ──────────────────────── Profile ────────────────────────
+
 @profile_app.command("trace")
 def profile_trace_cmd(
     dataset: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset"),
     out: Path = typer.Option(Path("outputs/reports"), help="Profile report output directory"),
-    dataset_id: Optional[str] = typer.Option(None, help="Dataset ID override"),
+    dataset_id: str | None = typer.Option(None, help="Dataset ID override"),
 ) -> None:
     ds_id = dataset_id or dataset.stem
     result = build_trace_profile(dataset_path=dataset, report_dir=out, dataset_id=ds_id)
-
     manifest = build_manifest(
         command="hpcopt profile trace",
         inputs=[dataset],
@@ -128,398 +190,130 @@ def profile_trace_cmd(
     )
     manifest_path = out / f"{ds_id}_profile_manifest.json"
     write_manifest(manifest_path, manifest)
-
     typer.echo(f"Profile report: {result.profile_path}")
     typer.echo(f"Profile manifest: {manifest_path}")
     typer.echo(f"Rows: {result.row_count}")
 
 
-@stress_app.command("gen")
-def stress_gen_cmd(
-    scenario: str = typer.Option(..., help="heavy_tail|low_congestion|user_skew|burst_shock"),
-    out: Path = typer.Option(Path("data/curated"), help="Output dataset directory"),
-    n_jobs: int = typer.Option(5000, min=100, help="Number of jobs"),
-    seed: int = typer.Option(42, help="Random seed"),
-    alpha: float = typer.Option(1.2, help="heavy_tail alpha"),
-    target_util: float = typer.Option(0.35, help="low_congestion target util"),
-    top_user_share: float = typer.Option(0.65, help="user_skew top-user share"),
-    burst_factor: int = typer.Option(4, help="burst_shock burst factor"),
-    burst_duration_sec: int = typer.Option(1800, help="burst_shock burst duration"),
-) -> None:
-    params = {
-        "alpha": alpha,
-        "target_util": target_util,
-        "top_user_share": top_user_share,
-        "burst_factor": burst_factor,
-        "burst_duration_sec": burst_duration_sec,
-    }
-    result = generate_stress_scenario(
-        scenario=scenario,
-        out_dir=out,
-        n_jobs=n_jobs,
-        seed=seed,
-        params=params,
-    )
-    typer.echo(f"Stress dataset: {result.dataset_path}")
-    typer.echo(f"Stress metadata: {result.metadata_path}")
-
-
-@stress_app.command("run")
-def stress_run_cmd(
-    scenario: str = typer.Option(..., help="Scenario previously generated"),
-    policy: Path = typer.Option(..., exists=True, readable=True, help="Policy config"),
-    model: str = typer.Option(..., help="Model version or artifact id"),
-    dataset: Optional[Path] = typer.Option(
-        None,
-        help="Optional stress dataset parquet override. Defaults to data/curated/stress_<scenario>.parquet",
-    ),
-    capacity_cpus: int = typer.Option(64, min=1, help="Cluster CPU capacity"),
-    baseline_policy: str = typer.Option(
-        "EASY_BACKFILL_BASELINE",
-        help="Baseline policy for stress comparison",
-    ),
-    out: Path = typer.Option(Path("outputs/simulations"), help="Simulation artifact output directory"),
-    report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
-    run_id: Optional[str] = typer.Option(None, help="Run identifier override"),
-    strict_invariants: bool = typer.Option(True, help="Fail on invariant violation"),
-    runtime_model_dir: Optional[Path] = typer.Option(
-        None,
-        help="Optional runtime model directory for ML policy prediction path",
-    ),
-) -> None:
-    if baseline_policy not in SUPPORTED_POLICIES:
-        raise typer.BadParameter(
-            f"Unsupported baseline policy '{baseline_policy}'. Supported: {sorted(SUPPORTED_POLICIES)}"
-        )
-    ensure_dir(out)
-    ensure_dir(report_out)
-
-    resolved_dataset = dataset or (Path("data/curated") / f"stress_{scenario}.parquet")
-    if not resolved_dataset.exists():
-        raise typer.BadParameter(
-            f"Stress dataset does not exist: {resolved_dataset}. "
-            f"Generate it first via 'hpcopt stress gen --scenario {scenario}'."
-        )
-    if resolved_dataset.suffix.lower() != ".parquet":
-        raise typer.BadParameter("Stress dataset must be a parquet file.")
-
-    cfg = yaml.safe_load(policy.read_text(encoding="utf-8"))
-    if not isinstance(cfg, dict):
-        raise typer.BadParameter("Policy config must be a YAML mapping.")
-
-    policy_id = str(cfg.get("policy_id", "ML_BACKFILL_P50"))
-    if policy_id not in SUPPORTED_POLICIES:
-        raise typer.BadParameter(f"Unsupported candidate policy '{policy_id}'. Supported: {sorted(SUPPORTED_POLICIES)}")
-
-    runtime_guard_k = float(cfg.get("runtime_guard_k", 0.5))
-    strict_uncertainty_mode = bool(cfg.get("strict_uncertainty_mode", False))
-    starvation_wait_cap_sec = int(cfg.get("starvation_wait_cap_sec", 172800))
-    fairness_cfg = cfg.get("fairness")
-    if not isinstance(fairness_cfg, dict):
-        fairness_cfg = {}
-
-    resolved_run_id = run_id or f"stress_{scenario}_{policy_id.lower()}_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
-    trace_df = pd.read_parquet(resolved_dataset)
-
-    runtime_predictor = None
-    resolved_model_dir = None
-    if policy_id == "ML_BACKFILL_P50":
-        resolved_model_dir = resolve_runtime_model_dir(runtime_model_dir)
-        if resolved_model_dir is not None:
-            runtime_predictor = RuntimeQuantilePredictor(resolved_model_dir)
-
-    baseline_sim = run_simulation_from_trace(
-        trace_df=trace_df,
-        policy_id=baseline_policy,
-        capacity_cpus=capacity_cpus,
-        run_id=f"{resolved_run_id}_{baseline_policy.lower()}",
-        strict_invariants=strict_invariants,
-        starvation_wait_cap_sec=starvation_wait_cap_sec,
-    )
-    candidate_sim = run_simulation_from_trace(
-        trace_df=trace_df,
-        policy_id=policy_id,
-        capacity_cpus=capacity_cpus,
-        run_id=f"{resolved_run_id}_{policy_id.lower()}",
-        strict_invariants=strict_invariants,
-        runtime_predictor=runtime_predictor,
-        runtime_guard_k=runtime_guard_k,
-        strict_uncertainty_mode=strict_uncertainty_mode,
-        starvation_wait_cap_sec=starvation_wait_cap_sec,
-    )
-
-    baseline_jobs_path = out / f"{resolved_run_id}_{baseline_policy.lower()}_stress_jobs.parquet"
-    baseline_queue_path = out / f"{resolved_run_id}_{baseline_policy.lower()}_stress_queue.parquet"
-    baseline_inv_path = report_out / f"{resolved_run_id}_{baseline_policy.lower()}_stress_invariants.json"
-    baseline_sim_report_path = report_out / f"{resolved_run_id}_{baseline_policy.lower()}_stress_sim_report.json"
-
-    candidate_jobs_path = out / f"{resolved_run_id}_{policy_id.lower()}_stress_jobs.parquet"
-    candidate_queue_path = out / f"{resolved_run_id}_{policy_id.lower()}_stress_queue.parquet"
-    candidate_inv_path = report_out / f"{resolved_run_id}_{policy_id.lower()}_stress_invariants.json"
-    candidate_sim_report_path = report_out / f"{resolved_run_id}_{policy_id.lower()}_stress_sim_report.json"
-
-    baseline_sim.jobs_df.to_parquet(baseline_jobs_path, index=False)
-    baseline_sim.queue_series_df.to_parquet(baseline_queue_path, index=False)
-    write_json(baseline_inv_path, baseline_sim.invariant_report)
-    write_json(
-        baseline_sim_report_path,
-        {
-            "run_id": resolved_run_id,
-            "scenario": scenario,
-            "policy_id": baseline_policy,
-            "status": "ok",
-            "metrics": baseline_sim.metrics,
-            "objective_metrics": baseline_sim.objective_metrics,
-            "fallback_accounting": baseline_sim.fallback_accounting,
-            "jobs_artifact": str(baseline_jobs_path),
-            "queue_artifact": str(baseline_queue_path),
-        },
-    )
-
-    candidate_sim.jobs_df.to_parquet(candidate_jobs_path, index=False)
-    candidate_sim.queue_series_df.to_parquet(candidate_queue_path, index=False)
-    write_json(candidate_inv_path, candidate_sim.invariant_report)
-    write_json(
-        candidate_sim_report_path,
-        {
-            "run_id": resolved_run_id,
-            "scenario": scenario,
-            "policy_id": policy_id,
-            "status": "ok",
-            "metrics": candidate_sim.metrics,
-            "objective_metrics": candidate_sim.objective_metrics,
-            "fallback_accounting": candidate_sim.fallback_accounting,
-            "model_id": model,
-            "model_dir": str(resolved_model_dir) if resolved_model_dir is not None else None,
-            "jobs_artifact": str(candidate_jobs_path),
-            "queue_artifact": str(candidate_queue_path),
-        },
-    )
-
-    constraints = evaluate_constraint_contract(
-        candidate=candidate_sim.objective_metrics,
-        baseline=baseline_sim.objective_metrics,
-        starvation_rate_max=float(fairness_cfg.get("starvation_rate_max", 0.02)),
-        fairness_dev_delta_max=float(fairness_cfg.get("fairness_dev_delta_max", 0.05)),
-        jain_delta_max=float(fairness_cfg.get("jain_delta_max", 0.03)),
-    )
-    p95_bsld_delta = float(
-        baseline_sim.objective_metrics["p95_bsld"] - candidate_sim.objective_metrics["p95_bsld"]
-    )
-    utilization_delta = float(
-        candidate_sim.objective_metrics["utilization_cpu"] - baseline_sim.objective_metrics["utilization_cpu"]
-    )
-    p95_wait_delta = float(
-        baseline_sim.objective_metrics["p95_wait_sec"] - candidate_sim.objective_metrics["p95_wait_sec"]
-    )
-
-    degrade_signatures: list[str] = []
-    if p95_bsld_delta <= 0.0:
-        degrade_signatures.append("primary_kpi_not_improved")
-    if utilization_delta < 0.0:
-        degrade_signatures.append("utilization_regression")
-    if scenario == "heavy_tail" and p95_bsld_delta <= 0.0:
-        degrade_signatures.append("heavy_tail_limited_backfill_gain")
-    if scenario == "low_congestion" and abs(p95_wait_delta) < 1e-6:
-        degrade_signatures.append("low_congestion_near_zero_effect")
-    if scenario == "user_skew" and (
-        candidate_sim.objective_metrics["fairness_dev"] - baseline_sim.objective_metrics["fairness_dev"]
-    ) > 0.0:
-        degrade_signatures.append("user_skew_fairness_pressure")
-    if scenario == "burst_shock" and p95_wait_delta < 0.0:
-        degrade_signatures.append("burst_shock_tail_wait_regression")
-
-    stress_status = "pass" if constraints["constraints_passed"] else "fail"
-    stress_report_path = report_out / f"{resolved_run_id}_stress_report.json"
-    write_json(
-        stress_report_path,
-        {
-            "run_id": resolved_run_id,
-            "scenario": scenario,
-            "dataset_path": str(resolved_dataset),
-            "capacity_cpus": capacity_cpus,
-            "candidate_policy_id": policy_id,
-            "baseline_policy_id": baseline_policy,
-            "status": stress_status,
-            "constraints": constraints,
-            "deltas": {
-                "p95_bsld_delta": p95_bsld_delta,
-                "utilization_delta": utilization_delta,
-                "p95_wait_sec_delta": p95_wait_delta,
-            },
-            "degrade_signatures": degrade_signatures,
-            "baseline_report_path": str(baseline_sim_report_path),
-            "candidate_report_path": str(candidate_sim_report_path),
-            "candidate_fallback_accounting": candidate_sim.fallback_accounting,
-            "model_id": model,
-            "model_dir": str(resolved_model_dir) if resolved_model_dir is not None else None,
-        },
-    )
-
-    manifest = build_manifest(
-        command="hpcopt stress run",
-        inputs=[resolved_dataset, policy],
-        outputs=[
-            baseline_jobs_path,
-            baseline_queue_path,
-            baseline_inv_path,
-            baseline_sim_report_path,
-            candidate_jobs_path,
-            candidate_queue_path,
-            candidate_inv_path,
-            candidate_sim_report_path,
-            stress_report_path,
-        ],
-        params={
-            "run_id": resolved_run_id,
-            "scenario": scenario,
-            "capacity_cpus": capacity_cpus,
-            "baseline_policy": baseline_policy,
-            "candidate_policy": policy_id,
-            "model_id": model,
-            "model_dir": str(resolved_model_dir) if resolved_model_dir is not None else None,
-            "runtime_guard_k": runtime_guard_k,
-            "strict_uncertainty_mode": strict_uncertainty_mode,
-            "strict_invariants": strict_invariants,
-            "fairness_thresholds": constraints["thresholds"],
-        },
-        config_paths=[policy],
-        seeds=[],
-    )
-    manifest_path = report_out / f"{resolved_run_id}_stress_manifest.json"
-    write_manifest(manifest_path, manifest)
-
-    typer.echo(f"Stress status: {stress_status}")
-    typer.echo(f"Stress report: {stress_report_path}")
-    typer.echo(f"Stress manifest: {manifest_path}")
-    typer.echo(f"Baseline sim report: {baseline_sim_report_path}")
-    typer.echo(f"Candidate sim report: {candidate_sim_report_path}")
-
+# ──────────────────────── Features ────────────────────────
 
 @features_app.command("build")
 def features_build_cmd(
     dataset: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset"),
     out: Path = typer.Option(Path("data/curated"), help="Feature dataset output directory"),
     report_out: Path = typer.Option(Path("outputs/reports"), help="Feature report output directory"),
-    dataset_id: Optional[str] = typer.Option(None, help="Dataset ID override"),
+    dataset_id: str | None = typer.Option(None, help="Dataset ID override"),
     n_folds: int = typer.Option(3, min=1, max=20, help="Number of chronological folds"),
     train_fraction: float = typer.Option(0.70, min=0.1, max=0.95, help="Train fraction per fold"),
     val_fraction: float = typer.Option(0.15, min=0.01, max=0.49, help="Validation fraction per fold"),
 ) -> None:
     if train_fraction + val_fraction >= 1.0:
         raise typer.BadParameter("train_fraction + val_fraction must be < 1.0")
-
     ds_id = dataset_id or dataset.stem
     result = build_feature_dataset(
-        dataset_path=dataset,
-        out_dir=out,
-        report_dir=report_out,
-        dataset_id=ds_id,
-        n_folds=n_folds,
-        train_fraction=train_fraction,
-        val_fraction=val_fraction,
+        dataset_path=dataset, out_dir=out, report_dir=report_out, dataset_id=ds_id,
+        n_folds=n_folds, train_fraction=train_fraction, val_fraction=val_fraction,
     )
-
     manifest = build_manifest(
         command="hpcopt features build",
         inputs=[dataset],
-        outputs=[
-            result.feature_dataset_path,
-            result.split_manifest_path,
-            result.feature_report_path,
-        ],
-        params={
-            "dataset_id": ds_id,
-            "feature_out_dir": str(out),
-            "report_out_dir": str(report_out),
-            "n_folds": n_folds,
-            "train_fraction": train_fraction,
-            "val_fraction": val_fraction,
-        },
+        outputs=[result.feature_dataset_path, result.split_manifest_path, result.feature_report_path],
+        params={"dataset_id": ds_id, "n_folds": n_folds, "train_fraction": train_fraction, "val_fraction": val_fraction},
         seeds=[],
     )
     manifest_path = report_out / f"{ds_id}_features_manifest.json"
     write_manifest(manifest_path, manifest)
-
     typer.echo(f"Feature dataset: {result.feature_dataset_path}")
-    typer.echo(f"Split manifest: {result.split_manifest_path}")
-    typer.echo(f"Feature report: {result.feature_report_path}")
     typer.echo(f"Features manifest: {manifest_path}")
-    typer.echo(f"Rows: {result.row_count}")
-    typer.echo(f"Folds: {result.fold_count}")
 
+
+# ──────────────────────── Train ────────────────────────
 
 @train_app.command("runtime")
 def train_runtime_cmd(
     dataset: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset"),
     out: Path = typer.Option(Path("outputs/models"), help="Model output directory"),
-    model_id: Optional[str] = typer.Option(None, help="Model id override"),
+    model_id: str | None = typer.Option(None, help="Model id override"),
     seed: int = typer.Option(42, help="Training seed"),
     report_out: Path = typer.Option(Path("outputs/reports"), help="Run manifest output directory"),
+    hyperparams_config: Path | None = typer.Option(None, help="Optional hyperparams YAML config"),
 ) -> None:
     resolved_model_id = model_id or f"runtime_quantile_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
+    hp = None
+    if hyperparams_config is not None and hyperparams_config.exists():
+        hp = yaml.safe_load(hyperparams_config.read_text(encoding="utf-8"))
     result = train_runtime_quantile_models(
-        dataset_path=dataset,
-        out_dir=out,
-        model_id=resolved_model_id,
-        seed=seed,
+        dataset_path=dataset, out_dir=out, model_id=resolved_model_id, seed=seed, hyperparams=hp,
     )
     manifest = build_manifest(
         command="hpcopt train runtime",
         inputs=[dataset],
         outputs=[result.metrics_path, result.metadata_path],
-        params={
-            "model_id": resolved_model_id,
-            "model_dir": str(result.model_dir),
-            "seed": seed,
-        },
+        params={"model_id": resolved_model_id, "seed": seed, "hyperparams": hp},
         seeds=[seed],
     )
     manifest_path = report_out / f"{resolved_model_id}_train_manifest.json"
     write_manifest(manifest_path, manifest)
-
     typer.echo(f"Model dir: {result.model_dir}")
-    typer.echo(f"Metrics: {result.metrics_path}")
-    typer.echo(f"Metadata: {result.metadata_path}")
     typer.echo(f"Train manifest: {manifest_path}")
 
+
+@train_app.command("tune")
+def train_tune_cmd(
+    dataset: Path = typer.Option(..., exists=True, readable=True, help="Training dataset"),
+    out: Path = typer.Option(Path("outputs/reports"), help="Tuning report output directory"),
+    quantile: float = typer.Option(0.5, help="Target quantile"),
+    seed: int = typer.Option(42, help="Tuning seed"),
+    n_trials: int = typer.Option(20, min=1, help="Number of search trials"),
+    n_folds: int = typer.Option(3, min=1, help="Chronological CV folds"),
+) -> None:
+    from hpcopt.models.tuning import build_tuning_report
+    ensure_dir(out)
+    report_path = out / f"tuning_q{quantile:.2f}_report.json"
+    result = build_tuning_report(
+        dataset_path=dataset, out_path=report_path,
+        quantile=quantile, seed=seed, n_trials=n_trials, n_folds=n_folds,
+    )
+    typer.echo(f"Best params: {result.best_params.to_dict()}")
+    typer.echo(f"Best score: {result.best_score:.6f}")
+    typer.echo(f"Tuning report: {result.report_path}")
+
+
+@train_app.command("resource-fit")
+def train_resource_fit_cmd(
+    dataset: Path = typer.Option(..., exists=True, readable=True, help="Training dataset"),
+    out: Path = typer.Option(Path("outputs/models"), help="Model output directory"),
+    model_id: str | None = typer.Option(None, help="Model id override"),
+    seed: int = typer.Option(42, help="Training seed"),
+) -> None:
+    from hpcopt.models.resource_fit import train_resource_fit_model
+    resolved_id = model_id or f"resource_fit_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
+    result = train_resource_fit_model(dataset_path=dataset, out_dir=out, model_id=resolved_id, seed=seed)
+    typer.echo(f"Model dir: {result.model_dir}")
+    typer.echo(f"Metrics: {result.metrics_path}")
+
+
+# ──────────────────────── Simulate ────────────────────────
 
 @simulate_app.command("run")
 def simulate_run_cmd(
     trace: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset"),
-    policy: str = typer.Option(
-        "FIFO_STRICT",
-        help="FIFO_STRICT|EASY_BACKFILL_BASELINE|ML_BACKFILL_P50",
-    ),
+    policy: str = typer.Option("FIFO_STRICT", help="FIFO_STRICT|EASY_BACKFILL_BASELINE|ML_BACKFILL_P50"),
     capacity_cpus: int = typer.Option(64, min=1, help="Cluster CPU capacity"),
     out: Path = typer.Option(Path("outputs/simulations"), help="Simulation artifact output directory"),
     report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
-    run_id: Optional[str] = typer.Option(None, help="Run identifier override"),
+    run_id: str | None = typer.Option(None, help="Run identifier override"),
     strict_invariants: bool = typer.Option(False, help="Fail on first invariant violation"),
-    runtime_model_dir: Optional[Path] = typer.Option(
-        None,
-        help="Optional runtime quantile model directory (required for ML predictions; fallback used if omitted)",
-    ),
-    runtime_guard_k: float = typer.Option(
-        0.5,
-        min=0.0,
-        max=2.0,
-        help="ML backfill runtime guard coefficient",
-    ),
-    strict_uncertainty_mode: bool = typer.Option(
-        False,
-        help="ML policy strict mode: backfill gate uses p90 instead of runtime_guard",
-    ),
+    runtime_model_dir: Path | None = typer.Option(None, help="Runtime quantile model directory"),
+    runtime_guard_k: float = typer.Option(0.5, min=0.0, max=2.0, help="ML backfill runtime guard coefficient"),
+    strict_uncertainty_mode: bool = typer.Option(False, help="ML policy strict mode"),
     reference_suite_config: Path = typer.Option(
-        Path("configs/data/reference_suite.yaml"),
-        exists=True,
-        readable=True,
+        Path("configs/data/reference_suite.yaml"), exists=True, readable=True,
         help="Reference suite config for trace hash checks",
     ),
 ) -> None:
     if policy not in SUPPORTED_POLICIES:
         raise typer.BadParameter(f"Unsupported policy '{policy}'. Supported: {sorted(SUPPORTED_POLICIES)}")
-
     ensure_dir(out)
     ensure_dir(report_out)
     resolved_run_id = run_id or f"sim_{policy.lower()}_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
@@ -533,13 +327,9 @@ def simulate_run_cmd(
             runtime_predictor = RuntimeQuantilePredictor(resolved_model_dir)
 
     result = run_simulation_from_trace(
-        trace_df=trace_df,
-        policy_id=policy,
-        capacity_cpus=capacity_cpus,
-        run_id=resolved_run_id,
-        strict_invariants=strict_invariants,
-        runtime_predictor=runtime_predictor,
-        runtime_guard_k=runtime_guard_k,
+        trace_df=trace_df, policy_id=policy, capacity_cpus=capacity_cpus,
+        run_id=resolved_run_id, strict_invariants=strict_invariants,
+        runtime_predictor=runtime_predictor, runtime_guard_k=runtime_guard_k,
         strict_uncertainty_mode=strict_uncertainty_mode,
     )
 
@@ -559,47 +349,30 @@ def simulate_run_cmd(
             sha256_observed=trace_meta.get("source_trace_sha256"),
             config_path=reference_suite_config,
         )
-    write_json(
-        sim_report_path,
-        {
-            "run_id": resolved_run_id,
-            "policy_id": policy,
-            "status": "ok",
-            "metrics": result.metrics,
-            "objective_metrics": result.objective_metrics,
-            "fallback_accounting": result.fallback_accounting,
-            "model_dir": str(resolved_model_dir) if resolved_model_dir is not None else None,
-            "source_trace_reference_suite": source_reference_match,
-            "jobs_artifact": str(jobs_path),
-            "queue_artifact": str(queue_path),
-        },
-    )
+    write_json(sim_report_path, {
+        "run_id": resolved_run_id, "policy_id": policy, "status": "ok",
+        "metrics": result.metrics, "objective_metrics": result.objective_metrics,
+        "fallback_accounting": result.fallback_accounting,
+        "model_dir": str(resolved_model_dir) if resolved_model_dir is not None else None,
+        "source_trace_reference_suite": source_reference_match,
+        "jobs_artifact": str(jobs_path), "queue_artifact": str(queue_path),
+    })
     write_json(invariant_path, result.invariant_report)
 
     manifest = build_manifest(
-        command="hpcopt simulate run",
-        inputs=[trace, reference_suite_config],
+        command="hpcopt simulate run", inputs=[trace, reference_suite_config],
         outputs=[jobs_path, queue_path, sim_report_path, invariant_path],
         params={
-            "run_id": resolved_run_id,
-            "policy_id": policy,
-            "capacity_cpus": capacity_cpus,
+            "run_id": resolved_run_id, "policy_id": policy, "capacity_cpus": capacity_cpus,
             "strict_invariants": strict_invariants,
             "runtime_model_dir": str(resolved_model_dir) if resolved_model_dir else None,
             "runtime_guard_k": runtime_guard_k,
-            "strict_uncertainty_mode": strict_uncertainty_mode,
-            "source_trace_reference_suite": source_reference_match,
         },
-        config_paths=[reference_suite_config],
-        seeds=[],
+        config_paths=[reference_suite_config], seeds=[],
     )
     manifest_path = report_out / f"{resolved_run_id}_{policy.lower()}_manifest.json"
     write_manifest(manifest_path, manifest)
-
     typer.echo(f"Simulation report: {sim_report_path}")
-    typer.echo(f"Invariant report: {invariant_path}")
-    typer.echo(f"Jobs artifact: {jobs_path}")
-    typer.echo(f"Queue artifact: {queue_path}")
     typer.echo(f"Manifest: {manifest_path}")
 
 
@@ -608,301 +381,120 @@ def simulate_fidelity_gate_cmd(
     trace: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset"),
     capacity_cpus: int = typer.Option(64, min=1, help="Cluster CPU capacity"),
     config: Path = typer.Option(
-        Path("configs/simulation/fidelity_gate.yaml"),
-        exists=True,
-        readable=True,
+        Path("configs/simulation/fidelity_gate.yaml"), exists=True, readable=True,
         help="Fidelity gate threshold config",
     ),
     out: Path = typer.Option(Path("outputs/reports"), help="Fidelity report output directory"),
-    run_id: Optional[str] = typer.Option(None, help="Run identifier override"),
-    strict_invariants: bool = typer.Option(True, help="Fail if invariants fail during baseline replay"),
+    run_id: str | None = typer.Option(None, help="Run identifier override"),
+    strict_invariants: bool = typer.Option(True, help="Fail if invariants fail"),
 ) -> None:
     ensure_dir(out)
     resolved_run_id = run_id or f"fidelity_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
     trace_df = pd.read_parquet(trace)
     report_path = out / f"{resolved_run_id}_fidelity_report.json"
-
     result = run_baseline_fidelity_gate(
-        trace_df=trace_df,
-        capacity_cpus=capacity_cpus,
-        out_path=report_path,
-        run_id=resolved_run_id,
-        config_path=config,
-        strict_invariants=strict_invariants,
+        trace_df=trace_df, capacity_cpus=capacity_cpus, out_path=report_path,
+        run_id=resolved_run_id, config_path=config, strict_invariants=strict_invariants,
     )
     manifest = build_manifest(
-        command="hpcopt simulate fidelity-gate",
-        inputs=[trace, config],
+        command="hpcopt simulate fidelity-gate", inputs=[trace, config],
         outputs=[result.report_path],
-        params={
-            "run_id": resolved_run_id,
-            "capacity_cpus": capacity_cpus,
-            "strict_invariants": strict_invariants,
-        },
-        config_paths=[config],
-        seeds=[],
+        params={"run_id": resolved_run_id, "capacity_cpus": capacity_cpus},
+        config_paths=[config], seeds=[],
     )
     manifest_path = out / f"{resolved_run_id}_fidelity_manifest.json"
     write_manifest(manifest_path, manifest)
-
     typer.echo(f"Fidelity status: {result.status}")
     typer.echo(f"Fidelity report: {result.report_path}")
-    typer.echo(f"Fidelity manifest: {manifest_path}")
 
 
 @simulate_app.command("batsim-config")
 def simulate_batsim_config_cmd(
-    trace: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset or Batsim workload json"),
-    policy: str = typer.Option("FIFO_STRICT", help="Policy id"),
-    out: Path = typer.Option(Path("outputs/simulations"), help="Output directory"),
-    run_id: Optional[str] = typer.Option(None, help="Run identifier override"),
-    platform_path: Optional[Path] = typer.Option(None, help="Optional Batsim platform xml; generated if omitted"),
-    workload_path: Optional[Path] = typer.Option(None, help="Optional Batsim workload json; generated from parquet if omitted"),
-    capacity_cpus: Optional[int] = typer.Option(None, min=1, help="Optional CPU capacity override"),
-    edc_mode: str = typer.Option("library_file", help="library_file|library_str|socket_file|socket_str"),
-    edc_library_path: Optional[str] = typer.Option(
-        None,
-        help="EDC library path (e.g., /home/<user>/.nix-profile/lib/libfcfs.so)",
-    ),
-    edc_socket_endpoint: Optional[str] = typer.Option(None, help="EDC socket endpoint for socket modes"),
-    edc_init_json: str = typer.Option("{}", help="EDC init JSON payload"),
-    export_prefix: Optional[Path] = typer.Option(None, help="Optional Batsim export prefix path"),
-    use_wsl_defaults: bool = typer.Option(
-        True,
-        help="Auto-resolve default fcfs EDC path from WSL HOME when library mode is used",
-    ),
-    wsl_distro: str = typer.Option("Ubuntu", help="WSL distro name for default-path resolution"),
-    report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
+    trace: Path = typer.Option(..., exists=True, readable=True),
+    policy: str = typer.Option("FIFO_STRICT"),
+    out: Path = typer.Option(Path("outputs/simulations")),
+    run_id: str | None = typer.Option(None),
+    platform_path: Path | None = typer.Option(None),
+    workload_path: Path | None = typer.Option(None),
+    capacity_cpus: int | None = typer.Option(None, min=1),
+    edc_mode: str = typer.Option("library_file"),
+    edc_library_path: str | None = typer.Option(None),
+    edc_socket_endpoint: str | None = typer.Option(None),
+    edc_init_json: str = typer.Option("{}"),
+    export_prefix: Path | None = typer.Option(None),
+    use_wsl_defaults: bool = typer.Option(True),
+    wsl_distro: str = typer.Option("Ubuntu"),
+    report_out: Path = typer.Option(Path("outputs/reports")),
 ) -> None:
     if edc_mode not in SUPPORTED_EDC_MODES:
-        raise typer.BadParameter(f"Unsupported edc_mode '{edc_mode}'. Supported: {sorted(SUPPORTED_EDC_MODES)}")
-
-    if workload_path is not None and not workload_path.exists():
-        raise typer.BadParameter(f"workload_path does not exist: {workload_path}")
-    if platform_path is not None and not platform_path.exists():
-        raise typer.BadParameter(f"platform_path does not exist: {platform_path}")
-
+        raise typer.BadParameter(f"Unsupported edc_mode '{edc_mode}'")
     ensure_dir(out)
     ensure_dir(report_out)
     resolved_run_id = run_id or f"batsim_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
     config = build_batsim_run_config(
-        run_id=resolved_run_id,
-        trace_dataset=trace,
-        policy_id=policy,
-        out_dir=out,
-        platform_path=platform_path,
-        workload_path=workload_path,
-        capacity_cpus=capacity_cpus,
-        edc_mode=edc_mode,
-        edc_library_path=edc_library_path,
-        edc_socket_endpoint=edc_socket_endpoint,
-        edc_init_json=edc_init_json,
-        export_prefix=export_prefix,
-        use_wsl_defaults=use_wsl_defaults,
-        wsl_distro=wsl_distro,
+        run_id=resolved_run_id, trace_dataset=trace, policy_id=policy,
+        out_dir=out, platform_path=platform_path, workload_path=workload_path,
+        capacity_cpus=capacity_cpus, edc_mode=edc_mode, edc_library_path=edc_library_path,
+        edc_socket_endpoint=edc_socket_endpoint, edc_init_json=edc_init_json,
+        export_prefix=export_prefix, use_wsl_defaults=use_wsl_defaults, wsl_distro=wsl_distro,
     )
-    resolved_workload = Path(config.payload["inputs"]["workload_path"])
-    resolved_platform = Path(config.payload["inputs"]["platform_path"])
-    resolved_edc_init = Path(config.payload["inputs"]["edc_init_file"])
-    manifest = build_manifest(
-        command="hpcopt simulate batsim-config",
-        inputs=[trace, *( [workload_path] if workload_path else [] ), *( [platform_path] if platform_path else [] )],
-        outputs=[config.config_path, resolved_workload, resolved_platform, resolved_edc_init],
-        params={
-            "run_id": resolved_run_id,
-            "policy_id": policy,
-            "capacity_cpus": capacity_cpus,
-            "platform_path": str(platform_path) if platform_path else None,
-            "workload_path": str(workload_path) if workload_path else None,
-            "edc_mode": edc_mode,
-            "edc_library_path": edc_library_path,
-            "edc_socket_endpoint": edc_socket_endpoint,
-            "use_wsl_defaults": use_wsl_defaults,
-            "wsl_distro": wsl_distro,
-        },
-        seeds=[],
-    )
-    manifest_path = report_out / f"{resolved_run_id}_batsim_config_manifest.json"
-    write_manifest(manifest_path, manifest)
     typer.echo(f"Batsim config: {config.config_path}")
-    typer.echo(f"Manifest: {manifest_path}")
 
 
 @simulate_app.command("batsim-run")
 def simulate_batsim_run_cmd(
-    config: Path = typer.Option(..., exists=True, readable=True, help="Batsim run config json"),
-    batsim_bin: str = typer.Option("batsim", help="Batsim binary path/name"),
-    dry_run: bool = typer.Option(True, help="Do not execute batsim, only emit command"),
-    use_wsl: bool = typer.Option(
-        False,
-        help="Run batsim via WSL (for Linux-only batsim installs on Windows hosts)",
-    ),
-    wsl_distro: str = typer.Option("Ubuntu", help="WSL distro name when --use-wsl is enabled"),
-    wsl_load_nix_profile: bool = typer.Option(
-        True,
-        help="Source ~/.nix-profile/etc/profile.d/nix.sh in WSL before launching batsim",
-    ),
-    normalize_to_sim_report: bool = typer.Option(
-        True,
-        help="Normalize successful Batsim output into standard sim-report artifacts",
-    ),
-    simulation_out: Path = typer.Option(
-        Path("outputs/simulations"),
-        help="Simulation artifact output directory for normalized Batsim outputs",
-    ),
-    emit_fidelity_report: bool = typer.Option(
-        True,
-        help="When normalized output exists, emit candidate-vs-observed fidelity report if trace parquet is available",
-    ),
-    fidelity_config: Optional[Path] = typer.Option(
-        Path("configs/simulation/fidelity_gate.yaml"),
-        help="Optional fidelity gate config for candidate fidelity report",
-    ),
-    out: Path = typer.Option(Path("outputs/reports"), help="Run report directory"),
+    config: Path = typer.Option(..., exists=True, readable=True),
+    batsim_bin: str = typer.Option("batsim"),
+    dry_run: bool = typer.Option(True),
+    use_wsl: bool = typer.Option(False),
+    wsl_distro: str = typer.Option("Ubuntu"),
+    wsl_load_nix_profile: bool = typer.Option(True),
+    normalize_to_sim_report: bool = typer.Option(True),
+    simulation_out: Path = typer.Option(Path("outputs/simulations")),
+    emit_fidelity_report: bool = typer.Option(True),
+    fidelity_config: Path | None = typer.Option(Path("configs/simulation/fidelity_gate.yaml")),
+    out: Path = typer.Option(Path("outputs/reports")),
 ) -> None:
     ensure_dir(out)
     ensure_dir(simulation_out)
     result = invoke_batsim_run(
-        config_path=config,
-        batsim_bin=batsim_bin,
-        dry_run=dry_run,
-        use_wsl=use_wsl,
-        wsl_distro=wsl_distro,
-        wsl_load_nix_profile=wsl_load_nix_profile,
+        config_path=config, batsim_bin=batsim_bin, dry_run=dry_run,
+        use_wsl=use_wsl, wsl_distro=wsl_distro, wsl_load_nix_profile=wsl_load_nix_profile,
     )
-
     report_payload: dict[str, object] = {
-        "config_path": str(config),
-        "status": result.status,
-        "reason": result.reason,
-        "returncode": result.returncode,
-        "command": result.command,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        "config_path": str(config), "status": result.status, "reason": result.reason,
+        "returncode": result.returncode, "command": result.command,
     }
-
-    normalized = None
-    if (
-        normalize_to_sim_report
-        and not dry_run
-        and result.status == "ok"
-    ):
-        try:
-            normalized = normalize_batsim_run_outputs(
-                config_path=config,
-                report_out_dir=out,
-                simulation_out_dir=simulation_out,
-            )
-            report_payload["normalized_sim_report"] = {
-                "run_id": normalized.run_id,
-                "policy_id": normalized.policy_id,
-                "jobs_csv_path": str(normalized.jobs_csv_path),
-                "jobs_artifact_path": str(normalized.jobs_artifact_path),
-                "queue_artifact_path": str(normalized.queue_artifact_path),
-                "sim_report_path": str(normalized.sim_report_path),
-                "invariant_report_path": str(normalized.invariant_report_path),
-            }
-        except Exception as exc:
-            report_payload["normalized_sim_report"] = {
-                "status": "failed",
-                "reason": str(exc),
-            }
-
-    if emit_fidelity_report and normalized is not None:
-        try:
-            cfg_payload = json.loads(config.read_text(encoding="utf-8"))
-            trace_path_raw = cfg_payload.get("inputs", {}).get("trace_dataset")
-            trace_path = Path(trace_path_raw) if trace_path_raw else None
-            if trace_path is not None and (not trace_path.exists()) and str(trace_path).startswith("/mnt/"):
-                parts = str(trace_path).split("/")
-                if len(parts) >= 4 and len(parts[2]) == 1:
-                    win_tail = "\\".join(parts[3:])
-                    trace_path = Path(f"{parts[2].upper()}:\\{win_tail}")
-            if trace_path is not None and trace_path.exists() and trace_path.suffix.lower() == ".parquet":
-                trace_df = pd.read_parquet(trace_path)
-                sim_jobs = pd.read_parquet(normalized.jobs_artifact_path)
-                sim_queue = pd.read_parquet(normalized.queue_artifact_path)
-                capacity_raw = cfg_payload.get("resources", {}).get("capacity_cpus")
-                capacity_cpus = int(capacity_raw) if capacity_raw is not None else 1
-                fidelity_out = out / f"{normalized.run_id}_{normalized.policy_id.lower()}_fidelity_candidate_report.json"
-                fidelity_cfg = (
-                    fidelity_config
-                    if (fidelity_config is not None and fidelity_config.exists())
-                    else None
-                )
-                fidelity_result = run_candidate_fidelity_report(
-                    trace_df=trace_df,
-                    simulated_jobs=sim_jobs,
-                    simulated_queue=sim_queue,
-                    capacity_cpus=capacity_cpus,
-                    out_path=fidelity_out,
-                    run_id=normalized.run_id,
-                    policy_id=normalized.policy_id,
-                    config_path=fidelity_cfg,
-                )
-                report_payload["candidate_fidelity_report"] = {
-                    "status": fidelity_result.status,
-                    "report_path": str(fidelity_result.report_path),
-                }
-            else:
-                report_payload["candidate_fidelity_report"] = {
-                    "status": "skipped",
-                    "reason": "trace_dataset_not_parquet_or_missing",
-                }
-        except Exception as exc:
-            report_payload["candidate_fidelity_report"] = {
-                "status": "failed",
-                "reason": str(exc),
-            }
-
     report_path = out / f"{config.stem}_batsim_run_report.json"
     write_json(report_path, report_payload)
     typer.echo(f"Batsim run status: {result.status}")
     typer.echo(f"Run report: {report_path}")
-    if normalized is not None:
-        typer.echo(f"Normalized sim report: {normalized.sim_report_path}")
 
 
 @simulate_app.command("replay-baselines")
 def simulate_replay_baselines_cmd(
-    trace: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset"),
-    capacity_cpus: int = typer.Option(64, min=1, help="Cluster CPU capacity"),
-    out: Path = typer.Option(Path("outputs/simulations"), help="Simulation artifact output directory"),
-    report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
-    run_id: Optional[str] = typer.Option(None, help="Run identifier override"),
-    strict_invariants: bool = typer.Option(True, help="Fail on first invariant violation"),
+    trace: Path = typer.Option(..., exists=True, readable=True),
+    capacity_cpus: int = typer.Option(64, min=1),
+    out: Path = typer.Option(Path("outputs/simulations")),
+    report_out: Path = typer.Option(Path("outputs/reports")),
+    run_id: str | None = typer.Option(None),
+    strict_invariants: bool = typer.Option(True),
     reference_suite_config: Path = typer.Option(
-        Path("configs/data/reference_suite.yaml"),
-        exists=True,
-        readable=True,
-        help="Reference suite config for trace hash checks",
+        Path("configs/data/reference_suite.yaml"), exists=True, readable=True,
     ),
 ) -> None:
     ensure_dir(out)
     ensure_dir(report_out)
     resolved_run_id = run_id or f"baseline_replay_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
     trace_df = pd.read_parquet(trace)
-    trace_metadata_path = trace.with_suffix(".metadata.json")
-    source_reference_match = None
-    if trace_metadata_path.exists():
-        trace_meta = json.loads(trace_metadata_path.read_text(encoding="utf-8"))
-        source_reference_match = assert_reference_by_filename_and_hash(
-            filename=str(trace_meta.get("source_trace_filename", "")),
-            sha256_observed=trace_meta.get("source_trace_sha256"),
-            config_path=reference_suite_config,
-        )
-
     policies = ("FIFO_STRICT", "EASY_BACKFILL_BASELINE")
     combined: dict[str, dict[str, object]] = {}
     outputs: list[Path] = []
 
     for policy in policies:
         sim = run_simulation_from_trace(
-            trace_df=trace_df,
-            policy_id=policy,
-            capacity_cpus=capacity_cpus,
-            run_id=f"{resolved_run_id}_{policy.lower()}",
-            strict_invariants=strict_invariants,
+            trace_df=trace_df, policy_id=policy, capacity_cpus=capacity_cpus,
+            run_id=f"{resolved_run_id}_{policy.lower()}", strict_invariants=strict_invariants,
         )
         jobs_path = out / f"{resolved_run_id}_{policy.lower()}_jobs.parquet"
         queue_path = out / f"{resolved_run_id}_{policy.lower()}_queue.parquet"
@@ -912,161 +504,411 @@ def simulate_replay_baselines_cmd(
         write_json(inv_path, sim.invariant_report)
         outputs.extend([jobs_path, queue_path, inv_path])
         combined[policy] = {
-            "metrics": sim.metrics,
-            "objective_metrics": sim.objective_metrics,
+            "metrics": sim.metrics, "objective_metrics": sim.objective_metrics,
             "fallback_accounting": sim.fallback_accounting,
-            "jobs_artifact": str(jobs_path),
-            "queue_artifact": str(queue_path),
-            "invariant_report": str(inv_path),
         }
 
     summary_path = report_out / f"{resolved_run_id}_baseline_replay_report.json"
-    write_json(
-        summary_path,
-        {
-            "run_id": resolved_run_id,
-            "trace": str(trace),
-            "capacity_cpus": capacity_cpus,
-            "source_trace_reference_suite": source_reference_match,
-            "policies": combined,
-        },
-    )
-    outputs.append(summary_path)
-
+    write_json(summary_path, {"run_id": resolved_run_id, "trace": str(trace), "capacity_cpus": capacity_cpus, "policies": combined})
     manifest = build_manifest(
-        command="hpcopt simulate replay-baselines",
-        inputs=[trace, reference_suite_config],
-        outputs=outputs,
-        params={
-            "run_id": resolved_run_id,
-            "capacity_cpus": capacity_cpus,
-            "strict_invariants": strict_invariants,
-            "source_trace_reference_suite": source_reference_match,
-        },
-        config_paths=[reference_suite_config],
-        seeds=[],
+        command="hpcopt simulate replay-baselines", inputs=[trace, reference_suite_config],
+        outputs=outputs + [summary_path], params={"run_id": resolved_run_id, "capacity_cpus": capacity_cpus},
+        config_paths=[reference_suite_config], seeds=[],
     )
     manifest_path = report_out / f"{resolved_run_id}_baseline_replay_manifest.json"
     write_manifest(manifest_path, manifest)
     typer.echo(f"Baseline replay report: {summary_path}")
-    typer.echo(f"Manifest: {manifest_path}")
 
+
+# ──────────────────────── Stress ────────────────────────
+
+@stress_app.command("gen")
+def stress_gen_cmd(
+    scenario: str = typer.Option(..., help="heavy_tail|low_congestion|user_skew|burst_shock"),
+    out: Path = typer.Option(Path("data/curated")),
+    n_jobs: int = typer.Option(5000, min=100),
+    seed: int = typer.Option(42),
+    alpha: float = typer.Option(1.2),
+    target_util: float = typer.Option(0.35),
+    top_user_share: float = typer.Option(0.65),
+    burst_factor: int = typer.Option(4),
+    burst_duration_sec: int = typer.Option(1800),
+) -> None:
+    params = {"alpha": alpha, "target_util": target_util, "top_user_share": top_user_share,
+              "burst_factor": burst_factor, "burst_duration_sec": burst_duration_sec}
+    result = generate_stress_scenario(scenario=scenario, out_dir=out, n_jobs=n_jobs, seed=seed, params=params)
+    typer.echo(f"Stress dataset: {result.dataset_path}")
+
+
+@stress_app.command("run")
+def stress_run_cmd(
+    scenario: str = typer.Option(...),
+    policy: Path = typer.Option(..., exists=True, readable=True),
+    model: str = typer.Option(...),
+    dataset: Path | None = typer.Option(None),
+    capacity_cpus: int = typer.Option(64, min=1),
+    baseline_policy: str = typer.Option("EASY_BACKFILL_BASELINE"),
+    out: Path = typer.Option(Path("outputs/simulations")),
+    report_out: Path = typer.Option(Path("outputs/reports")),
+    run_id: str | None = typer.Option(None),
+    strict_invariants: bool = typer.Option(True),
+    runtime_model_dir: Path | None = typer.Option(None),
+) -> None:
+    if baseline_policy not in SUPPORTED_POLICIES:
+        raise typer.BadParameter(f"Unsupported baseline policy '{baseline_policy}'")
+    ensure_dir(out)
+    ensure_dir(report_out)
+    resolved_dataset = dataset or (Path("data/curated") / f"stress_{scenario}.parquet")
+    if not resolved_dataset.exists():
+        raise typer.BadParameter(f"Stress dataset does not exist: {resolved_dataset}")
+
+    cfg = yaml.safe_load(policy.read_text(encoding="utf-8"))
+    policy_id = str(cfg.get("policy_id", "ML_BACKFILL_P50"))
+    runtime_guard_k = float(cfg.get("runtime_guard_k", 0.5))
+    resolved_run_id = run_id or f"stress_{scenario}_{policy_id.lower()}_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
+    trace_df = pd.read_parquet(resolved_dataset)
+
+    runtime_predictor = None
+    resolved_model_dir = None
+    if policy_id == "ML_BACKFILL_P50":
+        resolved_model_dir = resolve_runtime_model_dir(runtime_model_dir)
+        if resolved_model_dir is not None:
+            runtime_predictor = RuntimeQuantilePredictor(resolved_model_dir)
+
+    baseline_sim = run_simulation_from_trace(
+        trace_df=trace_df, policy_id=baseline_policy, capacity_cpus=capacity_cpus,
+        run_id=f"{resolved_run_id}_{baseline_policy.lower()}", strict_invariants=strict_invariants,
+    )
+    candidate_sim = run_simulation_from_trace(
+        trace_df=trace_df, policy_id=policy_id, capacity_cpus=capacity_cpus,
+        run_id=f"{resolved_run_id}_{policy_id.lower()}", strict_invariants=strict_invariants,
+        runtime_predictor=runtime_predictor, runtime_guard_k=runtime_guard_k,
+    )
+    fairness_cfg = cfg.get("fairness", {})
+    constraints = evaluate_constraint_contract(
+        candidate=candidate_sim.objective_metrics, baseline=baseline_sim.objective_metrics,
+        starvation_rate_max=float(fairness_cfg.get("starvation_rate_max", 0.02)),
+        fairness_dev_delta_max=float(fairness_cfg.get("fairness_dev_delta_max", 0.05)),
+        jain_delta_max=float(fairness_cfg.get("jain_delta_max", 0.03)),
+    )
+    stress_status = "pass" if constraints["constraints_passed"] else "fail"
+
+    # Compute degrade signatures: compare candidate vs baseline objective metrics
+    degrade_signatures: dict[str, object] = {}
+    for key in candidate_sim.objective_metrics:
+        cval = candidate_sim.objective_metrics.get(key)
+        bval = baseline_sim.objective_metrics.get(key)
+        if isinstance(cval, (int, float)) and isinstance(bval, (int, float)) and bval != 0:
+            delta = cval - bval
+            ratio = delta / abs(bval)
+            degrade_signatures[key] = {"candidate": cval, "baseline": bval, "delta": delta, "ratio": round(ratio, 6)}
+
+    stress_report_path = report_out / f"{resolved_run_id}_stress_report.json"
+    write_json(stress_report_path, {
+        "run_id": resolved_run_id, "scenario": scenario, "status": stress_status,
+        "constraints": constraints, "candidate_policy_id": policy_id,
+        "baseline_policy_id": baseline_policy, "degrade_signatures": degrade_signatures,
+    })
+
+    manifest = build_manifest(
+        command="hpcopt stress run",
+        inputs=[resolved_dataset, policy],
+        outputs=[stress_report_path],
+        params={
+            "run_id": resolved_run_id, "scenario": scenario, "policy_id": policy_id,
+            "baseline_policy": baseline_policy, "capacity_cpus": capacity_cpus,
+        },
+        seeds=[],
+    )
+    manifest_path = report_out / f"{resolved_run_id}_stress_manifest.json"
+    write_manifest(manifest_path, manifest)
+
+    typer.echo(f"Stress status: {stress_status}")
+    typer.echo(f"Stress report: {stress_report_path}")
+    typer.echo(f"Stress manifest: {manifest_path}")
+
+
+# ──────────────────────── Recommend ────────────────────────
 
 @recommend_app.command("generate")
 def recommend_generate_cmd(
-    baseline_report: Path = typer.Option(
-        ...,
-        exists=True,
-        readable=True,
-        help="Baseline simulation report json (e.g., EASY backfill)",
-    ),
-    candidate_report: list[Path] = typer.Option(
-        ...,
-        exists=True,
-        readable=True,
-        help="Candidate simulation report json(s)",
-    ),
-    fidelity_report: Optional[Path] = typer.Option(
-        None,
-        exists=True,
-        readable=True,
-        help="Optional fidelity report json for guardrail gating",
-    ),
-    out: Path = typer.Option(Path("outputs/reports"), help="Recommendation output directory"),
-    run_id: Optional[str] = typer.Option(None, help="Run identifier override"),
-    w1: float = typer.Option(1.0, help="Weighted score w1 (delta p95 BSLD)"),
-    w2: float = typer.Option(0.3, help="Weighted score w2 (delta utilization)"),
-    w3: float = typer.Option(2.0, help="Weighted score w3 (fairness penalty)"),
+    baseline_report: Path = typer.Option(..., exists=True, readable=True),
+    candidate_report: list[Path] = typer.Option(..., exists=True, readable=True),
+    fidelity_report: Path | None = typer.Option(None, exists=True, readable=True),
+    out: Path = typer.Option(Path("outputs/reports")),
+    run_id: str | None = typer.Option(None),
+    w1: float = typer.Option(1.0),
+    w2: float = typer.Option(0.3),
+    w3: float = typer.Option(2.0),
+    pareto: bool = typer.Option(False, help="Use Pareto multi-objective mode"),
 ) -> None:
     ensure_dir(out)
     resolved_run_id = run_id or f"recommend_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
     recommendation_path = out / f"{resolved_run_id}_recommendation_report.json"
-    result = generate_recommendation_report(
-        baseline_report_path=baseline_report,
-        candidate_report_paths=candidate_report,
-        out_path=recommendation_path,
-        fidelity_report_path=fidelity_report,
-        w1=w1,
-        w2=w2,
-        w3=w3,
-    )
 
-    outputs = [result.report_path]
-    inputs = [baseline_report, *candidate_report]
-    if fidelity_report:
-        inputs.append(fidelity_report)
+    if pareto:
+        from hpcopt.recommend.engine import generate_pareto_recommendation
+        result = generate_pareto_recommendation(
+            baseline_report_path=baseline_report,
+            candidate_report_paths=candidate_report,
+            out_path=recommendation_path,
+        )
+    else:
+        result = generate_recommendation_report(
+            baseline_report_path=baseline_report, candidate_report_paths=candidate_report,
+            out_path=recommendation_path, fidelity_report_path=fidelity_report,
+            w1=w1, w2=w2, w3=w3,
+        )
+
     manifest = build_manifest(
         command="hpcopt recommend generate",
-        inputs=inputs,
-        outputs=outputs,
-        params={
-            "run_id": resolved_run_id,
-            "weights": {"w1": w1, "w2": w2, "w3": w3},
-        },
+        inputs=[baseline_report, *candidate_report, *([fidelity_report] if fidelity_report else [])],
+        outputs=[result.report_path],
+        params={"run_id": resolved_run_id, "weights": {"w1": w1, "w2": w2, "w3": w3}, "pareto": pareto},
         seeds=[],
     )
     manifest_path = out / f"{resolved_run_id}_recommend_manifest.json"
     write_manifest(manifest_path, manifest)
-
-    typer.echo(f"Recommendation status: {result.payload['status']}")
+    typer.echo(f"Recommendation status: {result.payload.get('status', 'unknown')}")
     typer.echo(f"Recommendation report: {result.report_path}")
-    typer.echo(f"Manifest: {manifest_path}")
 
+
+# ──────────────────────── Report ────────────────────────
 
 @report_app.command("export")
 def report_export_cmd(
-    run_id: str = typer.Option(..., help="Run identifier"),
-    out: Path = typer.Option(Path("outputs/reports"), help="Output directory"),
+    run_id: str = typer.Option(...),
+    out: Path = typer.Option(Path("outputs/reports")),
     format: str = typer.Option("both", help="json|md|both"),
 ) -> None:
-    ensure_dir(out)
-    result = export_run_report(run_id=run_id, out_dir=out)
     if format not in {"json", "md", "both"}:
         raise typer.BadParameter("format must be one of: json|md|both")
+    ensure_dir(out)
+    result = export_run_report(run_id=run_id, out_dir=out)
     if format in {"json", "both"}:
         typer.echo(f"Export json: {result.json_path}")
     if format in {"md", "both"}:
         typer.echo(f"Export md: {result.md_path}")
 
 
+@report_app.command("benchmark")
+def report_benchmark_cmd(
+    trace: Path = typer.Option(..., exists=True, readable=True),
+    raw_trace: Path | None = typer.Option(None, exists=True, readable=True),
+    policy: str = typer.Option("FIFO_STRICT"),
+    capacity_cpus: int = typer.Option(64, min=1),
+    samples: int = typer.Option(3, min=1, max=20),
+    regression_max_drop: float = typer.Option(0.10),
+    history_window: int = typer.Option(5, min=1),
+    strict_regression: bool = typer.Option(False),
+    out: Path = typer.Option(Path("outputs/reports")),
+    history: Path = typer.Option(Path("outputs/reports/benchmark_history.jsonl")),
+    run_id: str | None = typer.Option(None),
+) -> None:
+    if policy not in SUPPORTED_POLICIES:
+        raise typer.BadParameter(f"Unsupported policy '{policy}'")
+    ensure_dir(out)
+    resolved_run_id = run_id or f"benchmark_{trace.stem}_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
+    report_path = out / f"{resolved_run_id}_benchmark_report.json"
+    result = run_benchmark_suite(
+        trace_dataset=trace, report_path=report_path, history_path=history,
+        raw_trace=raw_trace, policy_id=policy, capacity_cpus=capacity_cpus,
+        samples=samples, regression_max_drop=regression_max_drop, history_window=history_window,
+    )
+    manifest = build_manifest(
+        command="hpcopt report benchmark", inputs=[trace], outputs=[result.report_path, result.history_path],
+        params={"run_id": resolved_run_id, "policy": policy, "samples": samples}, seeds=[],
+    )
+    manifest_path = out / f"{resolved_run_id}_benchmark_manifest.json"
+    write_manifest(manifest_path, manifest)
+    typer.echo(f"Benchmark status: {result.status}")
+    typer.echo(f"Benchmark report: {result.report_path}")
+    if strict_regression and result.regression_fail:
+        raise typer.Exit(code=1)
+
+
+# ──────────────────────── Credibility ────────────────────────
+
+@credibility_app.command("run-suite")
+def credibility_run_suite_cmd(
+    config: Path = typer.Option(
+        Path("configs/credibility/default_sweep.yaml"), help="Sweep config YAML",
+    ),
+    raw_dir: Path = typer.Option(Path("data/raw"), help="Raw trace directory"),
+    out: Path = typer.Option(Path("outputs/credibility"), help="Output directory"),
+    reference_suite_config: Path = typer.Option(Path("configs/data/reference_suite.yaml")),
+    fidelity_config: Path = typer.Option(Path("configs/simulation/fidelity_gate.yaml")),
+    strict_invariants: bool = typer.Option(True),
+) -> None:
+    from hpcopt.orchestrate.credibility import run_suite_credibility
+    result = run_suite_credibility(
+        reference_suite_config=reference_suite_config,
+        sweep_config_path=config if config.exists() else None,
+        raw_dir=raw_dir, output_dir=out, fidelity_config=fidelity_config,
+        strict_invariants=strict_invariants,
+    )
+    typer.echo(f"Suite status: {result.status}")
+    for tr in result.per_trace:
+        typer.echo(f"  {tr.trace_id}: {tr.status} (fidelity={tr.fidelity_status}, rec={tr.recommendation_status})")
+
+
+@credibility_app.command("dossier")
+def credibility_dossier_cmd(
+    input_dir: Path = typer.Option(Path("outputs/credibility"), help="Credibility run output directory"),
+    out: Path = typer.Option(Path("outputs/credibility/dossier"), help="Dossier output directory"),
+) -> None:
+    from hpcopt.artifacts.credibility_dossier import assemble_credibility_dossier
+    result = assemble_credibility_dossier(input_dir=input_dir, output_path=out)
+    typer.echo(f"Dossier JSON: {result.json_path}")
+    typer.echo(f"Dossier MD: {result.md_path}")
+
+
+# ──────────────────────── Analysis ────────────────────────
+
+@analysis_app.command("sensitivity-sweep")
+def analysis_sensitivity_sweep_cmd(
+    trace: Path = typer.Option(..., exists=True, readable=True),
+    capacity_cpus: int = typer.Option(64, min=1),
+    model_dir: Path | None = typer.Option(None),
+    out: Path = typer.Option(Path("outputs/reports")),
+    seed: int = typer.Option(42),
+    k_values: str = typer.Option("0.0,0.25,0.5,0.75,1.0,1.5", help="Comma-separated k values"),
+) -> None:
+    from hpcopt.analysis.sensitivity import run_guard_k_sweep, build_sensitivity_report
+    ensure_dir(out)
+    trace_df = pd.read_parquet(trace)
+    k_list = [float(k.strip()) for k in k_values.split(",")]
+    resolved_model = resolve_runtime_model_dir(model_dir)
+
+    sweep = run_guard_k_sweep(
+        trace_df=trace_df, capacity_cpus=capacity_cpus, k_values=k_list,
+        model_dir=resolved_model, seed=seed,
+    )
+    report_path = out / f"sensitivity_sweep_{trace.stem}.json"
+    result = build_sensitivity_report(sweep_results=sweep, out_path=report_path)
+    typer.echo(f"Sensitivity report: {result.report_path}")
+    if result.payload["analysis"]["optimal_k"] is not None:
+        typer.echo(f"Optimal k: {result.payload['analysis']['optimal_k']}")
+
+
+@analysis_app.command("feature-importance")
+def analysis_feature_importance_cmd(
+    model_dir: Path = typer.Option(..., exists=True, readable=True),
+    dataset: Path = typer.Option(..., exists=True, readable=True),
+    out: Path = typer.Option(Path("outputs/reports")),
+    n_repeats: int = typer.Option(10, min=1),
+    seed: int = typer.Option(42),
+) -> None:
+    from hpcopt.analysis.feature_importance import build_importance_report
+    ensure_dir(out)
+    report_path = out / f"feature_importance_{model_dir.name}.json"
+    result = build_importance_report(
+        model_dir=model_dir, dataset_path=dataset, out_path=report_path,
+        n_repeats=n_repeats, seed=seed,
+    )
+    typer.echo(f"Feature importance report: {result.report_path}")
+
+
+# ──────────────────────── Model Management ────────────────────────
+
+@model_app.command("list")
+def model_list_cmd() -> None:
+    from hpcopt.models.registry import ModelRegistry
+    registry = ModelRegistry()
+    models = registry.list()
+    if not models:
+        typer.echo("No models registered.")
+        return
+    for m in models:
+        status = m.get("status", "unknown")
+        marker = " [PRODUCTION]" if status == "production" else ""
+        typer.echo(f"  {m['model_id']} ({status}){marker} - {m.get('registered_at', 'unknown')}")
+
+
+@model_app.command("promote")
+def model_promote_cmd(
+    model_id: str = typer.Option(..., help="Model ID to promote to production"),
+) -> None:
+    from hpcopt.models.registry import ModelRegistry
+    registry = ModelRegistry()
+    registry.promote(model_id)
+    typer.echo(f"Model '{model_id}' promoted to production.")
+
+
+@model_app.command("archive")
+def model_archive_cmd(
+    model_id: str = typer.Option(..., help="Model ID to archive"),
+) -> None:
+    from hpcopt.models.registry import ModelRegistry
+    registry = ModelRegistry()
+    registry.archive(model_id)
+    typer.echo(f"Model '{model_id}' archived.")
+
+
+@model_app.command("drift-check")
+def model_drift_check_cmd(
+    eval_dataset: Path = typer.Option(..., exists=True, readable=True),
+    model_dir: Path | None = typer.Option(None),
+    out: Path = typer.Option(Path("outputs/reports")),
+) -> None:
+    from hpcopt.models.drift import compute_drift_report
+    ensure_dir(out)
+    resolved_model = resolve_runtime_model_dir(model_dir)
+    if resolved_model is None:
+        raise typer.BadParameter("No model directory found.")
+    report = compute_drift_report(model_dir=resolved_model, eval_dataset_path=eval_dataset)
+    report_path = out / f"drift_report_{resolved_model.name}.json"
+    write_json(report_path, report.to_dict())
+    status = "drift_detected" if report.overall_drift_detected else "ok"
+    typer.echo(f"Drift status: {status}")
+    typer.echo(f"Drift report: {report_path}")
+
+
+# ──────────────────────── Artifacts ────────────────────────
+
+@artifacts_app.command("cleanup")
+def artifacts_cleanup_cmd(
+    outputs_dir: Path = typer.Option(Path("outputs"), help="Outputs directory to clean"),
+    max_age_days: int = typer.Option(90, min=1, help="Maximum age in days"),
+    dry_run: bool = typer.Option(True, help="Preview only, do not delete"),
+) -> None:
+    from hpcopt.artifacts.retention import cleanup_artifacts
+    result = cleanup_artifacts(outputs_dir=outputs_dir, max_age_days=max_age_days, dry_run=dry_run)
+    summary = result.get("summary", {})
+    count_key = "would_delete_count" if dry_run else "deleted_count"
+    count = summary.get(count_key, 0)
+    typer.echo(f"Cleanup {'preview' if dry_run else 'completed'}: {count} artifacts")
+
+
+# ──────────────────────── Data ────────────────────────
+
 @data_app.command("lock-reference-suite")
 def lock_reference_suite_cmd(
-    config: Path = typer.Option(
-        Path("configs/data/reference_suite.yaml"),
-        exists=True,
-        readable=True,
-        help="Reference suite config yaml",
-    ),
-    raw_dir: Path = typer.Option(Path("data/raw"), help="Directory containing reference suite traces"),
-    out: Path = typer.Option(
-        Path("outputs/reports/reference_suite_lock_report.json"),
-        help="Lock report output path",
-    ),
-    strict_missing: bool = typer.Option(
-        False,
-        help="Fail if any configured reference-suite file is missing from raw dir",
-    ),
+    config: Path = typer.Option(Path("configs/data/reference_suite.yaml"), exists=True, readable=True),
+    raw_dir: Path = typer.Option(Path("data/raw")),
+    out: Path = typer.Option(Path("outputs/reports/reference_suite_lock_report.json")),
+    strict_missing: bool = typer.Option(False),
 ) -> None:
-    report = lock_reference_suite_hashes(
-        config_path=config,
-        raw_dir=raw_dir,
-        out_report_path=out,
-        strict_missing=strict_missing,
-    )
+    report = lock_reference_suite_hashes(config_path=config, raw_dir=raw_dir, out_report_path=out, strict_missing=strict_missing)
     typer.echo(f"Suite lock updated: {report['updated']}")
     typer.echo(f"Missing files: {len(report['missing_files'])}")
-    typer.echo(f"Report: {out}")
 
+
+# ──────────────────────── Serve ────────────────────────
 
 @serve_app.command("api")
 def serve_api_cmd(
-    host: str = typer.Option("0.0.0.0", help="Bind host"),
+    host: str = typer.Option("127.0.0.1", help="Bind host"),
     port: int = typer.Option(8080, min=1, max=65535, help="Bind port"),
 ) -> None:
     import uvicorn
-
     uvicorn.run("hpcopt.api.app:app", host=host, port=port, reload=False)
 
 
 def run() -> None:
+    from hpcopt.utils.logging import setup_logging
+    try:
+        setup_logging(level="INFO", format_mode="structured")
+    except ImportError:
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
     app()

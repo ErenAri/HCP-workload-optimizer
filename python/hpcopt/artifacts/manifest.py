@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import logging
 import platform
 import subprocess
 import sys
@@ -10,17 +11,9 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any
 
-from hpcopt.utils.io import write_json
+from hpcopt.utils.io import sha256_path as _sha256_path, write_json
 
-
-def _sha256_path(path: Path) -> str | None:
-    if not path.exists() or not path.is_file():
-        return None
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+logger = logging.getLogger(__name__)
 
 
 def _git_commit() -> str | None:
@@ -32,7 +25,8 @@ def _git_commit() -> str | None:
             text=True,
         )
         return result.stdout.strip()
-    except Exception:
+    except (subprocess.SubprocessError, FileNotFoundError) as exc:
+        logger.debug("Could not resolve git commit: %s", exc)
         return None
 
 
@@ -52,7 +46,8 @@ def _cmd_version(cmd: list[str]) -> str | None:
             text=True,
         )
         return result.stdout.strip() or result.stderr.strip() or None
-    except Exception:
+    except (subprocess.SubprocessError, FileNotFoundError) as exc:
+        logger.debug("Could not resolve version for %s: %s", cmd[0], exc)
         return None
 
 
@@ -67,6 +62,34 @@ def _lock_hash(paths: list[Path]) -> str | None:
     return digest.hexdigest()
 
 
+def _pip_freeze_snapshot() -> list[str]:
+    """Capture installed package versions via pip freeze."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "pip", "freeze", "--local"],
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=30,
+        )
+        return [line.strip() for line in result.stdout.strip().splitlines() if line.strip()]
+    except (subprocess.SubprocessError, FileNotFoundError, OSError) as exc:
+        logger.debug("Could not capture pip freeze: %s", exc)
+        return []
+
+
+def _os_fingerprint() -> dict[str, str]:
+    """Collect OS/machine fingerprint for reproducibility."""
+    return {
+        "system": platform.system(),
+        "release": platform.release(),
+        "version": platform.version(),
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+        "node": platform.node(),
+    }
+
+
 def build_manifest(
     command: str,
     inputs: list[Path],
@@ -75,6 +98,7 @@ def build_manifest(
     policy_spec_path: Path | None = Path("design_docs/policy_spec_baselines_mvp.md"),
     config_paths: list[Path] | None = None,
     seeds: list[int] | None = None,
+    model_hash: str | None = None,
 ) -> dict[str, Any]:
     config_paths = config_paths or []
     config_snapshots = [
@@ -100,6 +124,8 @@ def build_manifest(
             "pandas": _pkg_version("pandas"),
             "pyarrow": _pkg_version("pyarrow"),
             "typer": _pkg_version("typer"),
+            "scikit-learn": _pkg_version("scikit-learn"),
+            "fastapi": _pkg_version("fastapi"),
         },
         "tool_versions": {
             "cargo": _cmd_version(["cargo", "--version"]),
@@ -109,6 +135,8 @@ def build_manifest(
             "platform": platform.platform(),
             "python_implementation": platform.python_implementation(),
         },
+        "os_fingerprint": _os_fingerprint(),
+        "pip_freeze_snapshot": _pip_freeze_snapshot(),
         "inputs": [
             {"path": str(path), "sha256": _sha256_path(path)}
             for path in inputs
@@ -122,6 +150,7 @@ def build_manifest(
         "config_snapshots": config_snapshots,
         "seeds": seeds or [],
         "params": params,
+        "model_hash": model_hash,
         "immutable": True,
     }
 

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from hpcopt.utils.io import ensure_dir, write_json
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_load_json(path: Path) -> dict[str, Any] | None:
@@ -14,7 +17,8 @@ def _safe_load_json(path: Path) -> dict[str, Any] | None:
         payload = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(payload, dict):
             return payload
-    except Exception:
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("Could not load JSON from %s: %s", path, exc)
         return None
     return None
 

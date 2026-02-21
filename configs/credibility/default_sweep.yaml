@@ -1,0 +1,15 @@
+defaults:
+  capacity_cpus: 64
+  runtime_guard_k: 0.5
+  seed: 42
+
+traces:
+  ctc_sp2_1996:
+    capacity_cpus: 64
+    runtime_guard_k: 0.5
+  sdsc_sp2_1998:
+    capacity_cpus: 128
+    runtime_guard_k: 0.5
+  hpc2n_2002:
+    capacity_cpus: 240
+    runtime_guard_k: 0.5

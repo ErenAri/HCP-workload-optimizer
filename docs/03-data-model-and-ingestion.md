@@ -2,7 +2,11 @@
 
 ## 1. Dataset Strategy
 
-The MVP is intentionally constrained to SWF/PWA traces to maximize comparability with established scheduling literature.
+The system supports multiple workload trace formats to cover both research benchmarks and production scheduler data:
+
+- **SWF** (Standard Workload Format): primary research format, maximizes comparability with established scheduling literature.
+- **Slurm** (`sacct --parsable2`): production scheduler accounting data.
+- **PBS/Torque**: production scheduler accounting logs.
 
 Reference suite (locked in `configs/data/reference_suite.yaml`):
 
@@ -12,9 +16,11 @@ Reference suite (locked in `configs/data/reference_suite.yaml`):
 
 Each reference entry stores filename, source URL, and SHA-256 hash.
 
-## 2. SWF Parsing Contract
+## 2. Ingestion Parsers
 
-Source parser:
+### SWF Parser
+
+Source:
 - `python/hpcopt/ingest/swf.py` (canonical pipeline),
 - `rust/swf-parser/src/main.rs` (high-speed statistics utility).
 
@@ -22,6 +28,39 @@ SWF format assumptions:
 - 18-field standard workload line format,
 - comments prefixed by `;` or `#`,
 - blank and malformed lines tracked in quality report.
+
+### Slurm Parser
+
+Source: `python/hpcopt/ingest/slurm.py`
+
+Parses `sacct --parsable2` (pipe-delimited) output. Features:
+- auto-detects header row from column names,
+- handles array jobs (`12345_0`) and job steps (`12345.batch`),
+- job steps are skipped by default (configurable),
+- parses `Elapsed` field in `[DD-]HH:MM:SS` format,
+- parses `ReqMem` field (`4000Mc`, `8Gn`) with per-CPU/per-node suffixes.
+
+### PBS/Torque Parser
+
+Source: `python/hpcopt/ingest/pbs.py`
+
+Parses PBS/Torque accounting log format (`timestamp;type;id;attrs`). Features:
+- extracts only `E` (exit) records for full accounting data,
+- parses `nodes=1:ppn=8` style CPU specifications,
+- handles memory units (`kb`, `mb`, `gb`, `tb`),
+- strips server suffix from job IDs and normalizes array bracket notation,
+- supports both epoch integer and formatted datetime timestamps.
+
+### Shadow Ingestion Daemon
+
+Source: `python/hpcopt/ingest/shadow.py`
+
+Periodic polling daemon for incremental ingestion from live scheduler data:
+- watermark-based deduplication (records with `submit_ts` > last watermark),
+- persistent watermark state (JSON) across restarts,
+- supports `slurm`, `pbs`, and `swf` source types,
+- configurable polling interval,
+- runs as blocking foreground or background daemon thread.
 
 ## 3. Canonical Job Schema (Current Implementation)
 

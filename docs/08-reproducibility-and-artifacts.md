@@ -61,6 +61,23 @@ Defines fidelity report essentials:
 
 These enforce scheduler boundary compatibility.
 
+### Configuration Schemas
+
+- `schemas/policy_config.schema.json` -- validates policy configuration (guard coefficients, fairness thresholds, backfill settings).
+- `schemas/fidelity_gate_config.schema.json` -- validates fidelity gate threshold configuration.
+- `schemas/reference_suite_config.schema.json` -- validates reference suite trace definitions.
+
+### Evaluation Schemas
+
+- `schemas/credibility_dossier.schema.json` -- validates credibility dossier structure.
+- `schemas/sensitivity_report.schema.json` -- validates sensitivity sweep output.
+
+### Config Validation
+
+Module: `python/hpcopt/utils/config_validation.py`
+
+`validate_config(path, schema_name)` loads a YAML config and validates against the matching JSON Schema from the `schemas/` directory. Returns `{"valid": bool, "errors": list[str]}` with JSON-path-annotated error messages. Gracefully degrades if `jsonschema` is not installed.
+
 ## 4. Artifact Families
 
 ### Data Artifacts
@@ -72,8 +89,12 @@ These enforce scheduler boundary compatibility.
 ### Modeling Artifacts
 
 - quantile model files (`outputs/models/<model_id>/p10.joblib`, etc.)
+- resource-fit model files (`fragmentation_classifier.joblib`, `node_size_regressor.joblib`)
 - model metrics and metadata
 - latest pointer (`outputs/models/runtime_latest.json`)
+- model registry (`outputs/models/registry.jsonl`)
+- drift reports (`*_drift_report.json`)
+- tuning reports (`tuning_q*_report.json`)
 
 ### Simulation Artifacts
 
@@ -87,6 +108,10 @@ These enforce scheduler boundary compatibility.
 - fidelity reports (`*_fidelity_report.json`, candidate variants),
 - recommendation reports (`*_recommendation_report.json`),
 - recommendation manifests (`*_recommend_manifest.json`),
+- sensitivity reports (`sensitivity_sweep_*.json`),
+- feature importance reports (`feature_importance_*.json`),
+- stress reports (`*_stress_report.json`) with degrade signatures,
+- credibility dossiers (`dossier.json`, `dossier.md`),
 - export bundles (`*_export.json`, `*_export.md`).
 
 ## 5. Batsim Normalization Contract
@@ -103,18 +128,55 @@ Normalization output includes:
 
 This enables uniform recommendation workflows regardless of backend.
 
-## 6. Validation and Test Coverage
+## 6. Artifact Retention
 
-Current tests validate:
+Module: `python/hpcopt/artifacts/retention.py`
 
-- ingestion and schema-critical fields,
+Command:
+```bash
+hpcopt artifacts cleanup --outputs-dir outputs --max-age-days 90
+```
+
+Scans for stale artifacts and optionally deletes them (default: dry run). Protected from cleanup:
+- current production model directory (resolved from model registry),
+- artifacts referenced by credibility dossier export files,
+- model registry file itself.
+
+Empty directories are cleaned up after file deletion.
+
+## 7. Structured Logging
+
+Module: `python/hpcopt/utils/logging.py`
+
+All CLI commands emit structured JSON logs to stderr with:
+- ISO-8601 UTC timestamp,
+- log level,
+- logger name,
+- correlation ID (propagated via `contextvars`),
+- optional extra fields,
+- exception details when applicable.
+
+Correlation IDs can be set explicitly or auto-generated for request tracing.
+
+## 8. Validation and Test Coverage
+
+Current tests validate (51 tests):
+
+- ingestion (SWF, Slurm) and schema-critical fields,
 - trace profile sections,
+- feature pipeline with chronological splits,
 - runtime model training and monotonic quantiles,
 - adapter contract behavior,
 - cross-language parity for decisions,
 - fidelity report generation,
 - recommendation guardrails,
 - Batsim config/run/normalization path,
+- benchmark suite with regression detection,
+- stress scenario generation and stress run CLI,
+- reproducibility (deterministic replay, seed stability, fidelity determinism, feature pipeline determinism),
+- credibility protocol integration,
+- API endpoints (health, ready, predict, resource-fit, auth, validation),
+- API load/concurrency behavior,
 - manifest hash persistence.
 
 ## 7. Known Reproducibility Caveat

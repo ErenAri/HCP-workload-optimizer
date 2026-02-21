@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import hashlib
+import logging
+
 import joblib
 import numpy as np
 import pandas as pd
@@ -18,6 +21,7 @@ from sklearn.preprocessing import OneHotEncoder
 
 from hpcopt.utils.io import ensure_dir, write_json
 
+logger = logging.getLogger(__name__)
 
 TARGET_COLUMN = "runtime_actual_sec"
 FEATURE_COLUMNS = [
@@ -98,7 +102,11 @@ def _safe_mape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(np.mean(np.abs(y_true - y_pred) / denom))
 
 
-def _build_pipeline(alpha: float, seed: int) -> Pipeline:
+def _build_pipeline(
+    alpha: float,
+    seed: int,
+    hyperparams: dict[str, Any] | None = None,
+) -> Pipeline:
     preprocessor = ColumnTransformer(
         transformers=[
             (
@@ -125,14 +133,17 @@ def _build_pipeline(alpha: float, seed: int) -> Pipeline:
             ),
         ]
     )
+    hp = hyperparams or {}
     estimator = GradientBoostingRegressor(
         loss="quantile",
         alpha=alpha,
         random_state=seed,
-        n_estimators=120,
-        learning_rate=0.05,
-        max_depth=3,
-        subsample=0.8,
+        n_estimators=int(hp.get("n_estimators", 120)),
+        learning_rate=float(hp.get("learning_rate", 0.05)),
+        max_depth=int(hp.get("max_depth", 3)),
+        subsample=float(hp.get("subsample", 0.8)),
+        min_samples_leaf=int(hp.get("min_samples_leaf", 10)),
+        min_samples_split=int(hp.get("min_samples_split", 20)),
     )
     return Pipeline([("preprocess", preprocessor), ("regressor", estimator)])
 
@@ -163,6 +174,7 @@ def train_runtime_quantile_models(
     out_dir: Path,
     model_id: str,
     seed: int = 42,
+    hyperparams: dict[str, Any] | None = None,
 ) -> RuntimeTrainResult:
     ensure_dir(out_dir)
     model_dir = out_dir / model_id
@@ -192,7 +204,7 @@ def train_runtime_quantile_models(
     test_predictions: dict[str, np.ndarray] = {}
 
     for quantile_name, quantile in QUANTILES.items():
-        pipeline = _build_pipeline(alpha=quantile, seed=seed)
+        pipeline = _build_pipeline(alpha=quantile, seed=seed, hyperparams=hyperparams)
         pipeline.fit(x_train, y_train)
         pred_test = pipeline.predict(x_test)
         pred_test = np.maximum(pred_test, 1.0)
@@ -257,6 +269,16 @@ def train_runtime_quantile_models(
     }
     metrics["timestamp_utc"] = dt.datetime.now(tz=dt.UTC).isoformat()
 
+    model_hashes: dict[str, str] = {}
+    for quantile_name in QUANTILES:
+        artifact = model_dir / f"{quantile_name}.joblib"
+        if artifact.exists():
+            digest = hashlib.sha256()
+            with artifact.open("rb") as f:
+                for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                    digest.update(chunk)
+            model_hashes[artifact.name] = digest.hexdigest()
+
     metadata = {
         "model_id": model_id,
         "model_type": "gradient_boosting_quantile",
@@ -266,6 +288,7 @@ def train_runtime_quantile_models(
         "seed": int(seed),
         "trained_at_utc": metrics["timestamp_utc"],
         "dataset_path": str(dataset_path),
+        "model_hashes": model_hashes,
     }
 
     metrics_path = model_dir / "metrics.json"
@@ -302,19 +325,54 @@ def resolve_runtime_model_dir(explicit_model_dir: Path | None = None) -> Path | 
             candidate = Path(str(latest["model_dir"]))
             if candidate.exists():
                 return candidate
-        except Exception:
+        except (json.JSONDecodeError, KeyError, OSError) as exc:
+            logger.warning("Could not resolve runtime model from latest pointer: %s", exc)
             return None
     return None
+
+
+def _verify_model_hash(model_path: Path, expected_hashes: dict[str, str] | None) -> None:
+    """Verify model file hash against metadata before loading."""
+    if expected_hashes is None:
+        return
+    expected = expected_hashes.get(model_path.name)
+    if expected is None:
+        return
+    digest = hashlib.sha256()
+    with model_path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    actual = digest.hexdigest()
+    if actual != expected:
+        raise ValueError(
+            f"Model hash mismatch for {model_path.name}: "
+            f"expected={expected}, actual={actual}"
+        )
+
+
+def _load_model_hashes(model_dir: Path) -> dict[str, str] | None:
+    """Load expected model hashes from metadata.json if available."""
+    metadata_path = model_dir / "metadata.json"
+    if not metadata_path.exists():
+        return None
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+        return metadata.get("model_hashes")
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.warning("Could not load model metadata for hash verification: %s", exc)
+        return None
 
 
 class RuntimeQuantilePredictor:
     def __init__(self, model_dir: Path):
         self.model_dir = model_dir
         self.models: dict[str, Pipeline] = {}
+        expected_hashes = _load_model_hashes(model_dir)
         for quantile_name in QUANTILES:
             model_path = model_dir / f"{quantile_name}.joblib"
             if not model_path.exists():
                 raise FileNotFoundError(f"missing model artifact: {model_path}")
+            _verify_model_hash(model_path, expected_hashes)
             self.models[quantile_name] = joblib.load(model_path)
 
     def predict_one(self, features: dict[str, Any]) -> dict[str, float]:

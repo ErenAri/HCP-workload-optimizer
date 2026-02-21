@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from hpcopt.utils.io import write_json
+from hpcopt.utils.io import sha256_path as _sha256_path, write_json
 
 
 @dataclass(frozen=True)
@@ -22,14 +21,6 @@ class ReferenceTrace:
 class ReferenceSuite:
     suite_id: str
     traces: tuple[ReferenceTrace, ...]
-
-
-def _sha256_path(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def load_reference_suite(config_path: Path) -> ReferenceSuite:

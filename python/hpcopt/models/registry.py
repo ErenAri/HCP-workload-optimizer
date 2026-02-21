@@ -1,0 +1,255 @@
+from __future__ import annotations
+
+import datetime as dt
+import json
+import logging
+import threading
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any
+
+from hpcopt.utils.io import ensure_dir
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Data model
+# ---------------------------------------------------------------------------
+
+VALID_STATUSES = {"registered", "production", "archived"}
+
+DEFAULT_REGISTRY_PATH = Path("outputs/models/registry.jsonl")
+
+
+@dataclass
+class RegistryEntry:
+    """Single row in the model registry."""
+
+    model_id: str
+    model_dir: str
+    status: str  # registered | production | archived
+    registered_at: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    # ------------------------------------------------------------------
+    # Serialisation helpers
+    # ------------------------------------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> RegistryEntry:
+        return cls(
+            model_id=str(data["model_id"]),
+            model_dir=str(data["model_dir"]),
+            status=str(data["status"]),
+            registered_at=str(data["registered_at"]),
+            metadata=data.get("metadata") or {},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Registry implementation
+# ---------------------------------------------------------------------------
+
+
+class ModelRegistry:
+    """Append-only registry backed by a JSONL file.
+
+    Thread-safety is provided via a ``threading.Lock`` so that multiple
+    in-process callers can safely read/write concurrently.  Cross-process
+    safety is **not** guaranteed -- callers that require it should layer an
+    external file-lock on top.
+    """
+
+    def __init__(self, registry_path: Path | None = None) -> None:
+        self._path: Path = registry_path or DEFAULT_REGISTRY_PATH
+        self._lock = threading.Lock()
+        # Eagerly create the parent directory so later writes never fail due
+        # to a missing directory.
+        ensure_dir(self._path.parent)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _read_all(self) -> list[RegistryEntry]:
+        """Load every entry from the JSONL backing file."""
+        if not self._path.exists():
+            return []
+
+        entries: list[RegistryEntry] = []
+        for line_no, raw_line in enumerate(
+            self._path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            raw_line = raw_line.strip()
+            if not raw_line:
+                continue
+            try:
+                data = json.loads(raw_line)
+                entries.append(RegistryEntry.from_dict(data))
+            except (json.JSONDecodeError, KeyError, TypeError) as exc:
+                logger.warning(
+                    "Skipping malformed registry line %d in %s: %s",
+                    line_no,
+                    self._path,
+                    exc,
+                )
+        return entries
+
+    def _write_all(self, entries: list[RegistryEntry]) -> None:
+        """Overwrite the backing file with *entries*."""
+        ensure_dir(self._path.parent)
+        lines = [json.dumps(entry.to_dict(), sort_keys=True) for entry in entries]
+        self._path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def _append_one(self, entry: RegistryEntry) -> None:
+        """Append a single entry without rewriting the whole file."""
+        ensure_dir(self._path.parent)
+        with self._path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry.to_dict(), sort_keys=True) + "\n")
+
+    def _find_entry(
+        self, entries: list[RegistryEntry], model_id: str
+    ) -> RegistryEntry | None:
+        for entry in entries:
+            if entry.model_id == model_id:
+                return entry
+        return None
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def register(
+        self,
+        model_id: str,
+        model_dir: str | Path,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Register a newly-trained model.
+
+        Parameters
+        ----------
+        model_id:
+            Unique identifier for this model version.
+        model_dir:
+            Path to the directory containing model artifacts.
+        metadata:
+            Arbitrary key/value pairs (hyperparams, dataset id, etc.).
+
+        Returns
+        -------
+        dict
+            The full registry entry as a plain dict.
+
+        Raises
+        ------
+        ValueError
+            If *model_id* is already registered.
+        """
+        with self._lock:
+            existing = self._read_all()
+            if self._find_entry(existing, model_id) is not None:
+                raise ValueError(
+                    f"Model '{model_id}' is already registered. "
+                    "Use a unique model_id or archive the existing one first."
+                )
+
+            entry = RegistryEntry(
+                model_id=model_id,
+                model_dir=str(model_dir),
+                status="registered",
+                registered_at=dt.datetime.now(tz=dt.UTC).isoformat(),
+                metadata=metadata or {},
+            )
+            self._append_one(entry)
+            logger.info("Registered model %s at %s", model_id, model_dir)
+            return entry.to_dict()
+
+    def get(self, model_id: str) -> dict[str, Any]:
+        """Return the registry entry for *model_id*.
+
+        Raises
+        ------
+        KeyError
+            If no entry exists for the given *model_id*.
+        """
+        with self._lock:
+            entries = self._read_all()
+        match = self._find_entry(entries, model_id)
+        if match is None:
+            raise KeyError(f"No model registered with id '{model_id}'")
+        return match.to_dict()
+
+    def list(self) -> list[dict[str, Any]]:
+        """Return every registry entry, ordered by registration time."""
+        with self._lock:
+            entries = self._read_all()
+        return [entry.to_dict() for entry in entries]
+
+    def get_production(self) -> dict[str, Any] | None:
+        """Return the current production model, or ``None`` if none is promoted."""
+        with self._lock:
+            entries = self._read_all()
+        for entry in entries:
+            if entry.status == "production":
+                return entry.to_dict()
+        return None
+
+    def promote(self, model_id: str) -> dict[str, Any]:
+        """Promote *model_id* to production.
+
+        Any previously-promoted model is demoted back to ``registered``.
+
+        Raises
+        ------
+        KeyError
+            If *model_id* is not found.
+        ValueError
+            If *model_id* is archived.
+        """
+        with self._lock:
+            entries = self._read_all()
+            target = self._find_entry(entries, model_id)
+            if target is None:
+                raise KeyError(f"No model registered with id '{model_id}'")
+            if target.status == "archived":
+                raise ValueError(
+                    f"Cannot promote archived model '{model_id}'. "
+                    "Re-register it first."
+                )
+
+            # Demote any existing production model.
+            for entry in entries:
+                if entry.status == "production" and entry.model_id != model_id:
+                    entry.status = "registered"
+                    logger.info(
+                        "Demoted model %s from production to registered",
+                        entry.model_id,
+                    )
+
+            target.status = "production"
+            self._write_all(entries)
+            logger.info("Promoted model %s to production", model_id)
+            return target.to_dict()
+
+    def archive(self, model_id: str) -> dict[str, Any]:
+        """Archive a model so it is no longer eligible for production.
+
+        Raises
+        ------
+        KeyError
+            If *model_id* is not found.
+        """
+        with self._lock:
+            entries = self._read_all()
+            target = self._find_entry(entries, model_id)
+            if target is None:
+                raise KeyError(f"No model registered with id '{model_id}'")
+
+            target.status = "archived"
+            self._write_all(entries)
+            logger.info("Archived model %s", model_id)
+            return target.to_dict()

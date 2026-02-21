@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import gzip
-import hashlib
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,7 +8,7 @@ from typing import Any, Iterable
 
 import pandas as pd
 
-from hpcopt.utils.io import ensure_dir, write_json
+from hpcopt.utils.io import ensure_dir, sha256_path as _sha256_path, write_json
 
 SWF_FIELDS = [
     "job_number",
@@ -45,14 +44,6 @@ def _open_text(path: Path):
     if path.suffix == ".gz":
         return gzip.open(path, "rt", encoding="utf-8", errors="replace")
     return path.open("r", encoding="utf-8", errors="replace")
-
-
-def _sha256_path(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _to_number(token: str) -> float | None:

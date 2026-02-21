@@ -1,0 +1,11 @@
+default:
+  regression_max_drop: 0.10
+  history_window: 5
+
+per_workload_class:
+  heavy_tail:
+    regression_max_drop: 0.15
+  balanced:
+    regression_max_drop: 0.10
+  low_congestion:
+    regression_max_drop: 0.08

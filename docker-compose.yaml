@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  hpcopt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./outputs/models:/app/models
+    environment:
+      HPCOPT_API_KEYS: dev-key
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

@@ -7,31 +7,77 @@ Primary interface:
 
 Top-level command groups:
 
-- `ingest`
-- `profile`
-- `features`
-- `train`
-- `simulate`
-- `stress`
-- `recommend`
-- `report`
-- `serve`
-- `data`
+- `ingest` -- multi-format trace ingestion and shadow polling
+- `profile` -- trace profiling
+- `features` -- feature engineering pipeline
+- `train` -- model training, tuning, resource-fit
+- `simulate` -- policy replay, fidelity, Batsim path
+- `stress` -- stress scenario generation and testing
+- `recommend` -- recommendation generation
+- `report` -- export and benchmark
+- `serve` -- API service
+- `data` -- dataset contract management
+- `credibility` -- credibility protocol and dossier
+- `analysis` -- sensitivity sweeps and feature importance
+- `model` -- model registry management
+- `artifacts` -- artifact retention management
 
 ## 2. Implemented Commands
 
 ### Ingestion
+
+#### SWF Format
 
 ```bash
 hpcopt ingest swf --input <trace.swf|trace.swf.gz> --out data/curated
 ```
 
 Outputs:
-
 - canonical parquet,
 - dataset metadata file,
 - quality report,
 - run manifest.
+
+#### Slurm (sacct --parsable2)
+
+```bash
+hpcopt ingest slurm --input <sacct_dump.txt> --out data/curated
+```
+
+Parses pipe-delimited `sacct --parsable2` output. Handles:
+- array jobs (`12345_0`),
+- job steps (skipped by default),
+- `Elapsed` field (`[DD-]HH:MM:SS`) to seconds conversion,
+- `ReqMem` field parsing (`4000Mc`, `8Gn`) to megabytes.
+
+Outputs: canonical parquet, quality report, dataset metadata.
+
+#### PBS/Torque Accounting Log
+
+```bash
+hpcopt ingest pbs --input <accounting_log> --out data/curated
+```
+
+Parses PBS/Torque accounting log format (`timestamp;type;id;attrs`). Extracts only `E` (exit) records. Handles:
+- `nodes=1:ppn=8` style CPU specifications,
+- memory units (`kb`, `mb`, `gb`, `tb`),
+- walltime in `HH:MM:SS` or `DD:HH:MM:SS`.
+
+Outputs: canonical parquet, quality report, dataset metadata.
+
+#### Shadow Ingestion Daemon
+
+```bash
+hpcopt ingest shadow-start \
+  --source-type slurm \
+  --source-path /var/log/slurm/sacct_dump.txt \
+  --interval-sec 300
+```
+
+Polls a scheduler data source periodically for incremental ingestion:
+- watermark-based deduplication (only new rows since last poll),
+- persistent watermark state across restarts,
+- supports `slurm`, `pbs`, and `swf` source types.
 
 ### Trace Profiling
 
@@ -40,7 +86,6 @@ hpcopt profile trace --dataset <dataset.parquet> --out outputs/reports
 ```
 
 Outputs:
-
 - trace profile JSON,
 - profile manifest.
 
@@ -55,23 +100,53 @@ hpcopt features build \
 ```
 
 Outputs:
-
 - feature dataset parquet,
 - chronological split manifest,
 - feature quality report,
 - features manifest.
 
-### Runtime Model Training
+### Model Training
+
+#### Runtime Quantile Training
 
 ```bash
 hpcopt train runtime --dataset <dataset.parquet> --out outputs/models
 ```
 
-Outputs:
+Options:
+- `--hyperparams-config`: optional YAML with hyperparameter overrides.
 
+Outputs:
 - quantile model artifacts (`p10/p50/p90`),
 - metrics and metadata,
 - training manifest.
+
+#### Hyperparameter Tuning
+
+```bash
+hpcopt train tune \
+  --dataset <dataset.parquet> \
+  --out outputs/reports \
+  --quantile 0.5 \
+  --n-trials 20 \
+  --n-folds 3
+```
+
+Outputs: tuning report with best parameters, best score, and trial history.
+
+#### Resource-Fit Training
+
+```bash
+hpcopt train resource-fit \
+  --dataset <dataset.parquet> \
+  --out outputs/models
+```
+
+Trains two models:
+- fragmentation risk classifier (low/medium/high),
+- optimal node size regressor.
+
+Outputs: model artifacts, metrics, metadata.
 
 ### Stress Scenario Generation and Execution
 
@@ -84,11 +159,12 @@ hpcopt stress run \
   --capacity-cpus 64
 ```
 
-Outputs:
+Supported scenarios: `heavy_tail`, `low_congestion`, `user_skew`, `burst_shock`.
 
+Outputs:
 - generated stress dataset and metadata (`stress gen`),
 - baseline/candidate stress simulation artifacts (`stress run`),
-- stress report with constraint pass/fail and degrade signatures,
+- stress report with constraint pass/fail, degrade signatures, and baseline policy comparison,
 - stress run manifest.
 
 ### Simulation
@@ -100,14 +176,12 @@ hpcopt simulate run --trace <dataset.parquet> --policy ML_BACKFILL_P50 --capacit
 ```
 
 Key options:
-
 - `--strict-invariants`
 - `--runtime-model-dir`
 - `--runtime-guard-k`
 - `--strict-uncertainty-mode`
 
 Outputs:
-
 - jobs artifact parquet,
 - queue artifact parquet,
 - simulation report,
@@ -151,8 +225,7 @@ hpcopt simulate batsim-run \
   --no-dry-run
 ```
 
-Optional post-run behaviors:
-
+Post-run behaviors:
 - normalize Batsim output into standard simulation artifacts,
 - emit candidate fidelity report (if source trace parquet is available).
 
@@ -165,8 +238,17 @@ hpcopt recommend generate \
   --fidelity-report <optional_fidelity_report.json>
 ```
 
-Outputs:
+Pareto multi-objective mode:
 
+```bash
+hpcopt recommend generate \
+  --baseline-report <baseline.json> \
+  --candidate-report <candidate1.json> \
+  --candidate-report <candidate2.json> \
+  --pareto
+```
+
+Outputs:
 - recommendation report,
 - recommendation manifest.
 
@@ -177,9 +259,84 @@ hpcopt report export --run-id <run_id> --format both
 ```
 
 Outputs:
-
 - run export JSON,
 - run export markdown.
+
+### Benchmark Suite
+
+```bash
+hpcopt report benchmark \
+  --trace <dataset.parquet> \
+  --raw-trace <optional_trace.swf.gz> \
+  --policy FIFO_STRICT \
+  --capacity-cpus 64 \
+  --samples 3
+```
+
+Outputs:
+- benchmark report JSON,
+- benchmark manifest,
+- benchmark history ledger (`benchmark_history.jsonl`).
+
+### Credibility Protocol
+
+```bash
+hpcopt credibility run-suite \
+  --config configs/credibility/default_sweep.yaml \
+  --raw-dir data/raw \
+  --out outputs/credibility
+
+hpcopt credibility dossier \
+  --input-dir outputs/credibility \
+  --out outputs/credibility/dossier
+```
+
+Outputs:
+- per-trace results (ingestion, profiling, training, simulation, fidelity, recommendation),
+- aggregate credibility dossier (JSON + markdown).
+
+### Analysis
+
+```bash
+hpcopt analysis sensitivity-sweep \
+  --trace <dataset.parquet> \
+  --capacity-cpus 64 \
+  --k-values "0.0,0.25,0.5,0.75,1.0,1.5"
+
+hpcopt analysis feature-importance \
+  --model-dir outputs/models/runtime_ctc_v1 \
+  --dataset <dataset.parquet>
+```
+
+Outputs:
+- sensitivity report with optimal k identification,
+- feature importance report with per-quantile rankings.
+
+### Model Management
+
+```bash
+hpcopt model list
+hpcopt model promote --model-id <model_id>
+hpcopt model archive --model-id <model_id>
+hpcopt model drift-check --eval-dataset <new_data.parquet>
+```
+
+Drift check outputs:
+- per-feature PSI (Population Stability Index) values,
+- per-quantile pinball loss degradation ratios,
+- overall drift detection status.
+
+### Artifact Retention
+
+```bash
+hpcopt artifacts cleanup --outputs-dir outputs --max-age-days 90
+hpcopt artifacts cleanup --outputs-dir outputs --max-age-days 90 --no-dry-run
+```
+
+Protected from cleanup:
+- current production model directory,
+- artifacts referenced by credibility dossiers,
+- model registry file.
 
 ### Reference Suite Lock
 
@@ -195,8 +352,10 @@ Service entrypoint:
 hpcopt serve api --host 0.0.0.0 --port 8080
 ```
 
-Implementation:
-- `python/hpcopt/api/app.py`
+Implementation modules:
+- `python/hpcopt/api/app.py` -- FastAPI application
+- `python/hpcopt/api/auth.py` -- API key authentication middleware
+- `python/hpcopt/api/metrics.py` -- Prometheus metrics integration
 
 ## 4. API Endpoints
 
@@ -204,35 +363,83 @@ Implementation:
 
 - `GET /health`
 
-Response:
-- service status and package version.
+Response: service status and package version.
+
+### Readiness
+
+- `GET /ready`
+
+Response: readiness status (`ok` when model is loaded, `degraded` otherwise).
 
 ### Runtime Prediction
 
 - `POST /v1/runtime/predict`
 
-Behavior:
+Request body:
+- `requested_cpus` (int, required, >= 1)
+- `requested_runtime_sec` (float, optional)
+- `requested_mem` (float, optional)
+- `queue_id`, `partition_id`, `user_id`, `group_id` (string, optional)
 
+Behavior:
 - uses trained quantile model when available,
 - else deterministic heuristic fallback,
 - always returns `runtime_p50_sec`, `runtime_p90_sec`, and `runtime_guard_sec`.
 
-### Resource Fit Baseline
+### Resource Fit
 
 - `POST /v1/resource-fit/predict`
 
+Request body:
+- `requested_cpus` (int, required, >= 1)
+- `candidate_node_cpus` (list of int, optional)
+
 Behavior:
+- uses trained resource-fit model when available,
+- else deterministic capacity-fit baseline,
+- returns fragmentation risk category (`low`, `medium`, `high`) and recommended node size.
 
-- deterministic capacity-fit baseline over provided candidate node CPU sizes,
-- returns fragmentation risk category (`low`, `medium`, `high`).
+### Prometheus Metrics
 
-## 5. API Documentation
+- `GET /metrics`
+
+Response: Prometheus text exposition format with:
+- `hpcopt_requests_total` (counter by method/endpoint/status),
+- `hpcopt_request_duration_seconds` (histogram by endpoint),
+- `hpcopt_fallback_total` (counter),
+- `hpcopt_model_loaded` (gauge),
+- `hpcopt_model_staleness_seconds` (gauge).
+
+Requires `prometheus_client` package. Returns empty response if unavailable.
+
+## 5. Authentication
+
+Set `HPCOPT_API_KEYS` environment variable (comma-separated list of valid keys) to enable API key authentication.
+
+- Requests must include `X-API-Key` header with a valid key.
+- `GET /health` and `GET /ready` are always exempt.
+- If `HPCOPT_API_KEYS` is unset, all requests pass through without authentication.
+
+## 6. Docker Deployment
+
+```bash
+docker compose up --build
+```
+
+The `docker-compose.yaml` configures:
+- port mapping (`8080:8080`),
+- volume mounts for `data/` and `outputs/models/`,
+- `HPCOPT_API_KEYS` environment variable,
+- health check against `/health`.
+
+## 7. API Documentation
 
 When API is running:
 
 - OpenAPI UI: `http://localhost:8080/docs`
 
-## 6. Interface Stability Notes
+## 8. Interface Stability Notes
 
 - CLI commands and report schemas are treated as contract-bearing interfaces.
 - Artifact keys used by evaluation/recommendation pipelines should be considered stable unless versioned migration is introduced.
+- API endpoints under `/v1/` are versioned and will maintain backward compatibility within a major version.

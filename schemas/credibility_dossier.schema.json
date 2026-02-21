@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hpcopt.local/schemas/credibility_dossier.schema.json",
+  "title": "CredibilityDossier",
+  "type": "object",
+  "required": ["traces_collected", "fidelity_summary", "recommendation_summary"],
+  "properties": {
+    "suite_summary": { "type": ["object", "null"] },
+    "traces_collected": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "fidelity_summary": {
+      "type": "object",
+      "properties": {
+        "all_pass": { "type": "boolean" },
+        "traces": { "type": "array" }
+      }
+    },
+    "recommendation_summary": {
+      "type": "object",
+      "properties": {
+        "accepted_count": { "type": "integer" },
+        "blocked_count": { "type": "integer" }
+      }
+    },
+    "fallback_telemetry_summary": { "type": "object" },
+    "no_improvement_narratives": { "type": "array" },
+    "sensitivity_sweep_summary": { "type": "array" },
+    "per_trace_data": { "type": "object" }
+  }
+}

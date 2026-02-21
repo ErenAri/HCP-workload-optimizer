@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hpcopt.local/schemas/policy_config.schema.json",
+  "title": "PolicyConfig",
+  "description": "Schema for scheduling-policy configuration used by the simulator and recommender.",
+  "type": "object",
+  "required": ["policy_id"],
+  "properties": {
+    "policy_id": {
+      "type": "string",
+      "description": "Unique identifier for this policy configuration."
+    },
+    "runtime_guard_k": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Multiplier applied to predicted runtime for guard-rail checks (e.g. 0.5 = P50 estimate)."
+    },
+    "strict_uncertainty_mode": {
+      "type": "boolean",
+      "default": false,
+      "description": "When true, the policy refuses to schedule jobs whose runtime uncertainty exceeds the guard threshold."
+    },
+    "starvation_wait_cap_sec": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Maximum wall-clock seconds a job may wait before anti-starvation promotion kicks in."
+    },
+    "fairness": {
+      "type": "object",
+      "description": "Fairness constraint parameters.",
+      "properties": {
+        "fairness_dev_delta_max": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Maximum tolerated deviation in per-user fairness share."
+        },
+        "jain_delta_max": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Maximum drop in Jain fairness index relative to the FCFS baseline."
+        }
+      },
+      "additionalProperties": false
+    },
+    "backfill": {
+      "type": "object",
+      "description": "Backfill-specific knobs.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether backfill scheduling is enabled."
+        },
+        "max_candidates": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of candidate jobs to evaluate for backfill per scheduling cycle."
+        },
+        "quantile": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Runtime quantile to use when estimating job duration for backfill decisions."
+        }
+      },
+      "additionalProperties": false
+    },
+    "preemption": {
+      "type": "object",
+      "description": "Preemption policy settings.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether preemptive scheduling is allowed."
+        },
+        "grace_period_sec": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Minimum run-time in seconds before a job becomes eligible for preemption."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,4 @@
+psi_threshold: 0.25
+mae_degradation_threshold: 0.20
+pinball_degradation_threshold: 0.15
+coverage_drop_threshold: 0.10

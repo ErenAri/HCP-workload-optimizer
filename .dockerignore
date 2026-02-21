@@ -1,0 +1,36 @@
+# Version control
+.git
+.gitignore
+
+# Python caches
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Build outputs
+outputs/
+dist/
+build/
+
+# Claude / IDE artifacts
+.claude/
+.vscode/
+.idea/
+
+# Documentation artifacts
+*.docx
+.docx_extract*
+
+# Rust build artifacts
+rust/target
+
+# Environment and secrets
+.env
+*.env
+
+# Tests (not needed in production image)
+tests/

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hpcopt.local/schemas/reference_suite_config.schema.json",
+  "title": "ReferenceSuiteConfig",
+  "description": "Schema for the reference-suite configuration that lists canonical SWF traces used for evaluation and benchmarking.",
+  "type": "object",
+  "required": ["suite_id", "traces"],
+  "properties": {
+    "suite_id": {
+      "type": "string",
+      "description": "Unique identifier for this suite of reference traces."
+    },
+    "traces": {
+      "type": "array",
+      "description": "Ordered list of trace entries in the reference suite.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "filename", "source", "sha256"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Short human-readable identifier for the trace."
+          },
+          "filename": {
+            "type": "string",
+            "description": "Name of the SWF file (may include .gz suffix)."
+          },
+          "source": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL or URI where the original trace can be downloaded."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "SHA-256 hex digest of the file for integrity verification."
+          },
+          "description": {
+            "type": "string",
+            "description": "Optional human-readable description of the trace."
+          },
+          "num_jobs": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Expected number of jobs in the trace (informational)."
+          },
+          "num_processors": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Number of processors in the originating system."
+          },
+          "time_range": {
+            "type": "object",
+            "description": "Calendar date range covered by the trace.",
+            "properties": {
+              "start": {
+                "type": "string",
+                "format": "date",
+                "description": "Start date of the trace (ISO 8601)."
+              },
+              "end": {
+                "type": "string",
+                "format": "date",
+                "description": "End date of the trace (ISO 8601)."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

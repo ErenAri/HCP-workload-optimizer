@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hpcopt.local/schemas/fidelity_gate_config.schema.json",
+  "title": "FidelityGateConfig",
+  "description": "Schema for the fidelity-gate configuration that controls divergence thresholds between simulated and real workloads.",
+  "type": "object",
+  "required": ["fidelity_gate"],
+  "properties": {
+    "fidelity_gate": {
+      "type": "object",
+      "required": ["aggregate", "distribution"],
+      "properties": {
+        "aggregate": {
+          "type": "object",
+          "description": "Aggregate-level divergence thresholds.",
+          "required": [
+            "single_metric_max_divergence",
+            "two_metric_max_divergence"
+          ],
+          "properties": {
+            "single_metric_max_divergence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Maximum tolerated divergence on any single aggregate metric."
+            },
+            "two_metric_max_divergence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Maximum tolerated divergence when two metrics are combined."
+            }
+          },
+          "additionalProperties": false
+        },
+        "distribution": {
+          "type": "object",
+          "description": "Distribution-level statistical test thresholds.",
+          "required": [
+            "wait_kl_max",
+            "slowdown_ks_max",
+            "queue_corr_min"
+          ],
+          "properties": {
+            "wait_kl_max": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Maximum KL-divergence for wait-time distributions."
+            },
+            "slowdown_ks_max": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Maximum KS statistic for slowdown distributions."
+            },
+            "queue_corr_min": {
+              "type": "number",
+              "minimum": -1,
+              "maximum": 1,
+              "description": "Minimum Pearson correlation for queue-depth time-series."
+            }
+          },
+          "additionalProperties": false
+        },
+        "queue_series": {
+          "type": "object",
+          "description": "Settings for queue-depth time-series comparison.",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": ["fixed_cadence", "event_driven"],
+              "description": "Sampling mode for queue-series comparison."
+            },
+            "cadence_sec": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Sampling interval in seconds when mode is fixed_cadence."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

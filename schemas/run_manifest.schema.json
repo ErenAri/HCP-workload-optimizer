@@ -103,6 +103,24 @@
       "type": "object",
       "additionalProperties": true
     },
+    "os_fingerprint": {
+      "type": "object",
+      "properties": {
+        "system": { "type": "string" },
+        "release": { "type": "string" },
+        "version": { "type": "string" },
+        "machine": { "type": "string" },
+        "processor": { "type": "string" },
+        "node": { "type": "string" }
+      }
+    },
+    "pip_freeze_snapshot": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "model_hash": {
+      "type": ["string", "null"]
+    },
     "config_snapshots": {
       "type": "array",
       "items": {

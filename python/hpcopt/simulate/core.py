@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 from hpcopt.simulate.adapter import (
     AdapterQueuedJob,
@@ -131,7 +134,8 @@ def _attach_runtime_estimates(
             if runtime_predictor is not None:
                 try:
                     predicted = runtime_predictor.predict_one(_build_prediction_features(row.to_dict()))
-                except Exception:
+                except (ValueError, KeyError, TypeError) as exc:
+                    logger.warning("Runtime prediction failed for job %s: %s", row.get("job_id"), exc)
                     predicted = None
 
             if predicted is not None:

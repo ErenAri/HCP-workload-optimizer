@@ -136,11 +136,75 @@ Behavior:
 - falls back to deterministic heuristic when model artifacts are absent,
 - returns guard value consistent with policy contract.
 
-## 10. Current Limitations
+## 10. Hyperparameter Tuning
 
-- no online learning or drift adaptation,
+Implementation: `python/hpcopt/models/tuning.py`
+
+Command:
+```bash
+hpcopt train tune --dataset <dataset.parquet> --quantile 0.5 --n-trials 20 --n-folds 3
+```
+
+Tuning approach:
+- random search over `n_estimators`, `max_depth`, `learning_rate`, `subsample`, `min_samples_leaf`,
+- chronological cross-validation (no future leakage),
+- scored by pinball loss for the target quantile,
+- outputs best parameters and full trial history.
+
+## 11. Resource-Fit Modeling
+
+Implementation: `python/hpcopt/models/resource_fit.py`
+
+A secondary model for resource allocation optimization:
+- **Fragmentation risk classifier**: GradientBoostingClassifier predicting low/medium/high fragmentation risk based on CPU waste ratio.
+- **Optimal node size regressor**: GradientBoostingRegressor predicting the best-fit node CPU count from a configurable set of node sizes.
+
+Feature vector: `requested_cpus`, `requested_mem`, `runtime_requested_sec`, `queue_id`, `partition_id`, `user_id`, `submit_hour`, `submit_dow`.
+
+## 12. Feature Importance Analysis
+
+Implementation: `python/hpcopt/analysis/feature_importance.py`
+
+Command:
+```bash
+hpcopt analysis feature-importance --model-dir <model_dir> --dataset <dataset.parquet>
+```
+
+Uses permutation importance to rank features per quantile. Reports importance scores with standard deviations.
+
+## 13. Model Registry
+
+Implementation: `python/hpcopt/models/registry.py`
+
+Append-only JSONL-backed registry with thread-safe operations:
+- `register`: create a new model entry (status: `registered`),
+- `promote`: set a model as production (demotes any existing production model),
+- `archive`: mark a model as archived (ineligible for promotion),
+- `get_production`: resolve the current production model.
+
+CLI commands: `hpcopt model list`, `hpcopt model promote`, `hpcopt model archive`.
+
+## 14. Drift Detection
+
+Implementation: `python/hpcopt/models/drift.py`
+
+Command:
+```bash
+hpcopt model drift-check --eval-dataset <new_data.parquet>
+```
+
+Two drift indicators:
+- **Feature PSI** (Population Stability Index): per-feature distributional shift detection. Bins derived from training distribution quantiles. Threshold: PSI > 0.20 indicates significant drift.
+- **Metric degradation**: per-quantile pinball loss comparison against baseline training metrics. Threshold: 50% worse than baseline is flagged.
+
+Configurable thresholds via `configs/models/drift_thresholds.yaml`.
+
+## 15. Current Limitations
+
+- no online learning (drift detection is batch-mode, not streaming),
+- no automatic drift-triggered retraining pipeline,
 - no memory prediction model in active use,
-- no GPU efficiency predictor in MVP implementation,
+- no GPU efficiency predictor,
 - no direct production scheduler actuation.
 
 These are deliberate deferments to preserve systems-first rigor in the core pipeline.

@@ -4,7 +4,7 @@ Systems-first HPC scheduling research and engineering platform (Python + Rust) f
 
 ## Abstract
 
-HPC Workload Optimizer (HPCOpt) targets a persistent operations problem in shared compute clusters: queue delay and resource waste caused by static scheduling heuristics and uncertain job runtime requests.  
+HPC Workload Optimizer (HPCOpt) targets a persistent operations problem in shared compute clusters: queue delay and resource waste caused by static scheduling heuristics and uncertain job runtime requests.
 The project does not frame this as a standalone runtime prediction task. Instead, it builds a contract-driven decision and evaluation stack where:
 
 - scheduler behavior is explicitly specified,
@@ -38,75 +38,129 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 
 ## Implemented Capabilities (Current State)
 
-- SWF ingestion and canonical parquet export with quality reporting.
+### Core Pipeline
+
+- Multi-format ingestion (SWF, Slurm `sacct --parsable2`, PBS/Torque accounting logs) with canonical parquet export and quality reporting.
 - Reference-suite trace hash locking and enforcement.
 - Trace profiling for heavy-tail, congestion, over-request, and user-skew analysis.
+- Time-safe feature engineering pipeline with chronological cross-validation splits.
 - Runtime quantile modeling (`p10/p50/p90`) with monotonic inference enforcement.
 - Runtime baseline-lift reporting against naive comparators (global mean/median and user-history median).
-- Deterministic simulation core for:
-  - `FIFO_STRICT`
-  - `EASY_BACKFILL_BASELINE`
-  - `ML_BACKFILL_P50`
+- Resource-fit modeling: fragmentation risk classifier + optimal node size regressor.
+
+### Simulation and Evaluation
+
+- Deterministic simulation core for `FIFO_STRICT`, `EASY_BACKFILL_BASELINE`, and `ML_BACKFILL_P50`.
 - Invariant reporting with strict-fail mode.
 - Baseline fidelity gate (aggregate + distribution + queue-correlation checks).
-- Recommendation engine with:
-  - primary KPI gating,
-  - fairness/starvation constraints,
-  - failure-mode and no-improvement narratives.
-- Batsim integration path:
-  - config generation,
-  - run invocation (native/WSL),
-  - normalization of Batsim outputs into standard simulation artifacts,
-  - optional candidate fidelity report generation.
-- API scaffold with runtime and resource-fit prediction endpoints.
-- Artifact export and immutable run manifest generation.
+- Stress scenario generation (heavy-tail, low-congestion, user-skew, burst-shock) and automated stress testing.
+- Recommendation engine with primary KPI gating, fairness/starvation constraints, Pareto multi-objective mode, and failure-mode narratives.
+- Benchmark suite with parse/simulation/pipeline throughput metrics, history ledger, and regression gate.
+- Batsim integration path: config generation, run invocation (native/WSL), output normalization, optional candidate fidelity report.
+
+### Model Management and Operations
+
+- Model registry (append-only JSONL) with register/promote/archive lifecycle.
+- Drift detection: Population Stability Index (PSI) per feature and pinball loss degradation tracking.
+- Hyperparameter tuning with random search and chronological cross-validation.
+- Feature importance analysis via permutation importance.
+- Shadow ingestion daemon for incremental Slurm/PBS polling with watermark persistence.
+- Artifact retention management with production-model and dossier-reference protection.
+
+### Credibility and Reproducibility
+
+- Full credibility protocol: automated multi-trace suite runs with per-trace fidelity, sensitivity, and recommendation outcomes.
+- Credibility dossier assembly (JSON + markdown) with cross-trace summary.
+- Policy sensitivity sweeps over guard coefficient (`k`) parameter space.
+- Immutable run manifest generation with hashes, config snapshots, seeds, and environment fingerprints.
+- Artifact export bundles (JSON + markdown).
+
+### Deployment and Observability
+
+- Production-ready API (FastAPI) with runtime and resource-fit prediction endpoints.
+- API key authentication middleware (optional, via `HPCOPT_API_KEYS` environment variable).
+- Prometheus metrics: request counters, latency histograms, fallback rates, model status gauges.
+- Grafana dashboard (8 panels: request rate, latency percentiles, error rate, model status, heatmap).
+- Structured JSON logging with correlation ID propagation.
+- Docker containerization with multi-stage build and health checks.
+- GitHub Actions CI/CD: lint, typecheck, test matrix, Docker build, and release workflows.
+- JSON Schema validation for all configuration files.
+
+### Cross-Language
+
 - Rust utilities for parser stats and scheduler adapter contract parity.
-
-## Deliberately Deferred
-
-- direct production scheduler integration (Slurm/PBS/LSF),
-- autonomous policy actuation,
-- RL-based scheduler,
-- richer stress-policy diagnostics and scenario expansion.
 
 ## Architecture
 
 ```text
-Raw SWF traces
+Raw traces (SWF / Slurm sacct / PBS accounting)
   -> Canonical ingestion (parquet + quality report)
   -> Trace profiling
-  -> Runtime quantile training
+  -> Feature engineering + chronological splits
+  -> Runtime quantile training (+ tuning + importance analysis)
+  -> Resource-fit training
   -> Policy replay (native core and Batsim-normalized path)
   -> Fidelity + objective contract evaluation
-  -> Recommendation generation + exportable artifacts
+  -> Stress testing across synthetic scenarios
+  -> Recommendation generation (single-objective or Pareto)
+  -> Credibility dossier assembly
+  -> Exportable artifacts with immutable manifests
 ```
 
 Language partition:
 
-- Python: orchestration, simulation logic, ML, fidelity, recommendations, CLI/API.
+- Python: orchestration, simulation logic, ML, fidelity, recommendations, CLI/API, observability.
 - Rust: SWF parser utility, deterministic runner scaffolding, adapter contract parity binary.
 
 ## Repository Map
 
 ```text
 python/hpcopt/
-  cli/ api/ ingest/ profile/ models/ simulate/ recommend/ artifacts/
+  cli/           # Typer command surface
+  api/           # FastAPI service, auth middleware, Prometheus metrics
+  ingest/        # SWF, Slurm, PBS parsers + shadow ingestion daemon
+  profile/       # Trace profiling and workload characterization
+  features/      # Time-safe feature pipeline + chronological splits
+  models/        # Runtime quantile, resource-fit, drift, tuning, registry
+  simulate/      # Policy core, adapter, fidelity, Batsim, stress scenarios
+  recommend/     # Recommendation engine with Pareto mode
+  artifacts/     # Manifests, export, benchmarks, credibility dossier, retention
+  analysis/      # Sensitivity sweeps, feature importance
+  orchestrate/   # Credibility protocol orchestrator
+  utils/         # I/O, structured logging, config validation
+
 rust/
-  swf-parser/ sim-runner/
+  swf-parser/    # Fast SWF line parser/statistics utility
+  sim-runner/    # Deterministic runner and adapter contract binaries
+
 configs/
-  data/ simulation/
+  data/          # Reference suite configuration
+  simulation/    # Fidelity gate, policy configs
+  credibility/   # Credibility sweep configuration
+  models/        # Drift threshold configuration
+  benchmark/     # Benchmark suite configuration
+  monitoring/    # Grafana dashboard
+
 schemas/
-  run_manifest + fidelity + invariant + adapter schemas
+  run_manifest, fidelity, invariant, adapter, policy, credibility,
+  sensitivity, reference_suite, fidelity_gate_config schemas
+
+tests/
+  unit/          # 39 unit tests
+  integration/   # API and protocol integration tests
+  load/          # API load/concurrency tests
+
 docs/
-  formal technical documentation corpus
+  Formal technical documentation corpus
+
 design_docs/
-  planning contracts and research appendix
+  Planning contracts and research appendix
 ```
 
 ## Installation
 
 ```bash
-python -m pip install -e .[dev]
+python -m pip install -e ".[dev]"
 ```
 
 Optional (for Rust tools):
@@ -116,16 +170,40 @@ cargo --version
 rustc --version
 ```
 
+### Docker
+
+```bash
+docker compose up --build
+```
+
+Or standalone:
+
+```bash
+docker build -t hpcopt .
+docker run -p 8080:8080 hpcopt
+```
+
 ## Quickstart (Minimal End-to-End)
 
 ### 1) Ingest a trace
 
 ```bash
+# SWF format
 hpcopt ingest swf \
   --input data/raw/CTC-SP2-1996-3.1-cln.swf.gz \
   --dataset-id ctc_sp2_1996 \
   --out data/curated \
   --report-out outputs/reports
+
+# Slurm sacct format
+hpcopt ingest slurm \
+  --input /var/log/slurm/sacct_dump.txt \
+  --out data/curated
+
+# PBS/Torque accounting log
+hpcopt ingest pbs \
+  --input /var/spool/pbs/server_priv/accounting/20260101 \
+  --out data/curated
 ```
 
 ### 2) Build trace profile
@@ -146,13 +224,26 @@ hpcopt features build \
   --n-folds 3
 ```
 
-### 4) Train runtime quantile model
+### 4) Train models
 
 ```bash
+# Runtime quantile model
 hpcopt train runtime \
   --dataset data/curated/ctc_sp2_1996.parquet \
   --out outputs/models \
   --model-id runtime_ctc_v1
+
+# Hyperparameter tuning
+hpcopt train tune \
+  --dataset data/curated/ctc_sp2_1996.parquet \
+  --out outputs/reports \
+  --quantile 0.5 \
+  --n-trials 20
+
+# Resource-fit model
+hpcopt train resource-fit \
+  --dataset data/curated/ctc_sp2_1996.parquet \
+  --out outputs/models
 ```
 
 ### 5) Replay baselines
@@ -192,6 +283,14 @@ hpcopt recommend generate \
   --candidate-report <ml_candidate_sim_report.json> \
   --fidelity-report <fidelity_report.json> \
   --out outputs/reports
+
+# Pareto multi-objective mode
+hpcopt recommend generate \
+  --baseline-report <baseline.json> \
+  --candidate-report <candidate1.json> \
+  --candidate-report <candidate2.json> \
+  --pareto \
+  --out outputs/reports
 ```
 
 ### 9) Export run bundle
@@ -199,6 +298,104 @@ hpcopt recommend generate \
 ```bash
 hpcopt report export --run-id <run_id> --format both
 ```
+
+### 10) Run benchmark suite
+
+```bash
+hpcopt report benchmark \
+  --trace data/curated/ctc_sp2_1996.parquet \
+  --raw-trace data/raw/CTC-SP2-1996-3.1-cln.swf.gz \
+  --policy FIFO_STRICT \
+  --capacity-cpus 64 \
+  --samples 3
+```
+
+## Model Management
+
+```bash
+# List registered models
+hpcopt model list
+
+# Promote a model to production
+hpcopt model promote --model-id runtime_ctc_v1
+
+# Archive a model
+hpcopt model archive --model-id runtime_ctc_v0
+
+# Check for drift against new data
+hpcopt model drift-check \
+  --eval-dataset data/curated/new_trace.parquet \
+  --model-dir outputs/models/runtime_ctc_v1
+```
+
+## Credibility Protocol
+
+Run the full credibility suite across all reference traces:
+
+```bash
+hpcopt credibility run-suite \
+  --config configs/credibility/default_sweep.yaml \
+  --raw-dir data/raw \
+  --out outputs/credibility
+```
+
+Assemble the credibility dossier:
+
+```bash
+hpcopt credibility dossier \
+  --input-dir outputs/credibility \
+  --out outputs/credibility/dossier
+```
+
+## Analysis
+
+```bash
+# Policy sensitivity sweep (guard coefficient k)
+hpcopt analysis sensitivity-sweep \
+  --trace data/curated/ctc_sp2_1996.parquet \
+  --capacity-cpus 64 \
+  --k-values "0.0,0.25,0.5,0.75,1.0,1.5"
+
+# Feature importance analysis
+hpcopt analysis feature-importance \
+  --model-dir outputs/models/runtime_ctc_v1 \
+  --dataset data/curated/ctc_sp2_1996.parquet
+```
+
+## Stress Testing
+
+```bash
+# Generate a stress scenario
+hpcopt stress gen --scenario heavy_tail --out data/curated --n-jobs 5000
+
+# Run stress test against a policy
+hpcopt stress run \
+  --scenario heavy_tail \
+  --policy configs/simulation/policy_ml_backfill.yaml \
+  --model runtime_latest \
+  --capacity-cpus 64
+```
+
+## Artifact Retention
+
+```bash
+# Preview stale artifacts (dry run)
+hpcopt artifacts cleanup --outputs-dir outputs --max-age-days 90
+
+# Delete stale artifacts (protects production model and dossier references)
+hpcopt artifacts cleanup --outputs-dir outputs --max-age-days 90 --no-dry-run
+```
+
+## Shadow Ingestion (Incremental Polling)
+
+```bash
+hpcopt ingest shadow-start \
+  --source-type slurm \
+  --source-path /var/log/slurm/sacct_dump.txt \
+  --interval-sec 300
+```
+
+Polls the scheduler data source periodically, applies watermark-based deduplication, and writes incremental parquet files.
 
 ## Batsim Workflow (Simulation Backend Path)
 
@@ -245,12 +442,15 @@ hpcopt serve api --host 0.0.0.0 --port 8080
 
 Available endpoints:
 
-- `GET /health`
-- `POST /v1/runtime/predict`
-- `POST /v1/resource-fit/predict`
+- `GET /health` -- service health
+- `GET /ready` -- readiness check (model availability)
+- `POST /v1/runtime/predict` -- runtime quantile predictions
+- `POST /v1/resource-fit/predict` -- resource fit and fragmentation risk
+- `GET /metrics` -- Prometheus metrics (when `prometheus_client` is installed)
 
-OpenAPI docs:
-- `http://localhost:8080/docs`
+OpenAPI docs: `http://localhost:8080/docs`
+
+Authentication: set `HPCOPT_API_KEYS` environment variable (comma-separated) to enable API key authentication via `X-API-Key` header. Health and readiness endpoints are always exempt.
 
 Runtime prediction endpoint automatically uses trained model artifacts when available; otherwise it falls back to deterministic heuristic behavior.
 
@@ -263,6 +463,11 @@ The project emits immutable manifests and schema-bound artifacts:
 - `schemas/fidelity_report.schema.json`
 - `schemas/adapter_snapshot.schema.json`
 - `schemas/adapter_decision.schema.json`
+- `schemas/policy_config.schema.json`
+- `schemas/fidelity_gate_config.schema.json`
+- `schemas/reference_suite_config.schema.json`
+- `schemas/credibility_dossier.schema.json`
+- `schemas/sensitivity_report.schema.json`
 
 Each run manifest records:
 
@@ -288,10 +493,16 @@ hpcopt data lock-reference-suite \
 ## Testing
 
 ```bash
-pytest -q
+pytest -v
 ```
 
-Current baseline result in this workspace: `29 passed, 1 skipped`.
+Current baseline result: `51 passed`.
+
+Test suite covers:
+
+- unit tests (ingestion, profiling, training, simulation, fidelity, recommendation, benchmarks, reproducibility),
+- integration tests (API endpoints, auth, credibility protocol, Slurm ingestion),
+- load tests (concurrent API predictions, health under load).
 
 ## Documentation
 

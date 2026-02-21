@@ -1,0 +1,6 @@
+n_estimators: 120
+learning_rate: 0.05
+max_depth: 3
+subsample: 0.8
+min_samples_leaf: 10
+min_samples_split: 20

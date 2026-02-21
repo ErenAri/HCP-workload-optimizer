@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hpcopt.local/schemas/sensitivity_report.schema.json",
+  "title": "SensitivityReport",
+  "type": "object",
+  "required": ["baseline", "sweep_results", "analysis"],
+  "properties": {
+    "baseline": {
+      "type": "object",
+      "required": ["policy_id", "objective_metrics"],
+      "properties": {
+        "policy_id": { "type": "string" },
+        "objective_metrics": { "type": "object" }
+      }
+    },
+    "sweep_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["guard_k"],
+        "properties": {
+          "guard_k": { "type": "number" },
+          "status": { "type": "string" }
+        }
+      }
+    },
+    "analysis": {
+      "type": "object",
+      "properties": {
+        "k_values_tested": { "type": "integer" },
+        "k_values_passed_constraints": { "type": "integer" },
+        "optimal_k": { "type": ["number", "null"] },
+        "optimal_delta_p95_bsld": { "type": ["number", "null"] }
+      }
+    }
+  }
+}
