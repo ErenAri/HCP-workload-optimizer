@@ -19,9 +19,9 @@ def init_tracing(app: object) -> None:
     """
     try:
         from opentelemetry import trace
-        from opentelemetry.sdk.trace import TracerProvider
-        from opentelemetry.sdk.resources import Resource
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        from opentelemetry.sdk.resources import Resource
+        from opentelemetry.sdk.trace import TracerProvider
     except ImportError:
         logger.debug("OpenTelemetry packages not installed; tracing disabled")
         return

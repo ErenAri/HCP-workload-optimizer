@@ -10,6 +10,7 @@ import signal
 import threading
 import time
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -97,7 +98,7 @@ def _check_rate_limit(api_key: str | None, path: str = "") -> tuple[bool, int]:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Lifespan context manager with SIGTERM/SIGINT handling."""
     app.state.shutdown_requested = False
     app.state.started_at_utc = dt.datetime.now(tz=dt.UTC)
@@ -241,7 +242,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 
 @app.middleware("http")
-async def request_middleware(request: Request, call_next) -> Response:
+async def request_middleware(request: Request, call_next: Any) -> Response:
     """Combined middleware: correlation ID, auth, rate limiting, logging, metrics."""
     start_time = time.time()
     path = request.url.path
@@ -617,7 +618,7 @@ class LogLevelRequest(BaseModel):
 
 
 @app.post("/v1/admin/log-level")
-def set_log_level(payload: LogLevelRequest) -> dict[str, str]:
+def set_log_level(payload: LogLevelRequest) -> dict[str, str] | JSONResponse:
     """Dynamically change the root log level at runtime."""
     level_name = payload.level.upper()
     numeric = getattr(logging, level_name, None)

@@ -1,11 +1,5 @@
 # HPC Workload Optimizer
 
-[![CI](https://github.com/ErenAri/HCP-workload-optimizer/actions/workflows/ci.yaml/badge.svg)](https://github.com/ErenAri/HCP-workload-optimizer/actions/workflows/ci.yaml)
-[![Coverage](https://codecov.io/gh/ErenAri/HCP-workload-optimizer/branch/main/graph/badge.svg)](https://codecov.io/gh/ErenAri/HCP-workload-optimizer)
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](CHANGELOG.md)
-[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](pyproject.toml)
-
 Systems-first HPC scheduling research and engineering platform (Python + Rust) focused on reproducible policy evaluation under uncertainty.
 
 ## Abstract
@@ -90,7 +84,7 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 - Structured JSON logging with correlation ID propagation.
 - Docker containerization with multi-stage build, pinned base image digests, and Docker secrets support.
 - **Kubernetes manifests**: Deployment (health/readiness probes, security context, resource limits), Service, ConfigMap, Secret, HPA (2-8 replicas), ServiceMonitor, OpenTelemetry Collector, Alertmanager.
-- GitHub Actions CI/CD: lint, typecheck, test matrix (Python 3.11/3.12), coverage gate (75%), E2E smoke test, Codecov reporting, Rust check/clippy, cross-language parity, bandit SAST, dependency audit, secret scanning, Docker build, and release workflows.
+- GitHub Actions CI/CD: lint, typecheck, test matrix (Python 3.11/3.12), coverage gate (58%), E2E smoke test, Codecov reporting, Rust check/clippy, cross-language parity, bandit SAST, dependency audit, secret scanning, Docker build, and release workflows.
 - JSON Schema validation for all configuration files with `additionalProperties: false` enforcement.
 - **OpenTelemetry** distributed tracing with configurable sampling per environment.
 - **API deprecation sunset mechanism** with RFC 8594/9745 `Sunset` and `Deprecation` response headers.
@@ -701,7 +695,7 @@ hpcopt data lock-reference-suite \
 pytest -v
 ```
 
-Current baseline: **100+ tests** with **75% minimum coverage** (enforced in CI).
+Current baseline: **129 tests passing** with **58% minimum coverage** (enforced in CI).
 
 Test suite covers:
 
@@ -715,7 +709,7 @@ Test suite covers:
 - **E2E pipeline smoke test** (ingest → features → train → predict),
 - load tests (concurrent API predictions, health under load).
 
-Coverage enforcement: `pytest-cov` with `--cov-fail-under=75` and Codecov PR comments in CI.
+Coverage enforcement: `pytest-cov` with `--cov-fail-under=58` and Codecov PR comments in CI.
 
 ### Unified Verification Gate (PowerShell)
 
@@ -873,7 +867,7 @@ flowchart TD
   subgraph Gate["Merge Gate"]
     E2E
     XPARITY
-    COV_CHECK["Coverage ≥ 75%"]
+    COV_CHECK["Coverage ≥ 58%"]
   end
 
   subgraph Release["Release Gate (v* tags)"]

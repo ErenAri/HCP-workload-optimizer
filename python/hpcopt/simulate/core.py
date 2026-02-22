@@ -76,7 +76,7 @@ def _choose_decisions(
     snapshot: SchedulerStateSnapshot,
     policy_id: str,
     strict_uncertainty_mode: bool = False,
-):
+) -> Any:
     if policy_id == "FIFO_STRICT":
         return choose_fifo_strict(snapshot)
     if policy_id == "EASY_BACKFILL_BASELINE":
@@ -211,7 +211,7 @@ def _check_invariants(
     return failed
 
 
-def _invariant_report(run_id: str, strict_mode: bool, step_count: int, violations: list[dict[str, Any]]):
+def _invariant_report(run_id: str, strict_mode: bool, step_count: int, violations: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "run_id": run_id,
         "strict_mode": bool(strict_mode),

@@ -7,10 +7,10 @@ from pathlib import Path
 
 import typer
 
+from hpcopt.artifacts.benchmark import run_benchmark_suite
 from hpcopt.artifacts.manifest import build_manifest, write_manifest
 from hpcopt.artifacts.report_export import export_run_report
 from hpcopt.recommend.engine import generate_recommendation_report
-from hpcopt.artifacts.benchmark import run_benchmark_suite
 from hpcopt.simulate.core import SUPPORTED_POLICIES
 from hpcopt.utils.io import ensure_dir
 

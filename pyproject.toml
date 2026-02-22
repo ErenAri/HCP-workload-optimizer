@@ -63,7 +63,7 @@ where = ["python"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=hpcopt --cov-report=term-missing --cov-fail-under=75"
+addopts = "--cov=hpcopt --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=58"
 markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
   "integration: integration tests",

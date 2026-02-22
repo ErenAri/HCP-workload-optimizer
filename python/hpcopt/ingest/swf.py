@@ -41,7 +41,7 @@ class IngestResult:
     row_count: int
 
 
-def _open_text(path: Path):
+def _open_text(path: Path) -> Any:
     if path.suffix == ".gz":
         return gzip.open(path, "rt", encoding="utf-8", errors="replace")
     return path.open("r", encoding="utf-8", errors="replace")
