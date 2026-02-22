@@ -6,9 +6,9 @@ import logging
 import os
 import shutil
 import signal
+import threading
 import time
 import uuid
-from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -41,7 +41,9 @@ def _float_env(name: str, default: float) -> float:
 # ---------- Rate limiter (token bucket per API key) ----------
 
 _RATE_LIMIT = int(os.getenv("HPCOPT_RATE_LIMIT", "60"))  # requests per minute
-_RATE_BUCKETS: dict[str, list[float]] = defaultdict(list)
+_RATE_MAX_BUCKETS = 10_000  # cap to prevent unbounded memory growth
+_RATE_BUCKETS: dict[str, list[float]] = {}
+_RATE_LOCK = threading.Lock()
 _HEALTH_MIN_DISK_FREE_GB = _float_env("HPCOPT_HEALTH_MIN_DISK_FREE_GB", 0.1)
 _EXEMPT_PATHS = {
     "/health",
@@ -60,14 +62,27 @@ def _check_rate_limit(api_key: str | None) -> tuple[bool, int]:
     bucket_key = api_key or "__anonymous__"
     now = time.time()
     window_start = now - 60.0
-    _RATE_BUCKETS[bucket_key] = [
-        ts for ts in _RATE_BUCKETS[bucket_key] if ts > window_start
-    ]
-    if len(_RATE_BUCKETS[bucket_key]) >= _RATE_LIMIT:
-        oldest = _RATE_BUCKETS[bucket_key][0]
-        retry_after = max(1, int(oldest + 60.0 - now))
-        return False, retry_after
-    _RATE_BUCKETS[bucket_key].append(now)
+
+    with _RATE_LOCK:
+        # Evict stale buckets when the dict exceeds the cap.
+        if len(_RATE_BUCKETS) > _RATE_MAX_BUCKETS:
+            stale_keys = [
+                k for k, v in _RATE_BUCKETS.items()
+                if not v or v[-1] <= window_start
+            ]
+            for k in stale_keys:
+                del _RATE_BUCKETS[k]
+
+        bucket = _RATE_BUCKETS.get(bucket_key, [])
+        bucket = [ts for ts in bucket if ts > window_start]
+
+        if len(bucket) >= _RATE_LIMIT:
+            oldest = bucket[0]
+            retry_after = max(1, int(oldest + 60.0 - now))
+            _RATE_BUCKETS[bucket_key] = bucket
+            return False, retry_after
+        bucket.append(now)
+        _RATE_BUCKETS[bucket_key] = bucket
     return True, 0
 
 
@@ -198,8 +213,8 @@ async def request_middleware(request: Request, call_next) -> Response:
     request.state.trace_id = trace_id
 
     # Auth check (exempt health/ready/metrics/system status)
-    api_keys_raw = os.getenv("HPCOPT_API_KEYS", "")
-    api_keys = {k.strip() for k in api_keys_raw.split(",") if k.strip()} if api_keys_raw else set()
+    from hpcopt.utils.secrets import load_api_keys
+    api_keys = load_api_keys()
     response: Response
 
     if api_keys and path not in _EXEMPT_PATHS:
@@ -306,12 +321,13 @@ class ResourceFitResponse(BaseModel):
     notes: list[str]
 
 
-# ---------- Model cache ----------
+# ---------- Model cache (thread-safe) ----------
 
 _RUNTIME_PREDICTOR_CACHE: dict[str, RuntimeQuantilePredictor | Path | None] = {
     "model_dir": None,
     "predictor": None,
 }
+_MODEL_CACHE_LOCK = threading.Lock()
 
 
 def _get_runtime_predictor() -> tuple[RuntimeQuantilePredictor | None, Path | None]:
@@ -320,16 +336,17 @@ def _get_runtime_predictor() -> tuple[RuntimeQuantilePredictor | None, Path | No
     if resolved is None:
         return None, None
 
-    cached_dir = _RUNTIME_PREDICTOR_CACHE["model_dir"]
-    if isinstance(cached_dir, Path) and cached_dir == resolved:
-        cached_predictor = _RUNTIME_PREDICTOR_CACHE["predictor"]
-        if isinstance(cached_predictor, RuntimeQuantilePredictor):
-            return cached_predictor, resolved
+    with _MODEL_CACHE_LOCK:
+        cached_dir = _RUNTIME_PREDICTOR_CACHE["model_dir"]
+        if isinstance(cached_dir, Path) and cached_dir == resolved:
+            cached_predictor = _RUNTIME_PREDICTOR_CACHE["predictor"]
+            if isinstance(cached_predictor, RuntimeQuantilePredictor):
+                return cached_predictor, resolved
 
-    predictor = RuntimeQuantilePredictor(resolved)
-    _RUNTIME_PREDICTOR_CACHE["model_dir"] = resolved
-    _RUNTIME_PREDICTOR_CACHE["predictor"] = predictor
-    return predictor, resolved
+        predictor = RuntimeQuantilePredictor(resolved)
+        _RUNTIME_PREDICTOR_CACHE["model_dir"] = resolved
+        _RUNTIME_PREDICTOR_CACHE["predictor"] = predictor
+        return predictor, resolved
 
 
 # ---------- Endpoints ----------

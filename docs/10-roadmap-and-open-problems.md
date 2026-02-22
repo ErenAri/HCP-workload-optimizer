@@ -36,10 +36,22 @@ Completed:
 - Batsim config/run wrappers with normalization to standard artifacts.
 - Manifest and export tooling.
 - Adapter contract and cross-language parity tests.
-- Production-ready API with auth, Prometheus metrics, and structured logging.
-- Docker containerization and GitHub Actions CI/CD.
-- JSON Schema validation for all configuration files.
+- Production-ready API with file-based auth, Prometheus metrics, and structured logging.
+- Docker containerization with pinned base image digests, secrets mount, and GitHub Actions CI/CD.
+- JSON Schema validation for all configuration files with `additionalProperties: false` enforcement.
 - Artifact retention management with production model protection.
+- Modular CLI architecture (6 domain modules + assembler, down from 935-line monolith).
+- Coverage enforcement infrastructure (`pytest-cov` with 58% gate in CI).
+- CLI test coverage across all 14 command groups (89 total tests).
+- Shared test fixtures (`conftest.py`) for API client, trace paths, and stress datasets.
+- Rust CI governance: `cargo check` + `clippy --deny warnings` + release build in CI.
+- Rust overflow safety: saturating arithmetic across simulation and adapter contract code.
+- Rust release profile optimization (LTO, strip, single codegen unit).
+- Mandatory cross-language adapter parity test in CI.
+- Bandit SAST security scanning in CI.
+- File-based API key management with 3-tier loading (file, Docker/K8s mount, legacy env).
+- Schema hardening: all 10 schemas locked with `additionalProperties: false`, `policy_id` and `severity` enum constraints.
+- Schema validation test suite (automated on every run).
 
 ## 3. Short-Horizon Priorities
 

@@ -8,8 +8,8 @@ from typing import Any
 
 import pandas as pd
 
-from hpcopt.utils.io import ensure_dir, write_json
-from hpcopt.utils.io import sha256_path as _sha256_path
+from hpcopt.ingest import finalize_ingest
+from hpcopt.utils.io import ensure_dir
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +215,7 @@ def _iter_rows(
         "parsed_rows": 0,
     }
 
-    with path.open("r", encoding="utf-8", errors="replace") as fh:
+    with path.open("r", encoding="utf-8", errors="strict") as fh:
         header_seen = False
         col_indices: dict[str, int] = {}
 
@@ -406,40 +406,15 @@ def ingest_slurm(
     if "array_index" in df.columns:
         df = df.drop(columns=["array_index"])
 
-    dataset_path = out_dir / f"{dataset_id}.parquet"
-    df.to_parquet(dataset_path, index=False)
-
-    # ------------------------------------------------------------------
-    # Quality report
-    # ------------------------------------------------------------------
-    quality_report: dict[str, Any] = {
-        "dataset_id": dataset_id,
-        "input_path": str(input_path),
-        "output_dataset_path": str(dataset_path),
-        **stats,
-        "requested_mem_null_rows": int(df["requested_mem"].isna().sum()),
-        "requested_mem_null_rate": float(df["requested_mem"].isna().mean()),
-        "runtime_requested_null_rows": int(df["runtime_requested_sec"].isna().sum()),
-        "row_count": int(len(df)),
-    }
-    quality_report_path = report_dir / f"{dataset_id}_quality_report.json"
-    write_json(quality_report_path, quality_report)
-
-    # ------------------------------------------------------------------
-    # Dataset metadata
-    # ------------------------------------------------------------------
-    dataset_metadata: dict[str, Any] = {
-        "dataset_id": dataset_id,
-        "dataset_path": str(dataset_path),
-        "dataset_sha256": _sha256_path(dataset_path),
-        "source_trace_path": str(input_path),
-        "source_trace_filename": input_path.name,
-        "source_trace_sha256": _sha256_path(input_path),
-        "source_format": "slurm_sacct_parsable2",
-        "row_count": int(len(df)),
-    }
-    dataset_metadata_path = out_dir / f"{dataset_id}.metadata.json"
-    write_json(dataset_metadata_path, dataset_metadata)
+    dataset_path, quality_report_path, dataset_metadata_path = finalize_ingest(
+        df=df,
+        dataset_id=dataset_id,
+        input_path=input_path,
+        out_dir=out_dir,
+        report_dir=report_dir,
+        parse_stats=stats,
+        source_format="slurm_sacct_parsable2",
+    )
 
     logger.info(
         "Slurm ingest complete: %d rows written to %s", len(df), dataset_path

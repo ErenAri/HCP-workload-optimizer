@@ -30,6 +30,19 @@ class ReportExportResult:
     payload: dict[str, Any]
 
 
+def _validate_run_id(run_id: str) -> None:
+    """Validate run_id to prevent path traversal attacks."""
+    if not run_id:
+        raise ValueError("run_id must not be empty")
+    # Block path separators, parent directory references, and glob-special chars
+    forbidden = {"\\", "/", "..", "*", "?", "[", "]"}
+    for ch in forbidden:
+        if ch in run_id:
+            raise ValueError(
+                f"run_id contains forbidden character or sequence {ch!r}: {run_id!r}"
+            )
+
+
 def export_run_report(
     run_id: str,
     out_dir: Path,
@@ -37,6 +50,7 @@ def export_run_report(
     simulation_dir: Path = Path("outputs/simulations"),
     model_dir: Path = Path("outputs/models"),
 ) -> ReportExportResult:
+    _validate_run_id(run_id)
     ensure_dir(out_dir)
 
     report_files = sorted(report_dir.glob(f"*{run_id}*"))

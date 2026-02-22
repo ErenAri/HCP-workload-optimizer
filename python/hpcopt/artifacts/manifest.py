@@ -23,9 +23,10 @@ def _git_commit() -> str | None:
             capture_output=True,
             check=True,
             text=True,
+            timeout=10,
         )
         return result.stdout.strip()
-    except (subprocess.SubprocessError, FileNotFoundError) as exc:
+    except (subprocess.SubprocessError, FileNotFoundError, OSError) as exc:
         logger.debug("Could not resolve git commit: %s", exc)
         return None
 
@@ -44,9 +45,10 @@ def _cmd_version(cmd: list[str]) -> str | None:
             capture_output=True,
             check=True,
             text=True,
+            timeout=10,
         )
         return result.stdout.strip() or result.stderr.strip() or None
-    except (subprocess.SubprocessError, FileNotFoundError) as exc:
+    except (subprocess.SubprocessError, FileNotFoundError, OSError) as exc:
         logger.debug("Could not resolve version for %s: %s", cmd[0], exc)
         return None
 

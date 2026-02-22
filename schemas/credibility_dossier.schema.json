@@ -28,5 +28,6 @@
     "no_improvement_narratives": { "type": "array" },
     "sensitivity_sweep_summary": { "type": "array" },
     "per_trace_data": { "type": "object" }
-  }
+  },
+  "additionalProperties": false
 }

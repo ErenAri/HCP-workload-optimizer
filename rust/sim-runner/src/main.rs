@@ -85,8 +85,8 @@ fn check_invariants(
         violations.push("free_cpus_exceeds_capacity".to_string());
     }
 
-    let running_cpus: u32 = running.iter().map(|job| job.requested_cpus).sum();
-    if running_cpus + free_cpus != capacity {
+    let running_cpus: u32 = running.iter().map(|job| job.requested_cpus).fold(0u32, |a, b| a.saturating_add(b));
+    if running_cpus.saturating_add(free_cpus) != capacity {
         violations.push("cpu_conservation_broken".to_string());
     }
 
@@ -162,7 +162,7 @@ fn main() -> Result<()> {
             let ids: HashSet<u64> = completed_now.iter().map(|job| job.job_id).collect();
             running.retain(|job| !ids.contains(&job.job_id));
             for job in completed_now {
-                free_cpus += job.requested_cpus;
+                free_cpus = free_cpus.saturating_add(job.requested_cpus);
                 completed_jobs += 1;
             }
         }
@@ -189,8 +189,8 @@ fn main() -> Result<()> {
             let job = queued.pop_front().expect("queue head exists");
             let runtime = job.runtime_actual_sec.max(0);
             let start_ts = clock_ts;
-            let end_ts = start_ts + runtime;
-            let wait_sec = start_ts - job.submit_ts;
+            let end_ts = start_ts.saturating_add(runtime);
+            let wait_sec = start_ts.saturating_sub(job.submit_ts);
 
             free_cpus -= job.requested_cpus;
             waits.push(wait_sec.max(0));
@@ -222,11 +222,11 @@ fn main() -> Result<()> {
     let mean_wait = if waits.is_empty() {
         0.0
     } else {
-        let sum: i64 = waits.iter().sum();
+        let sum: i64 = waits.iter().copied().fold(0i64, |a, b| a.saturating_add(b));
         sum as f64 / waits.len() as f64
     };
     let p95_wait = percentile(&waits, 0.95);
-    let makespan = (max_end_ts - min_submit_ts).max(0);
+    let makespan = max_end_ts.saturating_sub(min_submit_ts).max(0);
     let utilization_cpu = if makespan > 0 {
         let denom = (args.capacity_cpus as f64) * (makespan as f64);
         (total_cpu_seconds as f64 / denom).clamp(0.0, 1.0)

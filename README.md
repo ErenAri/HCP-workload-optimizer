@@ -78,17 +78,19 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 ### Deployment and Observability
 
 - Production-ready API (FastAPI) with runtime and resource-fit prediction endpoints.
-- API key authentication middleware (optional, via `HPCOPT_API_KEYS` environment variable).
+- File-based API key authentication with 3-tier loading (file env var, Docker secret mount, legacy env var) and rotation without restart.
 - Prometheus metrics: request counters, latency histograms, fallback rates, model status gauges.
 - Grafana dashboard (8 panels: request rate, latency percentiles, error rate, model status, heatmap).
 - Structured JSON logging with correlation ID propagation.
-- Docker containerization with multi-stage build and health checks.
-- GitHub Actions CI/CD: lint, typecheck, test matrix, Docker build, and release workflows.
-- JSON Schema validation for all configuration files.
+- Docker containerization with multi-stage build, pinned base image digests, and Docker secrets support.
+- GitHub Actions CI/CD: lint, typecheck, test matrix (Python 3.11/3.12), coverage gate (58%), Rust check/clippy, cross-language parity, bandit SAST, dependency audit, secret scanning, Docker build, and release workflows.
+- JSON Schema validation for all configuration files with `additionalProperties: false` enforcement.
 
 ### Cross-Language
 
 - Rust utilities for parser stats and scheduler adapter contract parity.
+- Rust release profile with LTO, strip, single codegen unit, and saturating arithmetic for overflow safety.
+- Mandatory cross-language adapter parity test in CI (Python/Rust decision equivalence).
 
 ## Architecture
 
@@ -133,7 +135,7 @@ flowchart LR
     FID["fidelity + objective contracts"]
     REC["recommend/engine.py"]
     ART["artifacts/* + manifests"]
-    IFACE["cli/main.py + api/app.py"]
+    IFACE["cli/ (6 modules) + api/app.py"]
     ORCH["orchestrate/credibility.py"]
   end
 
@@ -226,12 +228,54 @@ flowchart LR
   OUT2 --> SUM2["credibility_suite_summary.json"]
 ```
 
+#### 5) Security and secrets architecture
+
+```mermaid
+flowchart LR
+  subgraph Sources["Secret Sources (priority order)"]
+    F1["1. HPCOPT_API_KEYS_FILE<br/>(env var -> file path)"]
+    F2["2. /run/secrets/hpcopt_api_keys<br/>(Docker/K8s mount)"]
+    F3["3. HPCOPT_API_KEYS<br/>(legacy env var)"]
+  end
+
+  F1 --> LOAD["load_api_keys()<br/>utils/secrets.py"]
+  F2 --> LOAD
+  F3 --> LOAD
+
+  LOAD --> MW["API middleware<br/>(per-request reload)"]
+  MW --> AUTH{"X-API-Key<br/>valid?"}
+  AUTH -->|"Yes"| RATE["Rate limiter<br/>(token bucket)"]
+  AUTH -->|"No"| R401["401 Unauthorized"]
+  RATE -->|"Allowed"| HANDLER["Endpoint handler"]
+  RATE -->|"Exceeded"| R429["429 Rate Limited"]
+
+  subgraph CI["CI Security Gates"]
+    BANDIT["bandit SAST"]
+    AUDIT2["pip-audit"]
+    GITLEAKS["gitleaks"]
+  end
+```
+
+#### 6) CLI module architecture
+
+```mermaid
+flowchart TD
+  MAIN["cli/main.py<br/>(assembler, 41 lines)"]
+
+  MAIN --> ING_CLI["cli/ingest.py<br/>swf | slurm | pbs | shadow-start"]
+  MAIN --> TRAIN_CLI["cli/train.py<br/>runtime | tune | resource-fit"]
+  MAIN --> SIM_CLI["cli/simulate.py<br/>run | replay-baselines | fidelity-gate | batsim-*"]
+  MAIN --> PIPE_CLI["cli/pipeline.py<br/>profile | features | analysis | credibility"]
+  MAIN --> MODEL_CLI["cli/model.py<br/>list | promote | archive | drift-check | serve"]
+  MAIN --> REPORT_CLI["cli/report.py<br/>export | benchmark | recommend | artifacts"]
+```
+
 ## Repository Map
 
 ```text
 python/hpcopt/
-  cli/           # Typer command surface
-  api/           # FastAPI service, auth middleware, Prometheus metrics
+  cli/           # Typer command surface (modular: ingest, train, simulate, report, pipeline, model)
+  api/           # FastAPI service, Prometheus metrics
   ingest/        # SWF, Slurm, PBS parsers + shadow ingestion daemon
   profile/       # Trace profiling and workload characterization
   features/      # Time-safe feature pipeline + chronological splits
@@ -241,7 +285,7 @@ python/hpcopt/
   artifacts/     # Manifests, export, benchmarks, credibility dossier, retention
   analysis/      # Sensitivity sweeps, feature importance
   orchestrate/   # Credibility protocol orchestrator
-  utils/         # I/O, structured logging, config validation
+  utils/         # I/O, structured logging, config validation, file-based secrets
 
 rust/
   swf-parser/    # Fast SWF line parser/statistics utility
@@ -260,9 +304,10 @@ schemas/
   sensitivity, reference_suite, fidelity_gate_config schemas
 
 tests/
-  unit/          # 39 unit tests
+  unit/          # 80+ unit tests (CLI, API, schemas, secrets, adapters, simulation, ...)
   integration/   # API and protocol integration tests
   load/          # API load/concurrency tests
+  conftest.py    # Shared fixtures (api_client, sample_trace_path, stress_dataset)
 
 docs/
   Formal technical documentation corpus
@@ -287,6 +332,10 @@ rustc --version
 ### Docker
 
 ```bash
+# Create secrets directory with API keys
+mkdir -p secrets
+echo "my-secret-api-key" > secrets/api_keys.txt
+
 docker compose up --build
 ```
 
@@ -294,7 +343,7 @@ Or standalone:
 
 ```bash
 docker build -t hpcopt .
-docker run -p 8080:8080 hpcopt
+docker run -p 8080:8080 -e HPCOPT_API_KEYS=my-key hpcopt
 ```
 
 ## Quickstart (Minimal End-to-End)
@@ -565,7 +614,13 @@ Available endpoints:
 
 OpenAPI docs: `http://localhost:8080/docs`
 
-Authentication: set `HPCOPT_API_KEYS` environment variable (comma-separated) to enable API key authentication via `X-API-Key` header. Health and readiness endpoints are always exempt.
+Authentication: API key authentication is enabled when keys are configured via any of:
+
+1. `HPCOPT_API_KEYS_FILE` env var pointing to a file (one key per line),
+2. Docker/K8s secret mount at `/run/secrets/hpcopt_api_keys`,
+3. `HPCOPT_API_KEYS` env var (comma-separated, legacy).
+
+Requests must include `X-API-Key` header. Health, readiness, and metrics endpoints are always exempt. Keys are re-read on every request, enabling rotation without restart.
 
 Runtime prediction endpoint automatically uses trained model artifacts when available; otherwise it falls back to deterministic heuristic behavior.
 
@@ -617,13 +672,18 @@ hpcopt data lock-reference-suite \
 pytest -v
 ```
 
-Current baseline result: `51 passed`.
+Current baseline result: `89 passed` (59% coverage, enforced at 58% minimum).
 
 Test suite covers:
 
 - unit tests (ingestion, profiling, training, simulation, fidelity, recommendation, benchmarks, reproducibility),
+- CLI tests (ingest swf/slurm/pbs, train, simulate, pipeline, model, report -- all 14 command groups),
+- schema validation tests (all 10 JSON schemas checked for well-formedness and `additionalProperties` lockdown),
+- secrets module tests (file-based, Docker mount, legacy env, missing file),
 - integration tests (API endpoints, auth, credibility protocol, Slurm ingestion),
 - load tests (concurrent API predictions, health under load).
+
+Coverage enforcement: `pytest-cov` with `--cov-fail-under=58` runs in CI on every push/PR.
 
 ### Unified Verification Gate (PowerShell)
 
@@ -696,6 +756,40 @@ Design and contract history:
 - `design_docs/mvp_backlog_p0_p1_p2.md`
 - `design_docs/systems_first_research_appendix.md`
 
+## CI/CD Pipeline
+
+```mermaid
+flowchart TD
+  subgraph Checks["Parallel CI Jobs (push/PR)"]
+    LINT["Lint (ruff)"]
+    TYPE["Typecheck (mypy)"]
+    SAST["SAST (bandit)"]
+    AUDIT["Dependency audit (pip-audit)"]
+    SECRETS["Secret scan (gitleaks)"]
+    COMPAT["OpenAPI compat check"]
+    READY["Readiness checklist validate"]
+    DOCKER["Docker build (no push)"]
+  end
+
+  subgraph Test["Test Matrix"]
+    PY311["Python 3.11 tests + coverage"]
+    PY312["Python 3.12 tests + coverage"]
+  end
+
+  subgraph Rust["Rust Jobs"]
+    RCHECK["cargo check + clippy + build --release"]
+  end
+
+  PY312 --> COV["Upload coverage artifact"]
+  RCHECK --> XPARITY["Cross-language adapter parity"]
+  PY312 --> XPARITY
+
+  subgraph Release["Release Gate (v* tags)"]
+    GATE["production_readiness_gate.py --mode release"]
+    PUBLISH["Build + push Docker image + SBOM"]
+  end
+```
+
 ## Release Gate
 
 Production release tags are gated by `scripts/production_readiness_gate.py` against
@@ -708,5 +802,8 @@ Production release tags are gated by `scripts/production_readiness_gate.py` agai
   - recent `metadata.reviewed_at_utc` (<=30 days old).
 - CI also runs:
   - OpenAPI compatibility baseline check (`scripts/check_openapi_compat.py`),
+  - bandit SAST scanning (`bandit -r python/hpcopt/ -ll -ii`),
   - security dependency audit (`pip-audit`),
-  - secret scanning (`gitleaks`).
+  - secret scanning (`gitleaks`),
+  - Rust linting (`clippy --deny warnings`) and release build,
+  - mandatory cross-language adapter parity test.

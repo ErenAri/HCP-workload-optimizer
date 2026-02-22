@@ -33,7 +33,7 @@ def _decision_to_dict(decision: SchedulerDecision) -> dict:
 
 def _run_rust_contract(fixture: Path, policy_id: str, strict_uncertainty_mode: bool = False) -> dict:
     if shutil.which("cargo") is None:
-        pytest.skip("cargo not installed; skipping cross-language parity execution.")
+        pytest.fail("cargo is required for cross-language parity test; install Rust toolchain")
     root = Path(__file__).resolve().parents[2]
     cmd = [
         "cargo",
@@ -64,6 +64,7 @@ def _run_rust_contract(fixture: Path, policy_id: str, strict_uncertainty_mode: b
     return json.loads(proc.stdout)
 
 
+@pytest.mark.slow
 def test_cross_language_fifo_easy_ml_contract_parity() -> None:
     fixture = Path("tests/fixtures/adapter_snapshot_case.json").resolve()
     payload = json.loads(fixture.read_text(encoding="utf-8"))

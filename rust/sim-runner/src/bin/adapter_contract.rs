@@ -97,7 +97,7 @@ fn reservation_ts_for_hol(snapshot: &Snapshot, hol: &QueuedJob) -> i64 {
     }
     let mut free = snapshot.free_cpus;
     for running in &snapshot.running_jobs {
-        free += running.allocated_cpus;
+        free = free.saturating_add(running.allocated_cpus);
         if free >= hol.requested_cpus {
             return snapshot.clock_ts.max(running.end_ts);
         }
@@ -119,7 +119,7 @@ fn choose_fifo(snapshot: &Snapshot) -> DecisionReport {
                 job_id: job.job_id,
                 requested_cpus: job.requested_cpus,
                 runtime_estimate_sec: runtime,
-                estimated_completion_ts: snapshot.clock_ts + runtime,
+                estimated_completion_ts: snapshot.clock_ts.saturating_add(runtime),
                 reason: "fifo_dispatch".to_string(),
             });
             available -= job.requested_cpus;
@@ -156,7 +156,7 @@ fn choose_easy(snapshot: &Snapshot) -> DecisionReport {
             job_id: hol.job_id,
             requested_cpus: hol.requested_cpus,
             runtime_estimate_sec: runtime,
-            estimated_completion_ts: snapshot.clock_ts + runtime,
+            estimated_completion_ts: snapshot.clock_ts.saturating_add(runtime),
             reason: "easy_head_dispatch".to_string(),
         });
         available -= hol.requested_cpus;
@@ -171,7 +171,7 @@ fn choose_easy(snapshot: &Snapshot) -> DecisionReport {
                     job_id: job.job_id,
                     requested_cpus: job.requested_cpus,
                     runtime_estimate_sec: runtime,
-                    estimated_completion_ts: snapshot.clock_ts + runtime,
+                    estimated_completion_ts: snapshot.clock_ts.saturating_add(runtime),
                     reason: "easy_follow_dispatch".to_string(),
                 });
                 available -= job.requested_cpus;
@@ -189,7 +189,7 @@ fn choose_easy(snapshot: &Snapshot) -> DecisionReport {
             continue;
         }
         let runtime = job.runtime_estimate_sec.max(0);
-        let completion = snapshot.clock_ts + runtime;
+        let completion = snapshot.clock_ts.saturating_add(runtime);
         if completion <= reservation_ts {
             decisions.push(DispatchDecision {
                 job_id: job.job_id,
@@ -230,7 +230,7 @@ fn choose_ml(snapshot: &Snapshot, strict_uncertainty_mode: bool) -> DecisionRepo
             job_id: hol.job_id,
             requested_cpus: hol.requested_cpus,
             runtime_estimate_sec: runtime,
-            estimated_completion_ts: snapshot.clock_ts + runtime,
+            estimated_completion_ts: snapshot.clock_ts.saturating_add(runtime),
             reason: "ml_head_dispatch".to_string(),
         });
         available -= hol.requested_cpus;
@@ -249,7 +249,7 @@ fn choose_ml(snapshot: &Snapshot, strict_uncertainty_mode: bool) -> DecisionRepo
                     job_id: job.job_id,
                     requested_cpus: job.requested_cpus,
                     runtime_estimate_sec: runtime,
-                    estimated_completion_ts: snapshot.clock_ts + runtime,
+                    estimated_completion_ts: snapshot.clock_ts.saturating_add(runtime),
                     reason: format!("ml_follow_dispatch:{source}"),
                 });
                 available -= job.requested_cpus;
@@ -273,7 +273,7 @@ fn choose_ml(snapshot: &Snapshot, strict_uncertainty_mode: bool) -> DecisionRepo
                 .unwrap_or(job.runtime_estimate_sec)
                 .max(0)
         };
-        let completion = snapshot.clock_ts + runtime_for_gate;
+        let completion = snapshot.clock_ts.saturating_add(runtime_for_gate);
         if completion <= reservation_ts {
             let source = job
                 .estimate_source

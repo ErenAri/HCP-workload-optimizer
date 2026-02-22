@@ -11,7 +11,9 @@ services:
       - ./data:/app/data
       - ./outputs/models:/app/models
     environment:
-      HPCOPT_API_KEYS: dev-key
+      HPCOPT_API_KEYS_FILE: /run/secrets/hpcopt_api_keys
+    secrets:
+      - hpcopt_api_keys
     healthcheck:
       test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
       interval: 30s
@@ -19,3 +21,7 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+
+secrets:
+  hpcopt_api_keys:
+    file: ./secrets/api_keys.txt

@@ -57,9 +57,15 @@ Defines fidelity report essentials:
 ### Adapter Schemas
 
 - `schemas/adapter_snapshot.schema.json`
-- `schemas/adapter_decision.schema.json`
+- `schemas/adapter_decision.schema.json` (with `enum` constraint on `policy_id`: `FIFO_STRICT`, `EASY_BACKFILL_BASELINE`, `ML_BACKFILL_P50`)
 
 These enforce scheduler boundary compatibility.
+
+### Schema Hardening
+
+All 10 schemas enforce `additionalProperties: false` at root level (except `run_manifest.environment` which allows arbitrary keys). This prevents silent schema drift. The `invariant_report` schema also constrains `severity` to `["critical", "warning", "info", null]`.
+
+Automated enforcement: `tests/unit/test_schema_validation.py` validates every `schemas/*.schema.json` file for well-formedness and `additionalProperties` lockdown on every test run.
 
 ### Configuration Schemas
 
@@ -160,14 +166,14 @@ Correlation IDs can be set explicitly or auto-generated for request tracing.
 
 ## 8. Validation and Test Coverage
 
-Current tests validate (51 tests):
+Current tests validate (89 tests, 59% coverage with 58% CI gate):
 
-- ingestion (SWF, Slurm) and schema-critical fields,
+- ingestion (SWF, Slurm, PBS) and schema-critical fields,
 - trace profile sections,
 - feature pipeline with chronological splits,
 - runtime model training and monotonic quantiles,
 - adapter contract behavior,
-- cross-language parity for decisions,
+- cross-language parity for decisions (mandatory in CI),
 - fidelity report generation,
 - recommendation guardrails,
 - Batsim config/run/normalization path,
@@ -177,7 +183,12 @@ Current tests validate (51 tests):
 - credibility protocol integration,
 - API endpoints (health, ready, predict, resource-fit, auth, validation),
 - API load/concurrency behavior,
-- manifest hash persistence.
+- manifest hash persistence,
+- CLI commands across all 14 groups (ingest, train, simulate, pipeline, model, report),
+- JSON schema validation (well-formedness and `additionalProperties` lockdown for all 10 schemas),
+- file-based secrets loading (all 3 paths + missing file handling).
+
+Coverage enforcement: `pytest-cov` runs in CI with `--cov-fail-under=58` on Python 3.11 and 3.12 matrix.
 
 ## 7. Known Reproducibility Caveat
 

@@ -8,8 +8,8 @@ from typing import Any
 
 import pandas as pd
 
-from hpcopt.utils.io import ensure_dir, write_json
-from hpcopt.utils.io import sha256_path as _sha256_path
+from hpcopt.ingest import finalize_ingest
+from hpcopt.utils.io import ensure_dir
 
 SWF_FIELDS = [
     "job_number",
@@ -160,36 +160,21 @@ def ingest_swf(input_path: Path, out_dir: Path, dataset_id: str, report_dir: Pat
         raise ValueError("No parsable SWF rows were produced from input trace.")
 
     df = pd.DataFrame(rows)
-    dataset_path = out_dir / f"{dataset_id}.parquet"
-    df.to_parquet(dataset_path, index=False)
-
-    quality_report = {
-        "dataset_id": dataset_id,
-        "input_path": str(input_path),
-        "output_dataset_path": str(dataset_path),
-        **stats,
-        "requested_mem_null_rows": int(df["requested_mem"].isna().sum()),
-        "requested_mem_null_rate": float(df["requested_mem"].isna().mean()),
+    extra_quality = {
         "requested_cpu_fallback_rows": int(
             (df["requested_cpus"] == df["allocated_cpus"]).sum()
         ),
-        "runtime_requested_null_rows": int(df["runtime_requested_sec"].isna().sum()),
-        "row_count": int(len(df)),
     }
-    quality_report_path = report_dir / f"{dataset_id}_quality_report.json"
-    write_json(quality_report_path, quality_report)
-
-    dataset_metadata = {
-        "dataset_id": dataset_id,
-        "dataset_path": str(dataset_path),
-        "dataset_sha256": _sha256_path(dataset_path),
-        "source_trace_path": str(input_path),
-        "source_trace_filename": input_path.name,
-        "source_trace_sha256": _sha256_path(input_path),
-        "row_count": int(len(df)),
-    }
-    dataset_metadata_path = out_dir / f"{dataset_id}.metadata.json"
-    write_json(dataset_metadata_path, dataset_metadata)
+    dataset_path, quality_report_path, dataset_metadata_path = finalize_ingest(
+        df=df,
+        dataset_id=dataset_id,
+        input_path=input_path,
+        out_dir=out_dir,
+        report_dir=report_dir,
+        parse_stats=stats,
+        source_format="swf",
+        extra_quality_fields=extra_quality,
+    )
 
     return IngestResult(
         dataset_path=dataset_path,

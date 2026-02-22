@@ -33,5 +33,6 @@
         "optimal_delta_p95_bsld": { "type": ["number", "null"] }
       }
     }
-  }
+  },
+  "additionalProperties": false
 }

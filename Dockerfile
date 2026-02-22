@@ -3,7 +3,9 @@
 # ---------------------------------------------------------------------------
 
 # ---- Stage 1: builder – install Python dependencies into a virtual-env ----
-FROM python:3.12-slim AS builder
+# Pin digest for reproducible builds – update periodically via:
+#   docker manifest inspect python:3.12-slim
+FROM python:3.12-slim@sha256:48006ff57afe15f247ad3da166e9487da0f66a94adbc92810b0e189382d79246 AS builder
 
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -13,12 +15,13 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r /tmp/requirements.txt
 
 # ---- Stage 2: runtime – lean image with only what we need -----------------
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim@sha256:48006ff57afe15f247ad3da166e9487da0f66a94adbc92810b0e189382d79246 AS runtime
 
-# Install curl for the health-check probe
+# Install curl for the health-check probe and create non-root user
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 appuser
 
 # Copy the pre-built virtual-env from the builder stage
 COPY --from=builder /opt/venv /opt/venv
@@ -32,7 +35,10 @@ COPY python/ python/
 COPY schemas/ schemas/
 COPY configs/ configs/
 
-RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir . \
+    && chown -R appuser:appuser /app
+
+USER appuser
 
 EXPOSE 8080
 

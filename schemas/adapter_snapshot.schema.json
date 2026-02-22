@@ -68,7 +68,7 @@
             ]
           }
         },
-        "additionalProperties": true
+        "additionalProperties": false
       }
     },
     "running_jobs": {
@@ -92,9 +92,9 @@
             "minimum": 1
           }
         },
-        "additionalProperties": true
+        "additionalProperties": false
       }
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

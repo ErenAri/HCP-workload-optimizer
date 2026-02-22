@@ -55,42 +55,46 @@ def _coerce_frame(trace_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _queue_at_submit_features(df: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
-    # Queue semantics for feature extraction:
-    # process submit events before start events at equal timestamps.
+    """Compute queue depth at each job's submit time without future leakage.
+
+    Uses NumPy arrays and ``np.lexsort`` instead of Python lists/dicts for
+    lower overhead on large traces.  Submit events are processed before start
+    events at equal timestamps (event_type 0 < 1).
+    """
+    n = len(df)
+    submit_ts = df["submit_ts"].to_numpy(dtype=np.int64)
+    start_ts = df["start_ts"].to_numpy(dtype=np.int64)
+    cpus = df["requested_cpus"].to_numpy(dtype=np.int64)
+
+    # Build a (2n,) event array: (timestamp, event_type, row_id, cpus).
+    timestamps = np.concatenate([submit_ts, start_ts])
+    event_types = np.concatenate([np.zeros(n, dtype=np.int64), np.ones(n, dtype=np.int64)])
+    row_ids = np.concatenate([np.arange(n, dtype=np.int64), np.arange(n, dtype=np.int64)])
+    event_cpus = np.concatenate([cpus, cpus])
+
+    # Stable sort by (timestamp, event_type, row_id).
+    order = np.lexsort((row_ids, event_types, timestamps))
+
+    # Walk events sequentially (inherently serial due to running state).
+    queue_len_arr = np.zeros(n, dtype=np.int64)
+    queue_cpu_arr = np.zeros(n, dtype=np.int64)
     queue_len = 0
     queue_cpu = 0
-    queue_len_map: dict[int, int] = {}
-    queue_cpu_map: dict[int, int] = {}
-    events: list[tuple[int, int, int, int]] = []
-    row_ids = list(range(len(df)))
-    for row_idx, submit_ts, start_ts, requested_cpus in zip(
-        row_ids,
-        df["submit_ts"].to_numpy(dtype=int),
-        df["start_ts"].to_numpy(dtype=int),
-        df["requested_cpus"].to_numpy(dtype=int),
-        strict=False,
-    ):
-        row_id = row_idx
-        req_cpus = int(requested_cpus)
-        events.append((int(submit_ts), 0, row_id, req_cpus))
-        events.append((int(start_ts), 1, row_id, req_cpus))
-
-    events.sort(key=lambda item: (item[0], item[1], item[2]))
-    for _, event_type, row_id, requested_cpus in events:
-        rid = int(row_id)
-        req_cpus = int(requested_cpus)
-        if event_type == 0:
-            queue_len_map[rid] = int(queue_len)
-            queue_cpu_map[rid] = int(queue_cpu)
+    for idx in order:
+        if event_types[idx] == 0:  # submit
+            rid = row_ids[idx]
+            queue_len_arr[rid] = queue_len
+            queue_cpu_arr[rid] = queue_cpu
             queue_len += 1
-            queue_cpu += req_cpus
-        else:
+            queue_cpu += event_cpus[idx]
+        else:  # start
             queue_len = max(0, queue_len - 1)
-            queue_cpu = max(0, queue_cpu - req_cpus)
+            queue_cpu = max(0, queue_cpu - int(event_cpus[idx]))
 
-    queue_len_series = pd.Series([queue_len_map.get(i, 0) for i in row_ids], index=df.index, dtype="int64")
-    queue_cpu_series = pd.Series([queue_cpu_map.get(i, 0) for i in row_ids], index=df.index, dtype="int64")
-    return queue_len_series, queue_cpu_series
+    return (
+        pd.Series(queue_len_arr, index=df.index, dtype="int64"),
+        pd.Series(queue_cpu_arr, index=df.index, dtype="int64"),
+    )
 
 
 def _job_size_class(requested_cpus: pd.Series) -> pd.Series:

@@ -99,10 +99,17 @@ class ModelRegistry:
         return entries
 
     def _write_all(self, entries: list[RegistryEntry]) -> None:
-        """Overwrite the backing file with *entries*."""
+        """Overwrite the backing file atomically with *entries*.
+
+        Writes to a temporary file first, then renames it into place to
+        prevent partial writes from corrupting the registry.
+        """
         ensure_dir(self._path.parent)
         lines = [json.dumps(entry.to_dict(), sort_keys=True) for entry in entries]
-        self._path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        content = "\n".join(lines) + "\n"
+        tmp_path = self._path.with_suffix(".jsonl.tmp")
+        tmp_path.write_text(content, encoding="utf-8")
+        tmp_path.replace(self._path)
 
     def _append_one(self, entry: RegistryEntry) -> None:
         """Append a single entry without rewriting the whole file."""

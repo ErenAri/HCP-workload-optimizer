@@ -45,9 +45,9 @@ python/hpcopt/
   artifacts/     # manifest, export, benchmarks, credibility dossier, retention
   analysis/      # sensitivity sweeps, feature importance
   orchestrate/   # credibility protocol orchestrator
-  api/           # FastAPI service, auth middleware, Prometheus metrics
-  cli/           # Typer command surface
-  utils/         # I/O, structured logging, config validation
+  api/           # FastAPI service, Prometheus metrics
+  cli/           # Typer command surface (modular: main.py assembler + 6 domain modules)
+  utils/         # I/O, structured logging, config validation, file-based secrets
 
 rust/
   swf-parser/    # fast SWF line parser/statistics utility
@@ -130,8 +130,8 @@ No other transition is permitted to mutate queue or resource state.
 ## 6. Control and Data Planes
 
 Control plane:
-- `hpcopt` CLI (14 command groups),
-- FastAPI endpoints with auth and observability,
+- `hpcopt` CLI (14 command groups across 6 modular files + assembler),
+- FastAPI endpoints with file-based auth and observability,
 - model registry lifecycle,
 - credibility protocol orchestration,
 - manifest generation and artifact export.
@@ -172,6 +172,24 @@ Mitigation: baseline and candidate fidelity gating prior to recommendation accep
 Risk: over-attribution to ML.  
 Mitigation: mandatory fallback accounting and strict recommendation guardrails.
 
-Risk: reproducibility drift.  
+Risk: reproducibility drift.
 Mitigation: immutable run manifests with hashes, config snapshots, tool versions, and seeds.
+
+Risk: integer overflow in Rust simulation/adapter code.
+Mitigation: all arithmetic operations use `saturating_add`/`saturating_sub` to prevent panics on edge-case inputs. Release profile enables LTO + strip for production binaries.
+
+Risk: secret leakage via environment variables.
+Mitigation: file-based API key loading (`utils/secrets.py`) with Docker secrets support. Legacy env var path logs deprecation warning.
+
+## 9. CI/CD Architecture
+
+The project enforces quality through a multi-job CI pipeline:
+
+- **Python**: lint (ruff), typecheck (mypy), test matrix (3.11/3.12) with coverage gate, bandit SAST
+- **Rust**: `cargo check` + `clippy --deny warnings` + release build
+- **Cross-language**: mandatory Python/Rust adapter decision parity test
+- **Security**: dependency audit (pip-audit), secret scanning (gitleaks), SAST (bandit)
+- **Infrastructure**: Docker build, OpenAPI compatibility, production readiness checklist validation
+
+All schemas enforce `additionalProperties: false` at root level, validated by automated test.
 

@@ -3,7 +3,19 @@
 ## 1. CLI Overview
 
 Primary interface:
-- `hpcopt` (Typer-based command surface in `python/hpcopt/cli/main.py`).
+- `hpcopt` (Typer-based command surface).
+
+### Modular Architecture
+
+The CLI is implemented as a modular assembler pattern:
+
+- `python/hpcopt/cli/main.py` -- assembler (41 lines), imports and mounts sub-apps from domain modules.
+- `python/hpcopt/cli/ingest.py` -- `ingest swf`, `ingest slurm`, `ingest pbs`, `ingest shadow-start`
+- `python/hpcopt/cli/train.py` -- `train runtime`, `train tune`, `train resource-fit`
+- `python/hpcopt/cli/simulate.py` -- `simulate run`, `simulate replay-baselines`, `simulate fidelity-gate`, `simulate batsim-config`, `simulate batsim-run`, `stress gen`, `stress run`
+- `python/hpcopt/cli/pipeline.py` -- `profile trace`, `features build`, `analysis sensitivity-sweep`, `analysis feature-importance`, `credibility run-suite`, `credibility dossier`
+- `python/hpcopt/cli/model.py` -- `model list`, `model promote`, `model archive`, `model drift-check`, `data lock-reference-suite`, `serve api`
+- `python/hpcopt/cli/report.py` -- `report export`, `report benchmark`, `recommend generate`, `artifacts cleanup`
 
 Top-level command groups:
 
@@ -353,9 +365,9 @@ hpcopt serve api --host 0.0.0.0 --port 8080
 ```
 
 Implementation modules:
-- `python/hpcopt/api/app.py` -- FastAPI application
-- `python/hpcopt/api/auth.py` -- API key authentication middleware
+- `python/hpcopt/api/app.py` -- FastAPI application with inline middleware
 - `python/hpcopt/api/metrics.py` -- Prometheus metrics integration
+- `python/hpcopt/utils/secrets.py` -- File-based API key loading
 
 ## 4. API Endpoints
 
@@ -414,11 +426,19 @@ Requires `prometheus_client` package. Returns empty response if unavailable.
 
 ## 5. Authentication
 
-Set `HPCOPT_API_KEYS` environment variable (comma-separated list of valid keys) to enable API key authentication.
+API key authentication is enabled when keys are configured via any of these sources (checked in priority order):
 
+1. **`HPCOPT_API_KEYS_FILE`** env var -- points to a file with one key per line. Supports comments (`#`) and blank lines.
+2. **`/run/secrets/hpcopt_api_keys`** -- Docker/Kubernetes secret mount (auto-detected).
+3. **`HPCOPT_API_KEYS`** env var -- comma-separated list (legacy, logs deprecation warning).
+
+Implementation: `python/hpcopt/utils/secrets.py` (`load_api_keys()`).
+
+Behavior:
+- Keys are **re-read on every request**, enabling rotation without restart.
 - Requests must include `X-API-Key` header with a valid key.
-- `GET /health` and `GET /ready` are always exempt.
-- If `HPCOPT_API_KEYS` is unset, all requests pass through without authentication.
+- `GET /health`, `GET /ready`, `GET /metrics`, `GET /docs`, `GET /openapi.json`, and `GET /v1/system/status` are always exempt.
+- If no keys are configured, all requests pass through without authentication.
 
 ## 6. Docker Deployment
 
@@ -429,7 +449,8 @@ docker compose up --build
 The `docker-compose.yaml` configures:
 - port mapping (`8080:8080`),
 - volume mounts for `data/` and `outputs/models/`,
-- `HPCOPT_API_KEYS` environment variable,
+- Docker secrets mount for API keys (`secrets/api_keys.txt` -> `/run/secrets/hpcopt_api_keys`),
+- `HPCOPT_API_KEYS_FILE` env var pointing to the secret mount,
 - health check against `/health`.
 
 ## 7. API Documentation
