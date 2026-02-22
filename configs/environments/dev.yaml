@@ -1,0 +1,4 @@
+rate_limit_per_minute: 120
+log_level: DEBUG
+model_staleness_warn_days: 90
+health_min_disk_free_gb: 0.05

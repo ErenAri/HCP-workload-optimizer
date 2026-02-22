@@ -1,0 +1,4 @@
+rate_limit_per_minute: 30
+log_level: WARNING
+model_staleness_warn_days: 14
+health_min_disk_free_gb: 1.0

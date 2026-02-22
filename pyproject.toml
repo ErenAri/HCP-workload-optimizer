@@ -42,6 +42,11 @@ production = [
   "prometheus-client>=0.20.0,<1.0",
   "jsonschema>=4.20.0,<5.0"
 ]
+tracing = [
+  "opentelemetry-api>=1.25.0,<2.0",
+  "opentelemetry-sdk>=1.25.0,<2.0",
+  "opentelemetry-instrumentation-fastapi>=0.46b0"
+]
 
 [project.scripts]
 hpcopt = "hpcopt.cli.main:run"

@@ -3,14 +3,70 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
+import shutil
+import sys
 import threading
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from hpcopt.utils.io import ensure_dir
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Cross-platform advisory file lock
+# ---------------------------------------------------------------------------
+
+@contextmanager
+def _file_lock(lock_path: Path, timeout: float = 10.0) -> Iterator[None]:
+    """Acquire an advisory file lock, blocking up to *timeout* seconds.
+
+    Uses ``msvcrt.locking`` on Windows and ``fcntl.flock`` on POSIX.
+    Falls back to no-op if locking is unsupported (e.g. some network mounts).
+    """
+    import time
+
+    ensure_dir(lock_path.parent)
+    fh = lock_path.open("w", encoding="utf-8")
+    deadline = time.monotonic() + timeout
+
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            while True:
+                try:
+                    msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except (OSError, IOError):
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(f"Could not acquire lock on {lock_path}")
+                    time.sleep(0.05)
+        else:
+            import fcntl
+            while True:
+                try:
+                    fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except (OSError, IOError):
+                    if time.monotonic() >= deadline:
+                        raise TimeoutError(f"Could not acquire lock on {lock_path}")
+                    time.sleep(0.05)
+        yield
+    finally:
+        try:
+            if sys.platform == "win32":
+                import msvcrt
+                msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+        except (OSError, IOError):
+            pass
+        fh.close()
+
 
 # ---------------------------------------------------------------------------
 # Data model
@@ -59,13 +115,13 @@ class ModelRegistry:
 
     Thread-safety is provided via a ``threading.Lock`` so that multiple
     in-process callers can safely read/write concurrently.  Cross-process
-    safety is **not** guaranteed -- callers that require it should layer an
-    external file-lock on top.
+    safety is provided via an advisory file lock on ``<registry>.lock``.
     """
 
     def __init__(self, registry_path: Path | None = None) -> None:
         self._path: Path = registry_path or DEFAULT_REGISTRY_PATH
         self._lock = threading.Lock()
+        self._lock_path = self._path.with_suffix(".jsonl.lock")
         # Eagerly create the parent directory so later writes never fail due
         # to a missing directory.
         ensure_dir(self._path.parent)
@@ -98,24 +154,34 @@ class ModelRegistry:
                 )
         return entries
 
+    def _backup(self) -> None:
+        """Create a backup copy of the registry before destructive writes."""
+        if self._path.exists():
+            bak_path = self._path.with_suffix(".jsonl.bak")
+            shutil.copy2(self._path, bak_path)
+
     def _write_all(self, entries: list[RegistryEntry]) -> None:
         """Overwrite the backing file atomically with *entries*.
 
-        Writes to a temporary file first, then renames it into place to
-        prevent partial writes from corrupting the registry.
+        Creates a ``.bak`` backup, writes to a temporary file, then renames
+        it into place to prevent partial writes from corrupting the registry.
+        Cross-process safety via advisory file lock.
         """
         ensure_dir(self._path.parent)
-        lines = [json.dumps(entry.to_dict(), sort_keys=True) for entry in entries]
-        content = "\n".join(lines) + "\n"
-        tmp_path = self._path.with_suffix(".jsonl.tmp")
-        tmp_path.write_text(content, encoding="utf-8")
-        tmp_path.replace(self._path)
+        with _file_lock(self._lock_path):
+            self._backup()
+            lines = [json.dumps(entry.to_dict(), sort_keys=True) for entry in entries]
+            content = "\n".join(lines) + "\n"
+            tmp_path = self._path.with_suffix(".jsonl.tmp")
+            tmp_path.write_text(content, encoding="utf-8")
+            tmp_path.replace(self._path)
 
     def _append_one(self, entry: RegistryEntry) -> None:
         """Append a single entry without rewriting the whole file."""
         ensure_dir(self._path.parent)
-        with self._path.open("a", encoding="utf-8") as fh:
-            fh.write(json.dumps(entry.to_dict(), sort_keys=True) + "\n")
+        with _file_lock(self._lock_path):
+            with self._path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(entry.to_dict(), sort_keys=True) + "\n")
 
     def _find_entry(
         self, entries: list[RegistryEntry], model_id: str
@@ -240,6 +306,11 @@ class ModelRegistry:
             target.status = "production"
             self._write_all(entries)
             logger.info("Promoted model %s to production", model_id)
+            try:
+                from hpcopt.utils.audit import audit_log
+                audit_log("model.promote", details={"model_id": model_id})
+            except Exception:
+                pass
             return target.to_dict()
 
     def archive(self, model_id: str) -> dict[str, Any]:
@@ -259,4 +330,9 @@ class ModelRegistry:
             target.status = "archived"
             self._write_all(entries)
             logger.info("Archived model %s", model_id)
+            try:
+                from hpcopt.utils.audit import audit_log
+                audit_log("model.archive", details={"model_id": model_id})
+            except Exception:
+                pass
             return target.to_dict()

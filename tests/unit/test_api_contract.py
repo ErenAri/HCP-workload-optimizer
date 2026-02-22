@@ -13,6 +13,7 @@ def test_rate_limit_error_contract(monkeypatch) -> None:
     original_limit = api_module._RATE_LIMIT
     api_module._RATE_BUCKETS.clear()
     monkeypatch.setattr(api_module, "_RATE_LIMIT", 1)
+    monkeypatch.setattr(api_module, "_PER_ENDPOINT_LIMITS", {})
     try:
         first = client.post(
             "/v1/runtime/predict",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 import json
 import logging
@@ -40,7 +41,12 @@ def _float_env(name: str, default: float) -> float:
 
 # ---------- Rate limiter (token bucket per API key) ----------
 
-_RATE_LIMIT = int(os.getenv("HPCOPT_RATE_LIMIT", "60"))  # requests per minute
+_RATE_LIMIT = int(os.getenv("HPCOPT_RATE_LIMIT", "60"))  # requests per minute (global default)
+_PER_ENDPOINT_LIMITS: dict[str, int] = {
+    "/v1/runtime/predict": int(os.getenv("HPCOPT_RATE_LIMIT_PREDICT", str(_RATE_LIMIT))),
+    "/v1/resource-fit/predict": int(os.getenv("HPCOPT_RATE_LIMIT_RESOURCE_FIT", str(_RATE_LIMIT))),
+    "/v1/admin/log-level": int(os.getenv("HPCOPT_RATE_LIMIT_ADMIN", "10")),
+}
 _RATE_MAX_BUCKETS = 10_000  # cap to prevent unbounded memory growth
 _RATE_BUCKETS: dict[str, list[float]] = {}
 _RATE_LOCK = threading.Lock()
@@ -55,11 +61,12 @@ _EXEMPT_PATHS = {
 }
 
 
-def _check_rate_limit(api_key: str | None) -> tuple[bool, int]:
-    """Token-bucket rate limiter. Returns (allowed, retry_after_sec)."""
-    if _RATE_LIMIT <= 0:
+def _check_rate_limit(api_key: str | None, path: str = "") -> tuple[bool, int]:
+    """Token-bucket rate limiter keyed by (api_key, endpoint). Returns (allowed, retry_after_sec)."""
+    limit = _PER_ENDPOINT_LIMITS.get(path, _RATE_LIMIT)
+    if limit <= 0:
         return True, 0
-    bucket_key = api_key or "__anonymous__"
+    bucket_key = f"{api_key or '__anonymous__'}:{path}"
     now = time.time()
     window_start = now - 60.0
 
@@ -76,7 +83,7 @@ def _check_rate_limit(api_key: str | None) -> tuple[bool, int]:
         bucket = _RATE_BUCKETS.get(bucket_key, [])
         bucket = [ts for ts in bucket if ts > window_start]
 
-        if len(bucket) >= _RATE_LIMIT:
+        if len(bucket) >= limit:
             oldest = bucket[0]
             retry_after = max(1, int(oldest + 60.0 - now))
             _RATE_BUCKETS[bucket_key] = bucket
@@ -105,9 +112,19 @@ async def lifespan(app: FastAPI):
         except (OSError, ValueError):
             pass  # Not all platforms support all signals
 
+    # Optional OpenTelemetry instrumentation
+    try:
+        from hpcopt.api.tracing import init_tracing
+        init_tracing(app)
+    except Exception:
+        logger.debug("OpenTelemetry instrumentation skipped", exc_info=True)
+
     logger.info("HPC Workload Optimizer API starting (version=%s)", __version__)
     yield
-    logger.info("Shutting down HPC Workload Optimizer API. Flushing metrics.")
+    logger.info("Shutting down HPC Workload Optimizer API. Draining in-flight requests...")
+    app.state.shutdown_requested = True
+    await asyncio.sleep(2)  # Grace period for in-flight request draining
+    logger.info("Shutdown complete. Flushing metrics.")
 
 
 app = FastAPI(
@@ -212,6 +229,19 @@ async def request_middleware(request: Request, call_next) -> Response:
     trace_id = request.headers.get("X-Trace-ID") or request.headers.get("X-Correlation-ID") or str(uuid.uuid4())[:12]
     request.state.trace_id = trace_id
 
+    # Request draining: reject new non-exempt requests during shutdown
+    if getattr(app.state, "shutdown_requested", False) and path not in _EXEMPT_PATHS:
+        error_response = JSONResponse(
+            status_code=503,
+            content=_error_content(
+                code="SERVICE_UNAVAILABLE",
+                message="Server is shutting down",
+                trace_id=trace_id,
+            ),
+        )
+        _set_telemetry_headers(error_response, trace_id)
+        return error_response
+
     # Auth check (exempt health/ready/metrics/system status)
     from hpcopt.utils.secrets import load_api_keys
     api_keys = load_api_keys()
@@ -232,10 +262,10 @@ async def request_middleware(request: Request, call_next) -> Response:
             _set_telemetry_headers(error_response, trace_id)
             return error_response
 
-    # Rate limiting (exempt health/ready)
+    # Rate limiting (per-endpoint, exempt health/ready)
     if path not in _EXEMPT_PATHS:
         api_key = request.headers.get("X-API-Key")
-        allowed, retry_after = _check_rate_limit(api_key)
+        allowed, retry_after = _check_rate_limit(api_key, path)
         if not allowed:
             error_response = JSONResponse(
                 status_code=429,
@@ -330,6 +360,17 @@ _RUNTIME_PREDICTOR_CACHE: dict[str, RuntimeQuantilePredictor | Path | None] = {
 _MODEL_CACHE_LOCK = threading.Lock()
 
 
+def _load_predictor_with_retry(model_dir: Path) -> RuntimeQuantilePredictor:
+    """Load the predictor with retry on transient I/O errors."""
+    from hpcopt.utils.resilience import retry
+
+    @retry(max_attempts=3, backoff_base=0.5, exceptions=(OSError, IOError))
+    def _load() -> RuntimeQuantilePredictor:
+        return RuntimeQuantilePredictor(model_dir)
+
+    return _load()
+
+
 def _get_runtime_predictor() -> tuple[RuntimeQuantilePredictor | None, Path | None]:
     """Resolve model directory server-side only (env var or convention)."""
     resolved = resolve_runtime_model_dir()
@@ -343,7 +384,11 @@ def _get_runtime_predictor() -> tuple[RuntimeQuantilePredictor | None, Path | No
             if isinstance(cached_predictor, RuntimeQuantilePredictor):
                 return cached_predictor, resolved
 
-        predictor = RuntimeQuantilePredictor(resolved)
+        try:
+            predictor = _load_predictor_with_retry(resolved)
+        except (OSError, IOError):
+            logger.error("Failed to load model from %s after retries", resolved)
+            return None, None
         _RUNTIME_PREDICTOR_CACHE["model_dir"] = resolved
         _RUNTIME_PREDICTOR_CACHE["predictor"] = predictor
         return predictor, resolved
@@ -533,6 +578,25 @@ def predict_runtime(
         fallback_used=result.fallback_used,
     )
     return result
+
+
+class LogLevelRequest(BaseModel):
+    level: str = Field(..., description="Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL")
+
+
+@app.post("/v1/admin/log-level")
+def set_log_level(payload: LogLevelRequest) -> dict[str, str]:
+    """Dynamically change the root log level at runtime."""
+    level_name = payload.level.upper()
+    numeric = getattr(logging, level_name, None)
+    if not isinstance(numeric, int):
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"code": "INVALID_LEVEL", "message": f"Unknown level: {payload.level}"}},
+        )
+    logging.getLogger().setLevel(numeric)
+    logger.info("Log level changed to %s", level_name)
+    return {"status": "ok", "level": level_name}
 
 
 @app.post("/v1/resource-fit/predict", response_model=ResourceFitResponse)
