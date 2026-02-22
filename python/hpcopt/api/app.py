@@ -135,6 +135,26 @@ app = FastAPI(
 )
 
 
+# ---------- Deprecation headers (RFC 8594 Sunset / RFC 9745 Deprecation) ----------
+
+_DEPRECATION_CONFIG_PATH = Path("configs/api/deprecation.yaml")
+_DEPRECATION_ENTRIES: list[dict[str, str]] = []
+
+def _load_deprecation_config() -> list[dict[str, str]]:
+    """Load deprecated endpoint entries from the deprecation config file."""
+    global _DEPRECATION_ENTRIES
+    if _DEPRECATION_ENTRIES:
+        return _DEPRECATION_ENTRIES
+    try:
+        import yaml
+        if _DEPRECATION_CONFIG_PATH.exists():
+            data = yaml.safe_load(_DEPRECATION_CONFIG_PATH.read_text(encoding="utf-8"))
+            _DEPRECATION_ENTRIES = data.get("deprecated_endpoints", []) or []
+    except Exception:
+        logger.debug("Could not load deprecation config", exc_info=True)
+    return _DEPRECATION_ENTRIES
+
+
 # ---------- Middleware ----------
 
 def _request_trace_id(request: Request) -> str:
@@ -295,6 +315,18 @@ async def request_middleware(request: Request, call_next) -> Response:
 
     # Add trace headers to all responses.
     _set_telemetry_headers(response, trace_id)
+
+    # Add deprecation/sunset headers for deprecated endpoints
+    for entry in _load_deprecation_config():
+        prefix = entry.get("path_prefix", "")
+        if prefix and path.startswith(prefix):
+            if entry.get("deprecated_at"):
+                response.headers["Deprecation"] = entry["deprecated_at"]
+            if entry.get("sunset_at"):
+                response.headers["Sunset"] = entry["sunset_at"]
+            if entry.get("docs_url"):
+                response.headers["Link"] = f'<{entry["docs_url"]}>; rel="successor-version"'
+            break
 
     # Log request
     logger.info(

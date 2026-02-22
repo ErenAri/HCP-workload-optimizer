@@ -1,5 +1,11 @@
 # HPC Workload Optimizer
 
+[![CI](https://github.com/ErenAri/HCP-workload-optimizer/actions/workflows/ci.yaml/badge.svg)](https://github.com/ErenAri/HCP-workload-optimizer/actions/workflows/ci.yaml)
+[![Coverage](https://codecov.io/gh/ErenAri/HCP-workload-optimizer/branch/main/graph/badge.svg)](https://codecov.io/gh/ErenAri/HCP-workload-optimizer)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](pyproject.toml)
+
 Systems-first HPC scheduling research and engineering platform (Python + Rust) focused on reproducible policy evaluation under uncertainty.
 
 ## Abstract
@@ -83,8 +89,12 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 - Grafana dashboard (8 panels: request rate, latency percentiles, error rate, model status, heatmap).
 - Structured JSON logging with correlation ID propagation.
 - Docker containerization with multi-stage build, pinned base image digests, and Docker secrets support.
-- GitHub Actions CI/CD: lint, typecheck, test matrix (Python 3.11/3.12), coverage gate (58%), Rust check/clippy, cross-language parity, bandit SAST, dependency audit, secret scanning, Docker build, and release workflows.
+- **Kubernetes manifests**: Deployment (health/readiness probes, security context, resource limits), Service, ConfigMap, Secret, HPA (2-8 replicas), ServiceMonitor, OpenTelemetry Collector, Alertmanager.
+- GitHub Actions CI/CD: lint, typecheck, test matrix (Python 3.11/3.12), coverage gate (75%), E2E smoke test, Codecov reporting, Rust check/clippy, cross-language parity, bandit SAST, dependency audit, secret scanning, Docker build, and release workflows.
 - JSON Schema validation for all configuration files with `additionalProperties: false` enforcement.
+- **OpenTelemetry** distributed tracing with configurable sampling per environment.
+- **API deprecation sunset mechanism** with RFC 8594/9745 `Sunset` and `Deprecation` response headers.
+- **SLO and error budget** policy with PagerDuty (critical) and Slack (warning) alert routing.
 
 ### Cross-Language
 
@@ -275,7 +285,7 @@ flowchart TD
 ```text
 python/hpcopt/
   cli/           # Typer command surface (modular: ingest, train, simulate, report, pipeline, model)
-  api/           # FastAPI service, Prometheus metrics
+  api/           # FastAPI service, Prometheus metrics, deprecation middleware
   ingest/        # SWF, Slurm, PBS parsers + shadow ingestion daemon
   profile/       # Trace profiling and workload characterization
   features/      # Time-safe feature pipeline + chronological splits
@@ -286,10 +296,22 @@ python/hpcopt/
   analysis/      # Sensitivity sweeps, feature importance
   orchestrate/   # Credibility protocol orchestrator
   utils/         # I/O, structured logging, config validation, file-based secrets
+  py.typed       # PEP 561 marker for downstream type checking
 
 rust/
   swf-parser/    # Fast SWF line parser/statistics utility
   sim-runner/    # Deterministic runner and adapter contract binaries
+
+k8s/               # Kubernetes manifests
+  namespace.yaml
+  deployment.yaml  # 2-replica Deployment with probes + security context
+  service.yaml     # ClusterIP service
+  configmap.yaml   # Environment configuration
+  secret.yaml      # API keys template
+  hpa.yaml         # HorizontalPodAutoscaler (2-8 replicas)
+  servicemonitor.yaml  # Prometheus auto-discovery
+  otel-collector.yaml  # OpenTelemetry Collector deployment
+  alertmanager-config.yaml  # PagerDuty + Slack alert routing
 
 configs/
   data/          # Reference suite configuration
@@ -298,22 +320,28 @@ configs/
   models/        # Drift threshold configuration
   benchmark/     # Benchmark suite configuration
   monitoring/    # Grafana dashboard
+  api/           # API deprecation schedule
+  environments/  # Per-environment configs (dev, staging, prod)
+  release/       # Production readiness checklist
 
 schemas/
   run_manifest, fidelity, invariant, adapter, policy, credibility,
   sensitivity, reference_suite, fidelity_gate_config schemas
 
 tests/
-  unit/          # 80+ unit tests (CLI, API, schemas, secrets, adapters, simulation, ...)
-  integration/   # API and protocol integration tests
+  unit/          # 100+ unit tests (CLI, API, schemas, secrets, adapters, simulation, property-based)
+  integration/   # API and protocol integration tests + E2E smoke test
   load/          # API load/concurrency tests
   conftest.py    # Shared fixtures (api_client, sample_trace_path, stress_dataset)
 
-docs/
-  Formal technical documentation corpus
+docs/              # Formal technical documentation corpus
+  ops/           # SLO, logging, scaling, persistent state, tracing, deployment safety
+  runbooks/      # Incident response, latency, 5xx, fallback spike, rollback
+  security/      # Secrets, vulnerability management, access control
+  mlops/         # Model lifecycle
+  api/           # Versioning and deprecation
 
-design_docs/
-  Planning contracts and research appendix
+design_docs/       # Planning contracts and research appendix
 ```
 
 ## Installation
@@ -628,6 +656,7 @@ API response contract:
 
 - every response includes `X-Trace-ID` and `X-Correlation-ID`,
 - prediction responses include `X-Model-Version` and `X-Fallback-Used`,
+- deprecated endpoints include `Deprecation`, `Sunset`, and `Link` headers (RFC 8594/9745),
 - validation/auth/rate-limit/internal failures return an `error` object with `code`, `message`, and `trace_id`.
 
 ## Reproducibility and Contracts
@@ -672,18 +701,21 @@ hpcopt data lock-reference-suite \
 pytest -v
 ```
 
-Current baseline result: `89 passed` (59% coverage, enforced at 58% minimum).
+Current baseline: **100+ tests** with **75% minimum coverage** (enforced in CI).
 
 Test suite covers:
 
 - unit tests (ingestion, profiling, training, simulation, fidelity, recommendation, benchmarks, reproducibility),
-- CLI tests (ingest swf/slurm/pbs, train, simulate, pipeline, model, report -- all 14 command groups),
+- **property-based tests** (Hypothesis) for simulation invariants, fidelity metrics, adapter contracts, objective bounds, and recommendation engine,
+- CLI tests (ingest swf/slurm/pbs, train, simulate, pipeline, model, report — all 14 command groups),
 - schema validation tests (all 10 JSON schemas checked for well-formedness and `additionalProperties` lockdown),
 - secrets module tests (file-based, Docker mount, legacy env, missing file),
+- API deprecation header tests,
 - integration tests (API endpoints, auth, credibility protocol, Slurm ingestion),
+- **E2E pipeline smoke test** (ingest → features → train → predict),
 - load tests (concurrent API predictions, health under load).
 
-Coverage enforcement: `pytest-cov` with `--cov-fail-under=58` runs in CI on every push/PR.
+Coverage enforcement: `pytest-cov` with `--cov-fail-under=75` and Codecov PR comments in CI.
 
 ### Unified Verification Gate (PowerShell)
 
@@ -728,6 +760,10 @@ Primary docs:
 - `docs/ops/model-acceptance.md`
 - `docs/ops/deployment-safety.md`
 - `docs/ops/disaster-recovery.md`
+- `docs/ops/logging.md`
+- `docs/ops/scaling.md`
+- `docs/ops/persistent-state.md`
+- `docs/ops/tracing.md`
 - `docs/runbooks/incident-response.md`
 - `docs/runbooks/api-latency-degradation.md`
 - `docs/runbooks/high-5xx-rate.md`
@@ -756,13 +792,61 @@ Design and contract history:
 - `design_docs/mvp_backlog_p0_p1_p2.md`
 - `design_docs/systems_first_research_appendix.md`
 
+## Kubernetes Deployment
+
+HPCOpt ships with production-ready Kubernetes manifests in `k8s/`:
+
+```bash
+kubectl apply -f k8s/namespace.yaml
+kubectl apply -f k8s/configmap.yaml
+kubectl apply -f k8s/secret.yaml        # replace placeholder with base64-encoded keys
+kubectl apply -f k8s/deployment.yaml
+kubectl apply -f k8s/service.yaml
+kubectl apply -f k8s/hpa.yaml
+kubectl apply -f k8s/servicemonitor.yaml  # requires Prometheus Operator
+kubectl apply -f k8s/otel-collector.yaml  # optional: distributed tracing
+kubectl apply -f k8s/alertmanager-config.yaml  # optional: alert routing
+```
+
+#### Kubernetes deployment architecture
+
+```mermaid
+flowchart LR
+  subgraph K8s["Kubernetes Cluster (namespace: hpcopt)"]
+    ING["Ingress / LoadBalancer"] --> SVC["Service\n:8080"]
+    SVC --> POD1["Pod 1\nhpcopt-api"]
+    SVC --> POD2["Pod 2\nhpcopt-api"]
+    POD1 --> OTEL["OTel Collector\nsidecar/daemon"]
+    POD2 --> OTEL
+    HPA["HPA\n2-8 replicas"] -.-> POD1
+    HPA -.-> POD2
+  end
+
+  subgraph Obs["Observability"]
+    OTEL --> JAEGER["Jaeger / Tempo"]
+    PROM["Prometheus"] --> SMON["ServiceMonitor"]
+    SMON --> POD1
+    SMON --> POD2
+    PROM --> AM["Alertmanager"]
+    AM --> PD["PagerDuty"]
+    AM --> SLACK["Slack"]
+  end
+
+  PVC[("PVC\nModel Storage")] --> POD1
+  PVC --> POD2
+  SEC[("Secret\nAPI Keys")] --> POD1
+  SEC --> POD2
+```
+
+See `docs/ops/scaling.md` for horizontal scaling guidance and known limitations.
+
 ## CI/CD Pipeline
 
 ```mermaid
 flowchart TD
   subgraph Checks["Parallel CI Jobs (push/PR)"]
     LINT["Lint (ruff)"]
-    TYPE["Typecheck (mypy)"]
+    TYPE["Typecheck (mypy, strict)"]
     SAST["SAST (bandit)"]
     AUDIT["Dependency audit (pip-audit)"]
     SECRETS["Secret scan (gitleaks)"]
@@ -781,11 +865,19 @@ flowchart TD
   end
 
   PY312 --> COV["Upload coverage artifact"]
+  PY312 --> CODECOV["Codecov PR report"]
   RCHECK --> XPARITY["Cross-language adapter parity"]
   PY312 --> XPARITY
+  PY312 --> E2E["E2E smoke test"]
+
+  subgraph Gate["Merge Gate"]
+    E2E
+    XPARITY
+    COV_CHECK["Coverage ≥ 75%"]
+  end
 
   subgraph Release["Release Gate (v* tags)"]
-    GATE["production_readiness_gate.py --mode release"]
+    RGATE["production_readiness_gate.py --mode release"]
     PUBLISH["Build + push Docker image + SBOM"]
   end
 ```
@@ -806,4 +898,6 @@ Production release tags are gated by `scripts/production_readiness_gate.py` agai
   - security dependency audit (`pip-audit`),
   - secret scanning (`gitleaks`),
   - Rust linting (`clippy --deny warnings`) and release build,
-  - mandatory cross-language adapter parity test.
+  - mandatory cross-language adapter parity test,
+  - automated E2E pipeline smoke test,
+  - Codecov coverage reporting to PR comments.

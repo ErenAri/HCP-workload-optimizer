@@ -41,3 +41,19 @@ This document defines production SLOs for the HPCOpt API service (`hpcopt.api.ap
   - corrective actions,
   - open risk items.
 
+## Alerting Destinations
+
+Production alerts are routed via Prometheus Alertmanager (see [`k8s/alertmanager-config.yaml`](../../k8s/alertmanager-config.yaml)):
+
+| Severity   | Destination           | Repeat Interval |
+|------------|-----------------------|-----------------|
+| `critical` | PagerDuty on-call     | 1 hour          |
+| `warning`  | Slack `#hpcopt-alerts` | 4 hours         |
+| `info`     | Slack `#hpcopt-alerts` | 24 hours        |
+
+### Setup
+
+1. Create a PagerDuty service and obtain an integration key.
+2. Create a Slack incoming webhook for `#hpcopt-alerts`.
+3. Replace the placeholder values in `k8s/alertmanager-config.yaml`.
+4. Apply: `kubectl apply -f k8s/alertmanager-config.yaml`

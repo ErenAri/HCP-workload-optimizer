@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hpcopt
+  labels:
+    app.kubernetes.io/name: hpcopt
+    app.kubernetes.io/part-of: hpc-workload-optimizer

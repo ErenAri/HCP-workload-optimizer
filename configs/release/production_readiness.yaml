@@ -1,5 +1,5 @@
 metadata:
-  release_target: "v0.1.0"
+  release_target: "v1.0.0"
   reviewed_at_utc: "2026-02-21T22:30:00Z"
   owner: "platform-team"
   notes: "Checklist-driven release readiness for Kubernetes startup-baseline deployment."

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: hpcopt-api
+  namespace: hpcopt
+  labels:
+    app.kubernetes.io/name: hpcopt-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: hpc-workload-optimizer
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: hpcopt-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP

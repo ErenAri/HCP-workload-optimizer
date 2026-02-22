@@ -37,6 +37,10 @@ The intent is to present the system as an engineering artifact, not only as an M
 - `docs/ops/model-acceptance.md`
 - `docs/ops/deployment-safety.md`
 - `docs/ops/disaster-recovery.md`
+- `docs/ops/logging.md`
+- `docs/ops/scaling.md`
+- `docs/ops/persistent-state.md`
+- `docs/ops/tracing.md`
 - `docs/runbooks/incident-response.md`
 - `docs/runbooks/api-latency-degradation.md`
 - `docs/runbooks/high-5xx-rate.md`

@@ -24,3 +24,21 @@ repos:
       - id: bandit
         args: [-r, python/hpcopt/, -ll, -ii]
         pass_filenames: false
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.11.0
+    hooks:
+      - id: mypy
+        args: [--config-file=pyproject.toml]
+        additional_dependencies:
+          - types-PyYAML>=6.0.12
+          - pydantic>=2.8.2
+        pass_filenames: false
+        entry: mypy python/hpcopt/
+
+  - repo: https://github.com/hadolint/hadolint
+    rev: v2.12.0
+    hooks:
+      - id: hadolint-docker
+        entry: hadolint
+        files: Dockerfile

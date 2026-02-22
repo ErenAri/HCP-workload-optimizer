@@ -1,0 +1,20 @@
+# API Deprecation Schedule
+#
+# Each entry maps an endpoint prefix to its deprecation and sunset dates.
+# The deprecation middleware reads this file and adds:
+#   - Deprecation: <ISO 8601 date>
+#   - Sunset: <ISO 8601 date>
+#   - Link: <docs URL>
+# headers to responses for matching endpoints.
+#
+# Dates use ISO 8601 format. Sunset date must be >= deprecation date.
+# After the sunset date, the endpoint MAY return 410 Gone.
+
+deprecated_endpoints: []
+  # Example:
+  # - path_prefix: "/v1/runtime/predict"
+  #   deprecated_at: "2026-06-01"
+  #   sunset_at: "2026-12-01"
+  #   replacement: "/v2/runtime/predict"
+  #   docs_url: "https://docs.hpcopt.dev/api/migration/v1-to-v2"
+  #   notes: "v2 adds confidence intervals and batch prediction support"

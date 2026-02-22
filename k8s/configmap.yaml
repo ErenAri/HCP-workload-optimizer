@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hpcopt-config
+  namespace: hpcopt
+  labels:
+    app.kubernetes.io/name: hpcopt-api
+    app.kubernetes.io/part-of: hpc-workload-optimizer
+data:
+  HPCOPT_HOST: "0.0.0.0"
+  HPCOPT_PORT: "8080"
+  HPCOPT_ENV: "prod"
+  HPCOPT_LOG_LEVEL: "INFO"
+  HPCOPT_RATE_LIMIT: "30"
+  HPCOPT_RATE_LIMIT_PREDICT: "30"
+  HPCOPT_RATE_LIMIT_RESOURCE_FIT: "30"
+  HPCOPT_RATE_LIMIT_ADMIN: "10"
+  HPCOPT_RUNTIME_MODEL_DIR: "/app/outputs/models/runtime_latest"
+  HPCOPT_HEALTH_MIN_DISK_FREE_GB: "0.5"

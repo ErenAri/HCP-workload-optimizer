@@ -1,17 +1,52 @@
+# ---------- Python ----------
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+htmlcov/
+coverage.xml
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+
+# ---------- Virtual environments ----------
 .venv/
 venv/
+env/
+
+# ---------- IDE / Editor ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+.classpath
+
+# ---------- OS artifacts ----------
+.DS_Store
+._*
+Thumbs.db
+Desktop.ini
+*.tmp
+
+# ---------- Project-specific clutter ----------
 .claude/
 .docx_extract_*/
 ._docx_*/
 ._*.zip
-*.tmp
 *.docx
+tmp.ps1
 
-# Data/artifacts
+# ---------- Data / artifacts (keep .gitkeep) ----------
 data/raw/*
 !data/raw/.gitkeep
 data/curated/*
@@ -28,9 +63,23 @@ outputs/simulations/*
 outputs/reports/*
 !outputs/reports/.gitkeep
 
-# Rust
+# ---------- Secrets (never commit) ----------
+secrets/
+*.pem
+*.key
+
+# ---------- Rust ----------
 target/
 Cargo.lock
 
-# Packaging artifacts
+# ---------- Docker ----------
+docker-compose.override.yml
+
+# ---------- Packaging ----------
 python/hpc_workload_optimizer.egg-info/
+
+# ---------- Environment ----------
+.env
+.env.local
+.env.*.local
+!.env.example

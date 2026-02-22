@@ -2,7 +2,7 @@
 
 All notable changes to HPC Workload Optimizer are documented here.
 
-## [Unreleased]
+## [1.0.0] - 2026-02-22
 
 ### Added
 - End-to-end pipeline integration test (ingest -> features -> train -> predict)
@@ -18,12 +18,29 @@ All notable changes to HPC Workload Optimizer are documented here.
 - Dynamic log level endpoint (`POST /v1/admin/log-level`)
 - Environment-specific configs (`configs/environments/{dev,staging,prod}.yaml`)
 - Load tests wired into CI (main branch only)
-- Pre-commit configuration (ruff, bandit, file checks)
+- Pre-commit configuration (ruff, bandit, file checks, mypy, hadolint)
 - CONTRIBUTING.md and CHANGELOG.md
+- **Production readiness improvements:**
+  - Property-based tests (Hypothesis) for simulation, fidelity, adapter, objective, and recommendation
+  - Coverage gate raised from 58% to 75%
+  - Automated E2E smoke test in CI pipeline
+  - Kubernetes manifests (Deployment, Service, ConfigMap, Secret, HPA, ServiceMonitor)
+  - OpenTelemetry Collector configuration (`k8s/otel-collector.yaml`)
+  - Alertmanager configuration with PagerDuty + Slack routing
+  - API deprecation sunset mechanism (RFC 8594/9745 headers)
+  - `.env.example` and secrets bootstrap script
+  - `py.typed` PEP 561 marker
+  - Codecov configuration for PR coverage reporting
+  - Operations documentation: logging, scaling, persistent state, tracing
+  - `LICENSE` file (Proprietary)
 
 ### Changed
 - Rate limiter now keys buckets by `(api_key, endpoint)` instead of just `api_key`
 - Model registry docstring updated to reflect cross-process file locking
+- Version bumped from 0.1.0 to 1.0.0
+- mypy configuration tightened: `disallow_untyped_defs = true`
+- Removed deprecated `version` key from `docker-compose.yaml`
+- Pre-commit hooks expanded with mypy and hadolint
 
 ### Security
 - File-based API key management with 3-tier loading
