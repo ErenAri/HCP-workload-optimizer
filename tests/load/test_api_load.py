@@ -27,6 +27,7 @@ def _make_runtime_request(client: TestClient) -> float:
     return duration
 
 
+@pytest.mark.load
 def test_concurrent_runtime_predictions(client: TestClient) -> None:
     """Test that API handles concurrent requests within latency bounds."""
     n_requests = 20
@@ -50,6 +51,7 @@ def test_concurrent_runtime_predictions(client: TestClient) -> None:
     assert p50 < 1.0, f"p50 latency too high: {p50:.3f}s"
 
 
+@pytest.mark.load
 def test_health_under_load(client: TestClient) -> None:
     """Health endpoint remains responsive under load."""
     latencies: list[float] = []
