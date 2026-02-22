@@ -211,7 +211,9 @@ def _check_invariants(
     return failed
 
 
-def _invariant_report(run_id: str, strict_mode: bool, step_count: int, violations: list[dict[str, Any]]) -> dict[str, Any]:
+def _invariant_report(
+    run_id: str, strict_mode: bool, step_count: int, violations: list[dict[str, Any]],
+) -> dict[str, Any]:
     return {
         "run_id": run_id,
         "strict_mode": bool(strict_mode),

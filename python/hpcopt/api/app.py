@@ -617,7 +617,7 @@ class LogLevelRequest(BaseModel):
     level: str = Field(..., description="Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL")
 
 
-@app.post("/v1/admin/log-level")
+@app.post("/v1/admin/log-level", response_model=None)
 def set_log_level(payload: LogLevelRequest) -> dict[str, str] | JSONResponse:
     """Dynamically change the root log level at runtime."""
     level_name = payload.level.upper()
