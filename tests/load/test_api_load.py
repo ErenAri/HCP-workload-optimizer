@@ -4,17 +4,41 @@ from __future__ import annotations
 
 import statistics
 import time
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 from fastapi.testclient import TestClient
-
 from hpcopt.api.app import app
+from hpcopt.api.model_cache import reset_for_testing as reset_model_cache
+from hpcopt.api.rate_limit import (
+    reset_for_testing as reset_rate_limit,
+)
+from hpcopt.api.rate_limit import (
+    restore_limits_for_testing,
+    set_limits_for_testing,
+)
+from hpcopt.utils.secrets import invalidate_api_keys_cache
 
 
 @pytest.fixture
-def client() -> TestClient:
-    return TestClient(app)
+def client() -> Iterator[TestClient]:
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture(autouse=True)
+def _reset_api_test_state() -> Iterator[None]:
+    """Keep load tests isolated from shared in-memory API state."""
+    old_limits = set_limits_for_testing(global_limit=0, per_endpoint={})
+    reset_rate_limit()
+    reset_model_cache()
+    invalidate_api_keys_cache()
+    yield
+    restore_limits_for_testing(*old_limits)
+    reset_rate_limit()
+    reset_model_cache()
+    invalidate_api_keys_cache()
 
 
 def _make_runtime_request(client: TestClient) -> tuple[float, int]:
@@ -24,6 +48,18 @@ def _make_runtime_request(client: TestClient) -> tuple[float, int]:
     response = client.post("/v1/runtime/predict", json=payload)
     duration = time.perf_counter() - start
     return duration, response.status_code
+
+
+def _run_sustained_worker(client: TestClient, deadline: float) -> tuple[list[float], int]:
+    """Generate bounded sustained load until the shared deadline."""
+    latencies: list[float] = []
+    error_count = 0
+    while time.perf_counter() < deadline:
+        duration, status = _make_runtime_request(client)
+        latencies.append(duration)
+        if status != 200:
+            error_count += 1
+    return latencies, error_count
 
 
 @pytest.mark.load
@@ -100,18 +136,14 @@ def test_sustained_load(client: TestClient) -> None:
     max_workers = 4
     latencies: list[float] = []
     error_count = 0
-    start_time = time.perf_counter()
+    deadline = time.perf_counter() + duration_sec
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = []
-        while time.perf_counter() - start_time < duration_sec:
-            futures.append(pool.submit(_make_runtime_request, client))
-
+        futures = [pool.submit(_run_sustained_worker, client, deadline) for _ in range(max_workers)]
         for future in as_completed(futures):
-            dur, status = future.result()
-            latencies.append(dur)
-            if status != 200:
-                error_count += 1
+            worker_latencies, worker_errors = future.result()
+            latencies.extend(worker_latencies)
+            error_count += worker_errors
 
     if len(latencies) >= 10:
         sorted_lat = sorted(latencies)

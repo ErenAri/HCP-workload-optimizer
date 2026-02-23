@@ -7,10 +7,12 @@ from __future__ import annotations
 import logging
 import os
 
+from fastapi import FastAPI
+
 logger = logging.getLogger(__name__)
 
 
-def init_tracing(app: object) -> None:
+def init_tracing(app: FastAPI) -> None:
     """Instrument *app* with OpenTelemetry if the SDK is available.
 
     Configuration is driven by standard OTEL env vars:

@@ -9,7 +9,7 @@ import shutil
 import signal
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -79,8 +79,8 @@ def _validate_startup_env() -> None:
     timeout_raw = os.getenv("HPCOPT_REQUEST_TIMEOUT_SEC")
     if timeout_raw is not None:
         try:
-            val = float(timeout_raw)
-            if val <= 0:
+            timeout_val = float(timeout_raw)
+            if timeout_val <= 0:
                 logger.warning("HPCOPT_REQUEST_TIMEOUT_SEC=%s must be > 0; using default", timeout_raw)
         except ValueError:
             logger.warning("HPCOPT_REQUEST_TIMEOUT_SEC=%s is not a valid number; using default", timeout_raw)
@@ -171,7 +171,7 @@ async def body_size_limit_middleware(request: Request, call_next: Any) -> Respon
                 )
         except ValueError:
             pass
-    return await call_next(request)
+    return cast(Response, await call_next(request))
 
 
 # ---------- Middleware ----------
@@ -187,7 +187,7 @@ def _error_content(
     code: str,
     message: str,
     trace_id: str,
-    details: dict[str, object] | list[object] | None = None,
+    details: dict[str, object] | Sequence[object] | None = None,
     status: int | None = None,
 ) -> dict[str, Any]:
     """Build an RFC 7807 Problem Details response body."""
@@ -199,7 +199,10 @@ def _error_content(
         "instance": trace_id,
     }
     if details is not None:
-        body["errors"] = details
+        if isinstance(details, Sequence) and not isinstance(details, (str, bytes, bytearray)):
+            body["errors"] = list(details)
+        else:
+            body["errors"] = details
     return body
 
 
