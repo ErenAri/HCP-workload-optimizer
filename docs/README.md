@@ -17,8 +17,8 @@ The intent is to present the system as an engineering artifact, not only as an M
    Runtime quantile modeling, uncertainty handling, and fallback semantics.
 6. `docs/06-fidelity-objective-and-recommendation.md`  
    Fidelity gate, objective contract, and recommendation decision logic.
-7. `docs/07-interfaces-cli-and-api.md`  
-   CLI and API surface, including command-level and endpoint-level behavior.
+7. `docs/07-interfaces-cli-and-api.md`
+   CLI and API surface, including modular API architecture (auth, rate limiting, model cache, deprecation), request timeout, and endpoint-level behavior.
 8. `docs/08-reproducibility-and-artifacts.md`  
    Manifest contract, schema references, artifact lifecycle, and validation.
 9. `docs/09-experiment-protocol-mvp.md`  

@@ -13,7 +13,10 @@ from hpcopt.api.app import app
 
 @pytest.fixture
 def client() -> TestClient:
-    return TestClient(app)
+    from hpcopt.utils.secrets import invalidate_api_keys_cache
+    invalidate_api_keys_cache()
+    yield TestClient(app)
+    invalidate_api_keys_cache()
 
 
 def test_health_endpoint(client: TestClient) -> None:
@@ -36,7 +39,7 @@ def test_runtime_predict_fallback(client: TestClient) -> None:
         "requested_cpus": 4,
         "requested_runtime_sec": 3600,
     }
-    with patch("hpcopt.api.app.resolve_runtime_model_dir", return_value=None):
+    with patch("hpcopt.api.model_cache.resolve_runtime_model_dir", return_value=None):
         response = client.post("/v1/runtime/predict", json=payload)
     assert response.status_code == 200
     data = response.json()

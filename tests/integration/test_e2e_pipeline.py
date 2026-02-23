@@ -65,11 +65,11 @@ def test_full_pipeline_ingest_to_prediction(tmp_path: Path, monkeypatch) -> None
     # --- Step 4: Point API at trained model and predict ---
     monkeypatch.setenv("HPCOPT_RUNTIME_MODEL_DIR", str(train_result.model_dir))
 
-    import hpcopt.api.app as api_module
-    api_module._RUNTIME_PREDICTOR_CACHE["model_dir"] = None
-    api_module._RUNTIME_PREDICTOR_CACHE["predictor"] = None
+    from hpcopt.api.model_cache import reset_for_testing as reset_model_cache
+    reset_model_cache()
 
-    client = TestClient(api_module.app)
+    from hpcopt.api.app import app as api_app
+    client = TestClient(api_app)
     response = client.post(
         "/v1/runtime/predict",
         json={
@@ -120,11 +120,11 @@ def test_pipeline_with_stress_data(tmp_path: Path, monkeypatch) -> None:
     # Predict via API
     monkeypatch.setenv("HPCOPT_RUNTIME_MODEL_DIR", str(train_result.model_dir))
 
-    import hpcopt.api.app as api_module
-    api_module._RUNTIME_PREDICTOR_CACHE["model_dir"] = None
-    api_module._RUNTIME_PREDICTOR_CACHE["predictor"] = None
+    from hpcopt.api.model_cache import reset_for_testing as reset_model_cache
+    reset_model_cache()
 
-    client = TestClient(api_module.app)
+    from hpcopt.api.app import app as api_app
+    client = TestClient(api_app)
     response = client.post(
         "/v1/runtime/predict",
         json={"requested_cpus": 16, "runtime_guard_k": 0.75},

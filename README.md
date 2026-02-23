@@ -77,8 +77,10 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 
 ### Deployment and Observability
 
-- Production-ready API (FastAPI) with runtime and resource-fit prediction endpoints.
-- File-based API key authentication with 3-tier loading (file env var, Docker secret mount, legacy env var) and rotation without restart.
+- Production-ready API (FastAPI) with runtime and resource-fit prediction endpoints, modular architecture (`api/app.py`, `api/auth.py`, `api/rate_limit.py`, `api/model_cache.py`, `api/deprecation.py`).
+- File-based API key authentication with 3-tier loading (file env var, Docker secret mount, legacy env var) and rotation without restart (`api/auth.py`).
+- Model cache pre-warming at startup for faster cold-start response times (`api/model_cache.py`).
+- Configurable request timeout (default 30s via `HPCOPT_REQUEST_TIMEOUT_SEC`) with 504 Gateway Timeout response.
 - Prometheus metrics: request counters, latency histograms, fallback rates, model status gauges.
 - Grafana dashboard (8 panels: request rate, latency percentiles, error rate, model status, heatmap).
 - Structured JSON logging with correlation ID propagation.
@@ -139,7 +141,7 @@ flowchart LR
     FID["fidelity + objective contracts"]
     REC["recommend/engine.py"]
     ART["artifacts/* + manifests"]
-    IFACE["cli/ (6 modules) + api/app.py"]
+    IFACE["cli/ (6 modules) + api/ (app, auth, rate_limit, model_cache, deprecation)"]
     ORCH["orchestrate/credibility.py"]
   end
 
@@ -246,11 +248,13 @@ flowchart LR
   F2 --> LOAD
   F3 --> LOAD
 
-  LOAD --> MW["API middleware<br/>(per-request reload)"]
-  MW --> AUTH{"X-API-Key<br/>valid?"}
-  AUTH -->|"Yes"| RATE["Rate limiter<br/>(token bucket)"]
+  LOAD --> MW["API middleware<br/>api/app.py"]
+  MW --> AUTH{"auth.check_api_key_auth()<br/>X-API-Key valid?"}
+  AUTH -->|"Yes"| RATE["rate_limit.check_rate_limit()<br/>(token bucket)"]
   AUTH -->|"No"| R401["401 Unauthorized"]
-  RATE -->|"Allowed"| HANDLER["Endpoint handler"]
+  RATE -->|"Allowed"| TIMEOUT["asyncio.wait_for<br/>(30s default)"]
+  TIMEOUT -->|"OK"| HANDLER["Endpoint handler"]
+  TIMEOUT -->|"Exceeded"| R504["504 Gateway Timeout"]
   RATE -->|"Exceeded"| R429["429 Rate Limited"]
 
   subgraph CI["CI Security Gates"]
@@ -279,7 +283,7 @@ flowchart TD
 ```text
 python/hpcopt/
   cli/           # Typer command surface (modular: ingest, train, simulate, report, pipeline, model)
-  api/           # FastAPI service, Prometheus metrics, deprecation middleware
+  api/           # FastAPI service (modular: app, auth, rate_limit, model_cache, deprecation, metrics)
   ingest/        # SWF, Slurm, PBS parsers + shadow ingestion daemon
   profile/       # Trace profiling and workload characterization
   features/      # Time-safe feature pipeline + chronological splits
@@ -642,16 +646,18 @@ Authentication: API key authentication is enabled when keys are configured via a
 2. Docker/K8s secret mount at `/run/secrets/hpcopt_api_keys`,
 3. `HPCOPT_API_KEYS` env var (comma-separated, legacy).
 
-Requests must include `X-API-Key` header. Health, readiness, and metrics endpoints are always exempt. Keys are re-read on every request, enabling rotation without restart.
+Requests must include `X-API-Key` header. Health, readiness, metrics, docs, OpenAPI, and system status endpoints are always exempt (see `api/auth.py:EXEMPT_PATHS`). Keys are re-read on every request, enabling rotation without restart.
 
-Runtime prediction endpoint automatically uses trained model artifacts when available; otherwise it falls back to deterministic heuristic behavior.
+Runtime prediction endpoint automatically uses trained model artifacts when available; otherwise it falls back to deterministic heuristic behavior. The model cache is pre-warmed at startup to avoid cold-start latency on the first request.
+
+Request timeout: all requests are subject to a configurable timeout (default 30s, set via `HPCOPT_REQUEST_TIMEOUT_SEC` env var). Requests exceeding the timeout return `504 GATEWAY_TIMEOUT`.
 
 API response contract:
 
 - every response includes `X-Trace-ID` and `X-Correlation-ID`,
 - prediction responses include `X-Model-Version` and `X-Fallback-Used`,
 - deprecated endpoints include `Deprecation`, `Sunset`, and `Link` headers (RFC 8594/9745),
-- validation/auth/rate-limit/internal failures return an `error` object with `code`, `message`, and `trace_id`.
+- validation/auth/rate-limit/timeout/internal failures return an `error` object with `code`, `message`, and `trace_id` (`VALIDATION_ERROR`, `UNAUTHORIZED`, `RATE_LIMITED`, `GATEWAY_TIMEOUT`, `INTERNAL_ERROR`).
 
 ## Reproducibility and Contracts
 
@@ -695,7 +701,7 @@ hpcopt data lock-reference-suite \
 pytest -v
 ```
 
-Current baseline: **129 tests passing** with **58% minimum coverage** (enforced in CI).
+Current baseline: **130 tests passing** with **58% minimum coverage** (enforced in CI).
 
 Test suite covers:
 
@@ -704,6 +710,7 @@ Test suite covers:
 - CLI tests (ingest swf/slurm/pbs, train, simulate, pipeline, model, report — all 14 command groups),
 - schema validation tests (all 10 JSON schemas checked for well-formedness and `additionalProperties` lockdown),
 - secrets module tests (file-based, Docker mount, legacy env, missing file),
+- API contract tests (rate limiting, request timeout, validation error envelope),
 - API deprecation header tests,
 - integration tests (API endpoints, auth, credibility protocol, Slurm ingestion),
 - **E2E pipeline smoke test** (ingest → features → train → predict),

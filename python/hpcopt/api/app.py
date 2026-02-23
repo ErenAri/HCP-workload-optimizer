@@ -7,7 +7,6 @@ import logging
 import os
 import shutil
 import signal
-import threading
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -22,10 +21,11 @@ from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from hpcopt import __version__
-from hpcopt.models.runtime_quantile import (
-    RuntimeQuantilePredictor,
-    resolve_runtime_model_dir,
-)
+from hpcopt.api.auth import EXEMPT_PATHS, check_api_key_auth
+from hpcopt.api.deprecation import load_deprecation_config
+from hpcopt.api.model_cache import get_runtime_predictor
+from hpcopt.api.rate_limit import check_rate_limit
+from hpcopt.models.runtime_quantile import resolve_runtime_model_dir
 
 logger = logging.getLogger(__name__)
 
@@ -40,58 +40,22 @@ def _float_env(name: str, default: float) -> float:
         logger.warning("Invalid %s=%r, using default %.2f", name, raw, default)
         return default
 
-# ---------- Rate limiter (token bucket per API key) ----------
+# ---------- Constants ----------
 
-_RATE_LIMIT = int(os.getenv("HPCOPT_RATE_LIMIT", "60"))  # requests per minute (global default)
-_PER_ENDPOINT_LIMITS: dict[str, int] = {
-    "/v1/runtime/predict": int(os.getenv("HPCOPT_RATE_LIMIT_PREDICT", str(_RATE_LIMIT))),
-    "/v1/resource-fit/predict": int(os.getenv("HPCOPT_RATE_LIMIT_RESOURCE_FIT", str(_RATE_LIMIT))),
-    "/v1/admin/log-level": int(os.getenv("HPCOPT_RATE_LIMIT_ADMIN", "10")),
-}
-_RATE_MAX_BUCKETS = 10_000  # cap to prevent unbounded memory growth
-_RATE_BUCKETS: dict[str, list[float]] = {}
-_RATE_LOCK = threading.Lock()
 _HEALTH_MIN_DISK_FREE_GB = _float_env("HPCOPT_HEALTH_MIN_DISK_FREE_GB", 0.1)
-_EXEMPT_PATHS = {
-    "/health",
-    "/ready",
-    "/metrics",
-    "/docs",
-    "/openapi.json",
-    "/v1/system/status",
-}
+_REQUEST_TIMEOUT_SEC = _float_env("HPCOPT_REQUEST_TIMEOUT_SEC", 30.0)
 
+# Fallback heuristic constants (used when no trained model is available)
+_FALLBACK_BASE_RUNTIME_SEC = 1800  # default base when requested_runtime_sec is absent
+_FALLBACK_QUEUE_DEPTH_CAP = 2000  # jobs beyond this have diminishing queue delay impact
+_FALLBACK_QUEUE_DEPTH_SCALE = 10_000.0  # scaling factor for queue depth sensitivity
+_FALLBACK_P50_FACTOR = 0.72  # multiplier for p50 estimate
+_FALLBACK_P90_FACTOR = 1.08  # multiplier for p90 estimate
+_FALLBACK_MIN_RUNTIME_SEC = 60  # floor for fallback predictions
 
-def _check_rate_limit(api_key: str | None, path: str = "") -> tuple[bool, int]:
-    """Token-bucket rate limiter keyed by (api_key, endpoint). Returns (allowed, retry_after_sec)."""
-    limit = _PER_ENDPOINT_LIMITS.get(path, _RATE_LIMIT)
-    if limit <= 0:
-        return True, 0
-    bucket_key = f"{api_key or '__anonymous__'}:{path}"
-    now = time.time()
-    window_start = now - 60.0
-
-    with _RATE_LOCK:
-        # Evict stale buckets when the dict exceeds the cap.
-        if len(_RATE_BUCKETS) > _RATE_MAX_BUCKETS:
-            stale_keys = [
-                k for k, v in _RATE_BUCKETS.items()
-                if not v or v[-1] <= window_start
-            ]
-            for k in stale_keys:
-                del _RATE_BUCKETS[k]
-
-        bucket = _RATE_BUCKETS.get(bucket_key, [])
-        bucket = [ts for ts in bucket if ts > window_start]
-
-        if len(bucket) >= limit:
-            oldest = bucket[0]
-            retry_after = max(1, int(oldest + 60.0 - now))
-            _RATE_BUCKETS[bucket_key] = bucket
-            return False, retry_after
-        bucket.append(now)
-        _RATE_BUCKETS[bucket_key] = bucket
-    return True, 0
+# Resource-fit fragmentation risk thresholds (waste_ratio boundaries)
+_WASTE_RATIO_LOW_RISK = 0.15
+_WASTE_RATIO_MEDIUM_RISK = 0.35
 
 
 # ---------- Lifespan (graceful shutdown) ----------
@@ -120,6 +84,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         logger.debug("OpenTelemetry instrumentation skipped", exc_info=True)
 
+    # Pre-warm runtime predictor cache
+    from hpcopt.api.model_cache import warm_cache
+    if warm_cache():
+        logger.info("Runtime predictor pre-warmed successfully")
+    else:
+        logger.info("No runtime model found; will use fallback heuristic")
+
     logger.info("HPC Workload Optimizer API starting (version=%s)", __version__)
     yield
     logger.info("Shutting down HPC Workload Optimizer API. Draining in-flight requests...")
@@ -134,26 +105,6 @@ app = FastAPI(
     description="Systems-first API for runtime/resource-fit predictions and HPC advisory.",
     lifespan=lifespan,
 )
-
-
-# ---------- Deprecation headers (RFC 8594 Sunset / RFC 9745 Deprecation) ----------
-
-_DEPRECATION_CONFIG_PATH = Path("configs/api/deprecation.yaml")
-_DEPRECATION_ENTRIES: list[dict[str, str]] = []
-
-def _load_deprecation_config() -> list[dict[str, str]]:
-    """Load deprecated endpoint entries from the deprecation config file."""
-    global _DEPRECATION_ENTRIES
-    if _DEPRECATION_ENTRIES:
-        return _DEPRECATION_ENTRIES
-    try:
-        import yaml
-        if _DEPRECATION_CONFIG_PATH.exists():
-            data = yaml.safe_load(_DEPRECATION_CONFIG_PATH.read_text(encoding="utf-8"))
-            _DEPRECATION_ENTRIES = data.get("deprecated_endpoints", []) or []
-    except Exception:
-        logger.debug("Could not load deprecation config", exc_info=True)
-    return _DEPRECATION_ENTRIES
 
 
 # ---------- Middleware ----------
@@ -251,7 +202,7 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
     request.state.trace_id = trace_id
 
     # Request draining: reject new non-exempt requests during shutdown
-    if getattr(app.state, "shutdown_requested", False) and path not in _EXEMPT_PATHS:
+    if getattr(app.state, "shutdown_requested", False) and path not in EXEMPT_PATHS:
         error_response = JSONResponse(
             status_code=503,
             content=_error_content(
@@ -264,29 +215,25 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
         return error_response
 
     # Auth check (exempt health/ready/metrics/system status)
-    from hpcopt.utils.secrets import load_api_keys
-    api_keys = load_api_keys()
     response: Response
-
-    if api_keys and path not in _EXEMPT_PATHS:
-        provided_key = request.headers.get("X-API-Key", "")
-        if provided_key not in api_keys:
-            logger.warning("Auth failed for path=%s trace_id=%s", path, trace_id)
-            error_response = JSONResponse(
-                status_code=401,
-                content=_error_content(
-                    code="UNAUTHORIZED",
-                    message="Invalid or missing API key",
-                    trace_id=trace_id,
-                ),
-            )
-            _set_telemetry_headers(error_response, trace_id)
-            return error_response
+    provided_key = request.headers.get("X-API-Key", "")
+    if not check_api_key_auth(path, provided_key):
+        logger.warning("Auth failed for path=%s trace_id=%s", path, trace_id)
+        error_response = JSONResponse(
+            status_code=401,
+            content=_error_content(
+                code="UNAUTHORIZED",
+                message="Invalid or missing API key",
+                trace_id=trace_id,
+            ),
+        )
+        _set_telemetry_headers(error_response, trace_id)
+        return error_response
 
     # Rate limiting (per-endpoint, exempt health/ready)
-    if path not in _EXEMPT_PATHS:
+    if path not in EXEMPT_PATHS:
         api_key = request.headers.get("X-API-Key")
-        allowed, retry_after = _check_rate_limit(api_key, path)
+        allowed, retry_after = check_rate_limit(api_key, path)
         if not allowed:
             error_response = JSONResponse(
                 status_code=429,
@@ -301,7 +248,20 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
             return error_response
 
     try:
-        response = cast(Response, await call_next(request))
+        response = cast(
+            Response,
+            await asyncio.wait_for(call_next(request), timeout=_REQUEST_TIMEOUT_SEC),
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Request timed out for path=%s trace_id=%s", path, trace_id)
+        response = JSONResponse(
+            status_code=504,
+            content=_error_content(
+                code="GATEWAY_TIMEOUT",
+                message="Request timed out",
+                trace_id=trace_id,
+            ),
+        )
     except Exception as exc:
         logger.exception("Request failed for path=%s trace_id=%s", path, trace_id, exc_info=exc)
         response = JSONResponse(
@@ -318,7 +278,7 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
     _set_telemetry_headers(response, trace_id)
 
     # Add deprecation/sunset headers for deprecated endpoints
-    for entry in _load_deprecation_config():
+    for entry in load_deprecation_config():
         prefix = entry.get("path_prefix", "")
         if prefix and path.startswith(prefix):
             if entry.get("deprecated_at"):
@@ -383,48 +343,6 @@ class ResourceFitResponse(BaseModel):
     fragmentation_risk: Literal["low", "medium", "high"]
     notes: list[str]
 
-
-# ---------- Model cache (thread-safe) ----------
-
-_RUNTIME_PREDICTOR_CACHE: dict[str, RuntimeQuantilePredictor | Path | None] = {
-    "model_dir": None,
-    "predictor": None,
-}
-_MODEL_CACHE_LOCK = threading.Lock()
-
-
-def _load_predictor_with_retry(model_dir: Path) -> RuntimeQuantilePredictor:
-    """Load the predictor with retry on transient I/O errors."""
-    from hpcopt.utils.resilience import retry
-
-    @retry(max_attempts=3, backoff_base=0.5, exceptions=(OSError, IOError))
-    def _load() -> RuntimeQuantilePredictor:
-        return RuntimeQuantilePredictor(model_dir)
-
-    return _load()
-
-
-def _get_runtime_predictor() -> tuple[RuntimeQuantilePredictor | None, Path | None]:
-    """Resolve model directory server-side only (env var or convention)."""
-    resolved = resolve_runtime_model_dir()
-    if resolved is None:
-        return None, None
-
-    with _MODEL_CACHE_LOCK:
-        cached_dir = _RUNTIME_PREDICTOR_CACHE["model_dir"]
-        if isinstance(cached_dir, Path) and cached_dir == resolved:
-            cached_predictor = _RUNTIME_PREDICTOR_CACHE["predictor"]
-            if isinstance(cached_predictor, RuntimeQuantilePredictor):
-                return cached_predictor, resolved
-
-        try:
-            predictor = _load_predictor_with_retry(resolved)
-        except (OSError, IOError):
-            logger.error("Failed to load model from %s after retries", resolved)
-            return None, None
-        _RUNTIME_PREDICTOR_CACHE["model_dir"] = resolved
-        _RUNTIME_PREDICTOR_CACHE["predictor"] = predictor
-        return predictor, resolved
 
 
 # ---------- Endpoints ----------
@@ -544,7 +462,7 @@ def predict_runtime(
     request: Request,
     response: Response,
 ) -> RuntimePredictResponse:
-    predictor, model_dir = _get_runtime_predictor()
+    predictor, model_dir = get_runtime_predictor()
 
     if predictor is not None:
         features = {
@@ -587,11 +505,11 @@ def predict_runtime(
         pass
 
     fallback_used = True
-    base = payload.requested_runtime_sec or 1800
+    base = payload.requested_runtime_sec or _FALLBACK_BASE_RUNTIME_SEC
     queue_depth = payload.queue_depth_jobs or 0
-    queue_factor = 1.0 + min(queue_depth, 2000) / 10000.0
-    runtime_p50 = max(60, int(base * 0.72 * queue_factor))
-    runtime_p90 = max(runtime_p50, int(base * 1.08 * queue_factor))
+    queue_factor = 1.0 + min(queue_depth, _FALLBACK_QUEUE_DEPTH_CAP) / _FALLBACK_QUEUE_DEPTH_SCALE
+    runtime_p50 = max(_FALLBACK_MIN_RUNTIME_SEC, int(base * _FALLBACK_P50_FACTOR * queue_factor))
+    runtime_p90 = max(runtime_p50, int(base * _FALLBACK_P90_FACTOR * queue_factor))
     runtime_guard = int(runtime_p50 + payload.runtime_guard_k * (runtime_p90 - runtime_p50))
     result = RuntimePredictResponse(
         predictor_version="runtime-heuristic-fallback",
@@ -649,9 +567,9 @@ def predict_resource_fit(
     waste = max(fit_cpu - payload.requested_cpus, 0)
     waste_ratio = waste / fit_cpu if fit_cpu else 0.0
     risk: Literal["low", "medium", "high"]
-    if waste_ratio <= 0.15:
+    if waste_ratio <= _WASTE_RATIO_LOW_RISK:
         risk = "low"
-    elif waste_ratio <= 0.35:
+    elif waste_ratio <= _WASTE_RATIO_MEDIUM_RISK:
         risk = "medium"
     else:
         risk = "high"

@@ -2,6 +2,22 @@
 
 All notable changes to HPC Workload Optimizer are documented here.
 
+## [1.1.0] - 2026-02-23
+
+### Changed
+- **API architecture refactoring**: decomposed `api/app.py` into 4 focused modules:
+  - `api/auth.py` -- API key authentication with `EXEMPT_PATHS` constant and `check_api_key_auth()` (replaces unused legacy ASGI middleware)
+  - `api/rate_limit.py` -- token-bucket rate limiter with public testing API (`set_limits_for_testing()`, `reset_for_testing()`)
+  - `api/model_cache.py` -- thread-safe runtime predictor cache with startup pre-warming (`warm_cache()`) and public testing API (`reset_for_testing()`)
+  - `api/deprecation.py` -- deprecation config loading with public testing API (`set_entries_for_testing()`, `reset_for_testing()`)
+- Tests now use public testing APIs from extracted modules instead of reaching into private module globals
+- `patch` targets updated from `hpcopt.api.app` to source modules (e.g., `hpcopt.api.model_cache.resolve_runtime_model_dir`)
+
+### Added
+- Request timeout: all requests subject to configurable timeout (default 30s via `HPCOPT_REQUEST_TIMEOUT_SEC`), returns `504 GATEWAY_TIMEOUT` on expiry
+- Model cache pre-warming at API startup for faster cold-start response
+- `test_request_timeout_returns_504` contract test
+
 ## [1.0.0] - 2026-02-22
 
 ### Added

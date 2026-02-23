@@ -9,6 +9,16 @@ import pandas as pd
 
 from hpcopt.utils.io import ensure_dir, write_json
 
+# Fixed thresholds for job size classification (CPU counts).
+# Avoids dataset-leakage from future quantiles.
+JOB_SIZE_SMALL_MAX_CPUS = 4
+JOB_SIZE_MEDIUM_MAX_CPUS = 16
+JOB_SIZE_LARGE_MAX_CPUS = 64
+
+# User behavior pattern thresholds (over-request ratio boundaries).
+USER_OVERREQUEST_HIGH = 1.30  # above → heavy over-requester (class 2)
+USER_OVERREQUEST_LOW = 0.90  # below → under-requester (class 0)
+
 
 @dataclass(frozen=True)
 class FeatureBuildResult:
@@ -101,9 +111,9 @@ def _job_size_class(requested_cpus: pd.Series) -> pd.Series:
     # Fixed thresholds avoid dataset-leakage from future quantiles.
     values = requested_cpus.to_numpy(dtype=int)
     out = np.where(
-        values <= 4,
+        values <= JOB_SIZE_SMALL_MAX_CPUS,
         0,
-        np.where(values <= 16, 1, np.where(values <= 64, 2, 3)),
+        np.where(values <= JOB_SIZE_MEDIUM_MAX_CPUS, 1, np.where(values <= JOB_SIZE_LARGE_MAX_CPUS, 2, 3)),
     )
     return pd.Series(out, index=requested_cpus.index, dtype="int64")
 
@@ -265,9 +275,9 @@ def build_feature_dataset(
 
     # User behavior class from lookback over-request tendency.
     df["user_behavior_pattern"] = np.where(
-        df["user_overrequest_mean_lookback"] > 1.30,
+        df["user_overrequest_mean_lookback"] > USER_OVERREQUEST_HIGH,
         2,
-        np.where(df["user_overrequest_mean_lookback"] < 0.90, 0, 1),
+        np.where(df["user_overrequest_mean_lookback"] < USER_OVERREQUEST_LOW, 0, 1),
     ).astype("int64")
 
     feature_cols = [

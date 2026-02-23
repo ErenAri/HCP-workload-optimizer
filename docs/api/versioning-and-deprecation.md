@@ -20,6 +20,13 @@
 - Minimum notice period: 90 days before removal.
 - Deprecation notice published in release notes.
 
+## Implementation
+
+Deprecation configuration is managed by `python/hpcopt/api/deprecation.py`:
+- Loads deprecated endpoint entries from `configs/api/deprecation.yaml` (cached after first load).
+- Provides `set_entries_for_testing()` and `reset_for_testing()` for test isolation.
+- The middleware in `api/app.py` adds `Deprecation`, `Sunset`, and `Link` headers for matching endpoints.
+
 ## Enforcement
 
 - OpenAPI compatibility check runs in CI against baseline.

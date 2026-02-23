@@ -22,6 +22,12 @@ from hpcopt.utils.io import ensure_dir, write_json
 
 logger = logging.getLogger(__name__)
 
+# Time-based split ratios for train/valid/test partitioning
+TIME_SPLIT_TRAIN_RATIO = 0.7
+TIME_SPLIT_VALID_END_RATIO = 0.85
+# Minimum floor for quantile predictions (seconds)
+MIN_PREDICTION_SEC = 1.0
+
 TARGET_COLUMN = "runtime_actual_sec"
 FEATURE_COLUMNS = [
     "requested_cpus",
@@ -154,8 +160,8 @@ def _time_split(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFr
         train_end = max(int(n * 0.8), 1)
         valid_end = max(int(n * 0.9), train_end + 1)
     else:
-        train_end = int(n * 0.7)
-        valid_end = int(n * 0.85)
+        train_end = int(n * TIME_SPLIT_TRAIN_RATIO)
+        valid_end = int(n * TIME_SPLIT_VALID_END_RATIO)
     valid_end = min(valid_end, n)
 
     train = df.iloc[:train_end]
@@ -206,7 +212,7 @@ def train_runtime_quantile_models(
         pipeline = _build_pipeline(alpha=quantile, seed=seed, hyperparams=hyperparams)
         pipeline.fit(x_train, y_train)
         pred_test = pipeline.predict(x_test)
-        pred_test = np.maximum(pred_test, 1.0)
+        pred_test = np.maximum(pred_test, MIN_PREDICTION_SEC)
 
         pinball = _pinball_loss(y_test, pred_test, alpha=quantile)
         mae = float(np.mean(np.abs(y_test - pred_test)))
@@ -393,9 +399,9 @@ class RuntimeQuantilePredictor:
             row["submit_dow"] = int(ts.dayofweek)
         frame = pd.DataFrame([row], columns=FEATURE_COLUMNS)
 
-        p10 = float(max(1.0, self.models["p10"].predict(frame)[0]))
-        p50 = float(max(1.0, self.models["p50"].predict(frame)[0]))
-        p90 = float(max(1.0, self.models["p90"].predict(frame)[0]))
+        p10 = float(max(MIN_PREDICTION_SEC, self.models["p10"].predict(frame)[0]))
+        p50 = float(max(MIN_PREDICTION_SEC, self.models["p50"].predict(frame)[0]))
+        p90 = float(max(MIN_PREDICTION_SEC, self.models["p90"].predict(frame)[0]))
 
         # Enforce monotonic quantiles for control safety.
         ordered = sorted([p10, p50, p90])

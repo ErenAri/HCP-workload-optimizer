@@ -6,10 +6,11 @@
 
 ## Checks
 
-1. Identify endpoint(s) returning 5xx.
+1. Identify endpoint(s) returning 5xx. Note: 504 responses indicate request timeout (`HPCOPT_REQUEST_TIMEOUT_SEC`, default 30s).
 2. Inspect structured logs using `X-Trace-ID`.
 3. Check upstream dependencies and storage availability.
-4. Correlate with recent config/deploy/model changes.
+4. Check model cache state -- if the predictor failed to load at startup, `model_cache.is_loaded()` will return `False` and all predictions use the fallback path.
+5. Correlate with recent config/deploy/model changes.
 
 ## Mitigation
 

@@ -365,7 +365,11 @@ hpcopt serve api --host 0.0.0.0 --port 8080
 ```
 
 Implementation modules:
-- `python/hpcopt/api/app.py` -- FastAPI application with inline middleware
+- `python/hpcopt/api/app.py` -- FastAPI application, middleware orchestration, and endpoint handlers
+- `python/hpcopt/api/auth.py` -- API key authentication and `EXEMPT_PATHS` constant
+- `python/hpcopt/api/rate_limit.py` -- Token-bucket rate limiter (per-endpoint, keyed by API key)
+- `python/hpcopt/api/model_cache.py` -- Thread-safe runtime predictor cache with startup pre-warming
+- `python/hpcopt/api/deprecation.py` -- Deprecation config loading (RFC 8594/9745)
 - `python/hpcopt/api/metrics.py` -- Prometheus metrics integration
 - `python/hpcopt/utils/secrets.py` -- File-based API key loading
 
@@ -432,7 +436,9 @@ API key authentication is enabled when keys are configured via any of these sour
 2. **`/run/secrets/hpcopt_api_keys`** -- Docker/Kubernetes secret mount (auto-detected).
 3. **`HPCOPT_API_KEYS`** env var -- comma-separated list (legacy, logs deprecation warning).
 
-Implementation: `python/hpcopt/utils/secrets.py` (`load_api_keys()`).
+Implementation:
+- Auth check: `python/hpcopt/api/auth.py` (`check_api_key_auth()`, `EXEMPT_PATHS`)
+- Key loading: `python/hpcopt/utils/secrets.py` (`load_api_keys()`)
 
 Behavior:
 - Keys are **re-read on every request**, enabling rotation without restart.
@@ -440,7 +446,22 @@ Behavior:
 - `GET /health`, `GET /ready`, `GET /metrics`, `GET /docs`, `GET /openapi.json`, and `GET /v1/system/status` are always exempt.
 - If no keys are configured, all requests pass through without authentication.
 
-## 6. Docker Deployment
+## 6. Request Timeout
+
+All requests are subject to a configurable timeout. If the handler does not produce a response within the allowed time, the middleware returns `504 GATEWAY_TIMEOUT`.
+
+- Default: `30` seconds.
+- Override: set `HPCOPT_REQUEST_TIMEOUT_SEC` environment variable.
+- Scope: covers the endpoint handler phase (header production); streaming response bodies are not covered.
+
+## 7. Model Cache Pre-Warming
+
+On startup, the API lifespan handler calls `model_cache.warm_cache()` to eagerly load the runtime predictor into cache. This eliminates cold-start latency on the first prediction request.
+
+- If `HPCOPT_RUNTIME_MODEL_DIR` is set and the model directory exists, the predictor is loaded with retry (3 attempts, exponential backoff).
+- If no model is found, the API starts normally and uses the fallback heuristic.
+
+## 8. Docker Deployment
 
 ```bash
 docker compose up --build
@@ -453,13 +474,13 @@ The `docker-compose.yaml` configures:
 - `HPCOPT_API_KEYS_FILE` env var pointing to the secret mount,
 - health check against `/health`.
 
-## 7. API Documentation
+## 9. API Documentation
 
 When API is running:
 
 - OpenAPI UI: `http://localhost:8080/docs`
 
-## 8. Interface Stability Notes
+## 10. Interface Stability Notes
 
 - CLI commands and report schemas are treated as contract-bearing interfaces.
 - Artifact keys used by evaluation/recommendation pipelines should be considered stable unless versioned migration is introduced.

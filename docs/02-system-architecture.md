@@ -45,7 +45,7 @@ python/hpcopt/
   artifacts/     # manifest, export, benchmarks, credibility dossier, retention
   analysis/      # sensitivity sweeps, feature importance
   orchestrate/   # credibility protocol orchestrator
-  api/           # FastAPI service, Prometheus metrics
+  api/           # FastAPI service (app, auth, rate_limit, model_cache, deprecation, metrics)
   cli/           # Typer command surface (modular: main.py assembler + 6 domain modules)
   utils/         # I/O, structured logging, config validation, file-based secrets
 
@@ -131,7 +131,7 @@ No other transition is permitted to mutate queue or resource state.
 
 Control plane:
 - `hpcopt` CLI (14 command groups across 6 modular files + assembler),
-- FastAPI endpoints with file-based auth and observability,
+- FastAPI endpoints with modular auth (`api/auth.py`), rate limiting (`api/rate_limit.py`), model cache with pre-warming (`api/model_cache.py`), deprecation headers (`api/deprecation.py`), request timeout, and observability,
 - model registry lifecycle,
 - credibility protocol orchestration,
 - manifest generation and artifact export.

@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-import hpcopt.api.app as api_module
 from hpcopt.api.app import app
+from hpcopt.api.model_cache import reset_for_testing as reset_model_cache
 from hpcopt.models.runtime_quantile import train_runtime_quantile_models
 from hpcopt.simulate.stress import generate_stress_scenario
 
@@ -77,8 +77,7 @@ def test_runtime_predict_uses_trained_model_when_available(tmp_path, monkeypatch
         seed=3,
     )
     monkeypatch.setenv("HPCOPT_RUNTIME_MODEL_DIR", str(train.model_dir))
-    api_module._RUNTIME_PREDICTOR_CACHE["model_dir"] = None
-    api_module._RUNTIME_PREDICTOR_CACHE["predictor"] = None
+    reset_model_cache()
 
     response = client.post(
         "/v1/runtime/predict",

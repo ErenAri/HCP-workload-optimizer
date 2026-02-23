@@ -9,15 +9,18 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def api_client():
-    """TestClient with a clean rate-limit and model cache state."""
-    import hpcopt.api.app as api_module
+    """TestClient with a clean rate-limit, model cache, and API key cache state."""
     from hpcopt.api.app import app
+    from hpcopt.api.model_cache import reset_for_testing as reset_model_cache
+    from hpcopt.api.rate_limit import reset_for_testing as reset_rate_limit
+    from hpcopt.utils.secrets import invalidate_api_keys_cache
 
-    api_module._RATE_BUCKETS.clear()
-    api_module._RUNTIME_PREDICTOR_CACHE["model_dir"] = None
-    api_module._RUNTIME_PREDICTOR_CACHE["predictor"] = None
+    reset_rate_limit()
+    reset_model_cache()
+    invalidate_api_keys_cache()
     yield TestClient(app)
-    api_module._RATE_BUCKETS.clear()
+    reset_rate_limit()
+    invalidate_api_keys_cache()
 
 
 @pytest.fixture

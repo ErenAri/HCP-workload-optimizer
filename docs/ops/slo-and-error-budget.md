@@ -2,7 +2,7 @@
 
 ## Service Scope
 
-This document defines production SLOs for the HPCOpt API service (`hpcopt.api.app`) running on Kubernetes.
+This document defines production SLOs for the HPCOpt API service (`hpcopt.api.app` with supporting modules `api.auth`, `api.rate_limit`, `api.model_cache`, `api.deprecation`) running on Kubernetes.
 
 ## Availability SLO
 

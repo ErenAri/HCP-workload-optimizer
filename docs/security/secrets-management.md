@@ -15,7 +15,8 @@ flowchart LR
   F1["HPCOPT_API_KEYS_FILE"] -->|"priority 1"| LOAD["load_api_keys()"]
   F2["/run/secrets/hpcopt_api_keys"] -->|"priority 2"| LOAD
   F3["HPCOPT_API_KEYS"] -->|"priority 3 (legacy)"| LOAD
-  LOAD --> MW["API middleware"]
+  LOAD --> AUTH["api/auth.py\ncheck_api_key_auth()"]
+  AUTH --> MW["API middleware\napi/app.py"]
 ```
 
 ### Key Properties
