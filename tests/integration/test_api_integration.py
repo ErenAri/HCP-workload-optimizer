@@ -7,7 +7,6 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-
 from hpcopt.api.app import app
 
 
@@ -77,7 +76,7 @@ def test_resource_fit_predict(client: TestClient) -> None:
 
 def test_auth_enforcement() -> None:
     """Test that auth middleware blocks requests when HPCOPT_API_KEYS is set."""
-    with patch.dict(os.environ, {"HPCOPT_API_KEYS": "test-key-1,test-key-2"}):
+    with patch.dict(os.environ, {"HPCOPT_API_KEYS": "a,b"}):
         client = TestClient(app)
 
         # Health should be exempt

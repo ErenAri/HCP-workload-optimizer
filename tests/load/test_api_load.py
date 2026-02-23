@@ -30,11 +30,13 @@ def client() -> Iterator[TestClient]:
 @pytest.fixture(autouse=True)
 def _reset_api_test_state() -> Iterator[None]:
     """Keep load tests isolated from shared in-memory API state."""
+    app.state.shutdown_requested = False
     old_limits = set_limits_for_testing(global_limit=0, per_endpoint={})
     reset_rate_limit()
     reset_model_cache()
     invalidate_api_keys_cache()
     yield
+    app.state.shutdown_requested = False
     restore_limits_for_testing(*old_limits)
     reset_rate_limit()
     reset_model_cache()

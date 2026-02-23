@@ -1,15 +1,11 @@
 """Security-focused tests: auth edge cases, input validation, admin RBAC."""
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
-
 from hpcopt.api.app import app
-from hpcopt.api.auth import check_admin_auth, check_api_key_auth
+from hpcopt.api.auth import check_admin_auth
 from hpcopt.api.rate_limit import reset_for_testing as reset_rate_limit
-
 
 client = TestClient(app)
 
@@ -25,7 +21,7 @@ def _reset() -> None:
 
 
 def test_auth_empty_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HPCOPT_API_KEYS", "valid-key-123")
+    monkeypatch.setenv("HPCOPT_API_KEYS", "a")
     from hpcopt.utils.secrets import invalidate_api_keys_cache
     invalidate_api_keys_cache()
 
@@ -41,7 +37,7 @@ def test_auth_empty_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_auth_very_long_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HPCOPT_API_KEYS", "valid-key")
+    monkeypatch.setenv("HPCOPT_API_KEYS", "a")
     from hpcopt.utils.secrets import invalidate_api_keys_cache
     invalidate_api_keys_cache()
 
@@ -58,7 +54,7 @@ def test_auth_very_long_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_auth_key_with_null_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HPCOPT_API_KEYS", "valid-key")
+    monkeypatch.setenv("HPCOPT_API_KEYS", "a")
     from hpcopt.utils.secrets import invalidate_api_keys_cache
     invalidate_api_keys_cache()
 
@@ -87,12 +83,12 @@ def test_admin_auth_no_keys_configured() -> None:
 
 
 def test_admin_auth_prefix_check(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HPCOPT_API_KEYS", "admin-key-1,user-key-2")
+    monkeypatch.setenv("HPCOPT_API_KEYS", "admin-a,u")
     from hpcopt.utils.secrets import invalidate_api_keys_cache
     invalidate_api_keys_cache()
 
-    assert check_admin_auth("/v1/admin/log-level", "admin-key-1") is True
-    assert check_admin_auth("/v1/admin/log-level", "user-key-2") is False
+    assert check_admin_auth("/v1/admin/log-level", "admin-a") is True
+    assert check_admin_auth("/v1/admin/log-level", "u") is False
 
     monkeypatch.delenv("HPCOPT_API_KEYS", raising=False)
     invalidate_api_keys_cache()

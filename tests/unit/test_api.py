@@ -1,15 +1,12 @@
-import os
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-
 from hpcopt.api.app import app
 from hpcopt.api.model_cache import reset_for_testing as reset_model_cache
 from hpcopt.api.rate_limit import reset_for_testing as reset_rate_limit
 from hpcopt.models.runtime_quantile import train_runtime_quantile_models
 from hpcopt.simulate.stress import generate_stress_scenario
-
 
 client = TestClient(app)
 
@@ -124,14 +121,14 @@ def test_admin_log_level_invalid() -> None:
 
 def test_admin_rbac_non_admin_key_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     """Non-admin API key should be rejected for admin paths when keys are configured."""
-    monkeypatch.setenv("HPCOPT_API_KEYS", "user-key-123,admin-key-456")
+    monkeypatch.setenv("HPCOPT_API_KEYS", "u,admin-a")
     from hpcopt.utils.secrets import invalidate_api_keys_cache
     invalidate_api_keys_cache()
 
     response = client.post(
         "/v1/admin/log-level",
         json={"level": "DEBUG"},
-        headers={"X-API-Key": "user-key-123"},
+        headers={"X-API-Key": "u"},
     )
     assert response.status_code == 403
 
@@ -139,7 +136,7 @@ def test_admin_rbac_non_admin_key_rejected(monkeypatch: pytest.MonkeyPatch) -> N
     response = client.post(
         "/v1/admin/log-level",
         json={"level": "DEBUG"},
-        headers={"X-API-Key": "admin-key-456"},
+        headers={"X-API-Key": "admin-a"},
     )
     assert response.status_code == 200
 
@@ -203,7 +200,6 @@ def test_recommendation_endpoint_path_traversal() -> None:
 
 def test_recommendation_endpoint_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import json
-    from pathlib import Path
 
     rec_dir = tmp_path / "recommendations"
     rec_dir.mkdir(parents=True)
