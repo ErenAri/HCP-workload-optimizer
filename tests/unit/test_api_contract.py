@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import asyncio
-from unittest.mock import AsyncMock, patch
+import time
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
-
 from hpcopt.api.app import app
 from hpcopt.api.rate_limit import (
     reset_for_testing,
     restore_limits_for_testing,
     set_limits_for_testing,
 )
-
 
 client = TestClient(app)
 
@@ -50,8 +48,9 @@ def test_request_timeout_returns_504(monkeypatch) -> None:
 
     monkeypatch.setattr(app_module, "_REQUEST_TIMEOUT_SEC", 0.001)
 
-    async def _slow_handler(*args, **kwargs):
-        await asyncio.sleep(5)
+    def _slow_handler(*args, **kwargs):
+        time.sleep(0.05)
+        return None, None
 
     with patch("hpcopt.api.app.get_runtime_predictor", side_effect=_slow_handler):
         response = client.post(
