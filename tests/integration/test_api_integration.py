@@ -92,8 +92,8 @@ def test_auth_enforcement() -> None:
         )
         assert response.status_code == 401
         body = response.json()
-        assert body["error"]["code"] == "UNAUTHORIZED"
-        assert "trace_id" in body["error"]
+        assert body["title"] == "UNAUTHORIZED"
+        assert "instance" in body  # trace_id in RFC 7807
         assert "X-Trace-ID" in response.headers
 
 
@@ -103,5 +103,5 @@ def test_runtime_predict_validation(client: TestClient) -> None:
     response = client.post("/v1/runtime/predict", json=payload)
     assert response.status_code == 422
     body = response.json()
-    assert body["error"]["code"] == "VALIDATION_ERROR"
-    assert "trace_id" in body["error"]
+    assert body["title"] == "VALIDATION_ERROR"
+    assert "instance" in body  # trace_id in RFC 7807

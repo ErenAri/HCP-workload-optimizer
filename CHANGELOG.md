@@ -2,6 +2,38 @@
 
 All notable changes to HPC Workload Optimizer are documented here.
 
+## [1.2.0] - 2026-02-23
+
+### Added
+- **API Security**: Request body size limit (1MB middleware), Pydantic input bounds (le=, max_length=, extra="forbid"), admin RBAC with `admin-` key prefix for `/v1/admin/*` paths
+- **Kubernetes resilience**: PodDisruptionBudget (`k8s/pdb.yaml`, minAvailable: 1), NetworkPolicy (`k8s/network-policy.yaml`, ingress from ingress-nginx + monitoring only), preStop lifecycle hook (sleep 5s for connection draining)
+- **RFC 7807 Problem Details** error responses (replaces `{"error": {...}}` format) with `type`, `title`, `status`, `detail`, `instance` fields
+- **Circuit breaker** on prediction path (5-failure threshold, 60s reset, fallback on open)
+- **New Prometheus metrics**: `rate_limit_rejections_total`, `auth_failures_total`, `cache_hits_total`, `model_load_duration_seconds`
+- **GET /v1/recommendations/{run_id}** endpoint for retrieving stored recommendation results
+- **Model card generation** (`models/model_card.py`): dataset characteristics, performance metrics, fairness/bias evaluation, limitations — output alongside model artifacts at training time
+- **Startup config validation**: validates environment variables (`HPCOPT_RATE_LIMIT`, `HPCOPT_REQUEST_TIMEOUT_SEC`, `HPCOPT_ENV`) at API startup with fail-fast on invalid config
+- **Audit logging** for admin log-level changes (who, when, old→new level)
+- **Ingestion file size guards**: 2GB max file size, 1M line length, 50M row cap (SWF, Slurm, PBS parsers)
+- **Timeout on secrets file reads** (5s) to prevent hangs on stale NFS mounts
+- **Docker Compose resource limits** (cpus: 1.0, memory: 512M) and read-only volume mounts
+- 20+ new test files: security tests, concurrency tests, error path tests, model cache, rate limit, metrics, registry, drift, resource-fit, PBS, shadow, retention, report export, feature importance, config validation, env config, logging, tuning, credibility dossier, tracing, sensitivity, recommendation engine, Slurm helpers
+- **Load tests**: spike (0→100 concurrent), sustained (5s continuous), error rate verification (<1%), tail latency assertions (p99 < 2x p95)
+- **Property-based tests** strengthened: max_examples=100, CPU conservation law, temporal ordering invariant, metric monotonicity
+
+### Changed
+- Coverage gate raised from 58% to **82%** (324 tests, 83% actual coverage)
+- `/ready` endpoint returns 503 when degraded (disk low or shutting down)
+- Broad `except Exception` replaced with specific exception types across 11 modules (16 locations)
+- Error responses migrated from `{"error": {"code", "message", "trace_id"}}` to RFC 7807 format
+
+### Security
+- Admin RBAC: `admin-` prefixed API keys required for `/v1/admin/*` paths (403 for non-admin keys)
+- Request body capped at 1MB (413 PAYLOAD_TOO_LARGE)
+- Input bounds: `requested_cpus` ≤ 100,000; `queue_depth_jobs` ≤ 1,000,000; `requested_runtime_sec` ≤ 31,536,000; `candidate_node_cpus` max length 1,000
+- Extra fields rejected on all request models (`extra="forbid"`)
+- Kubernetes NetworkPolicy restricts ingress to ingress-nginx and monitoring namespaces
+
 ## [1.1.0] - 2026-02-23
 
 ### Changed

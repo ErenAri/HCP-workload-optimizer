@@ -90,7 +90,7 @@ def run_guard_k_sweep(
                     "status": "ok",
                 }
             )
-        except Exception as exc:
+        except (ValueError, OSError) as exc:
             logger.warning("Sweep failed for k=%.2f: %s", k, exc)
             sweep_rows.append(
                 {

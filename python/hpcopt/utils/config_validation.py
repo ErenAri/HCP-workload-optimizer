@@ -80,7 +80,7 @@ def validate_config(path: Path, schema_name: str) -> dict[str, Any]:
     # ---- Load the config ------------------------------------------------
     try:
         config_data = _load_yaml(path)
-    except Exception as exc:
+    except (OSError, ValueError, yaml.YAMLError) as exc:
         return {"valid": False, "errors": [f"Failed to load config: {exc}"]}
 
     # ---- Load the schema ------------------------------------------------
@@ -92,7 +92,7 @@ def validate_config(path: Path, schema_name: str) -> dict[str, Any]:
     try:
         with open(schema_path, "r", encoding="utf-8") as fh:
             schema = json.load(fh)
-    except Exception as exc:
+    except (OSError, json.JSONDecodeError) as exc:
         return {"valid": False, "errors": [f"Failed to load schema: {exc}"]}
 
     # ---- Validate -------------------------------------------------------

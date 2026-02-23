@@ -70,6 +70,10 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 2
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sleep", "5"]
           securityContext:
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false

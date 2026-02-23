@@ -134,7 +134,7 @@ def _try_shap_importance(
             "n_samples": len(X),
             "features": features,
         }
-    except Exception as exc:
+    except (ValueError, OSError) as exc:
         logger.warning("SHAP analysis failed: %s", exc)
         return None
 

@@ -52,7 +52,7 @@ def load_env_config() -> dict[str, Any]:
             logger.warning("Invalid env config format in %s; using defaults", config_path)
     except ImportError:
         logger.debug("pyyaml not installed; using default config")
-    except Exception:
+    except (ValueError, TypeError):
         logger.warning("Failed to load env config from %s", config_path, exc_info=True)
 
     return config

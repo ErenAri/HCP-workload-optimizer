@@ -1,0 +1,14 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: hpcopt-api
+  namespace: hpcopt
+  labels:
+    app.kubernetes.io/name: hpcopt-api
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: hpc-workload-optimizer
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hpcopt-api

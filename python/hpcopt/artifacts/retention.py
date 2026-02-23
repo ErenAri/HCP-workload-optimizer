@@ -26,7 +26,7 @@ def _get_production_model_dir() -> Path | None:
         entry = registry.get_production()
         if entry is not None:
             return Path(str(entry["model_dir"]))
-    except Exception as exc:
+    except (OSError, ImportError) as exc:
         logger.debug("Could not resolve production model from registry: %s", exc)
     return None
 

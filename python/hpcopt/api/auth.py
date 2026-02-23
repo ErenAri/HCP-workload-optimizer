@@ -24,6 +24,10 @@ EXEMPT_PATHS: frozenset[str] = frozenset({
 })
 
 
+ADMIN_KEY_PREFIX = "admin-"
+_ADMIN_PATH_PREFIX = "/v1/admin/"
+
+
 def check_api_key_auth(path: str, provided_key: str) -> bool:
     """Return True if the request is authorised.
 
@@ -38,3 +42,18 @@ def check_api_key_auth(path: str, provided_key: str) -> bool:
     if not api_keys:
         return True
     return any(hmac.compare_digest(provided_key, k) for k in api_keys)
+
+
+def check_admin_auth(path: str, provided_key: str) -> bool:
+    """Return True if the request is authorised for admin paths.
+
+    Admin paths (``/v1/admin/*``) require an API key with the ``admin-``
+    prefix.  Non-admin paths always pass.  When no API keys are configured
+    (dev mode), admin access is unrestricted.
+    """
+    if not path.startswith(_ADMIN_PATH_PREFIX):
+        return True
+    api_keys = load_api_keys()
+    if not api_keys:
+        return True
+    return provided_key.startswith(ADMIN_KEY_PREFIX)

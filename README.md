@@ -77,16 +77,21 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 
 ### Deployment and Observability
 
-- Production-ready API (FastAPI) with runtime and resource-fit prediction endpoints, modular architecture (`api/app.py`, `api/auth.py`, `api/rate_limit.py`, `api/model_cache.py`, `api/deprecation.py`).
-- File-based API key authentication with 3-tier loading (file env var, Docker secret mount, legacy env var) and rotation without restart (`api/auth.py`).
+- Production-ready API (FastAPI) with runtime and resource-fit prediction endpoints, recommendation retrieval, modular architecture (`api/app.py`, `api/auth.py`, `api/rate_limit.py`, `api/model_cache.py`, `api/deprecation.py`, `api/metrics.py`).
+- **Request body size limit** (1MB middleware) and **Pydantic input bounds** (le=, max_length=, extra="forbid") on all request models.
+- File-based API key authentication with 3-tier loading (file env var, Docker secret mount, legacy env var) and rotation without restart (`api/auth.py`). **Admin RBAC**: `admin-` prefixed API keys required for `/v1/admin/*` paths.
 - Model cache pre-warming at startup for faster cold-start response times (`api/model_cache.py`).
 - Configurable request timeout (default 30s via `HPCOPT_REQUEST_TIMEOUT_SEC`) with 504 Gateway Timeout response.
-- Prometheus metrics: request counters, latency histograms, fallback rates, model status gauges.
+- **Circuit breaker** on prediction path (5-failure threshold, 60s reset, fallback on open).
+- **RFC 7807 Problem Details** error responses with `type`, `title`, `status`, `detail`, `instance` fields.
+- **Model card generation** (`models/model_card.py`): dataset characteristics, performance metrics, fairness/bias evaluation, limitations.
+- **Startup config validation**: validates environment variables at API startup with fail-fast on invalid config.
+- Prometheus metrics: request counters, latency histograms, fallback rates, model status gauges, `rate_limit_rejections_total`, `auth_failures_total`, `cache_hits_total`, `model_load_duration_seconds`.
 - Grafana dashboard (8 panels: request rate, latency percentiles, error rate, model status, heatmap).
 - Structured JSON logging with correlation ID propagation.
 - Docker containerization with multi-stage build, pinned base image digests, and Docker secrets support.
-- **Kubernetes manifests**: Deployment (health/readiness probes, security context, resource limits), Service, ConfigMap, Secret, HPA (2-8 replicas), ServiceMonitor, OpenTelemetry Collector, Alertmanager.
-- GitHub Actions CI/CD: lint, typecheck, test matrix (Python 3.11/3.12), coverage gate (58%), E2E smoke test, Codecov reporting, Rust check/clippy, cross-language parity, bandit SAST, dependency audit, secret scanning, Docker build, and release workflows.
+- **Kubernetes manifests**: Deployment (health/readiness probes, security context, resource limits, preStop hook for connection draining), Service, ConfigMap, Secret, HPA (2-8 replicas), ServiceMonitor, OpenTelemetry Collector, Alertmanager, PodDisruptionBudget (minAvailable: 1), NetworkPolicy (ingress from ingress-nginx + monitoring only).
+- GitHub Actions CI/CD: lint, typecheck, test matrix (Python 3.11/3.12), coverage gate (82%), E2E smoke test, Codecov reporting, Rust check/clippy, cross-language parity, bandit SAST, dependency audit, secret scanning, Docker build, and release workflows.
 - JSON Schema validation for all configuration files with `additionalProperties: false` enforcement.
 - **OpenTelemetry** distributed tracing with configurable sampling per environment.
 - **API deprecation sunset mechanism** with RFC 8594/9745 `Sunset` and `Deprecation` response headers.
@@ -249,9 +254,14 @@ flowchart LR
   F3 --> LOAD
 
   LOAD --> MW["API middleware<br/>api/app.py"]
-  MW --> AUTH{"auth.check_api_key_auth()<br/>X-API-Key valid?"}
-  AUTH -->|"Yes"| RATE["rate_limit.check_rate_limit()<br/>(token bucket)"]
+  MW --> BODY{"Body size check<br/>≤ 1MB?"}
+  BODY -->|"No"| R413["413 Payload Too Large"]
+  BODY -->|"Yes"| AUTH{"auth.check_api_key_auth()<br/>X-API-Key valid?"}
+  AUTH -->|"Yes"| ADMIN{"Admin path?<br/>/v1/admin/*"}
   AUTH -->|"No"| R401["401 Unauthorized"]
+  ADMIN -->|"Yes, admin- key"| RATE["rate_limit.check_rate_limit()<br/>(token bucket)"]
+  ADMIN -->|"Yes, non-admin key"| R403["403 Forbidden"]
+  ADMIN -->|"No"| RATE
   RATE -->|"Allowed"| TIMEOUT["asyncio.wait_for<br/>(30s default)"]
   TIMEOUT -->|"OK"| HANDLER["Endpoint handler"]
   TIMEOUT -->|"Exceeded"| R504["504 Gateway Timeout"]
@@ -287,7 +297,7 @@ python/hpcopt/
   ingest/        # SWF, Slurm, PBS parsers + shadow ingestion daemon
   profile/       # Trace profiling and workload characterization
   features/      # Time-safe feature pipeline + chronological splits
-  models/        # Runtime quantile, resource-fit, drift, tuning, registry
+  models/        # Runtime quantile, resource-fit, drift, tuning, registry, model card
   simulate/      # Policy core, adapter, fidelity, Batsim, stress scenarios
   recommend/     # Recommendation engine with Pareto mode
   artifacts/     # Manifests, export, benchmarks, credibility dossier, retention
@@ -302,11 +312,13 @@ rust/
 
 k8s/               # Kubernetes manifests
   namespace.yaml
-  deployment.yaml  # 2-replica Deployment with probes + security context
+  deployment.yaml  # 2-replica Deployment with probes, security context, preStop hook
   service.yaml     # ClusterIP service
   configmap.yaml   # Environment configuration
   secret.yaml      # API keys template
   hpa.yaml         # HorizontalPodAutoscaler (2-8 replicas)
+  pdb.yaml         # PodDisruptionBudget (minAvailable: 1)
+  network-policy.yaml  # NetworkPolicy (ingress from ingress-nginx + monitoring)
   servicemonitor.yaml  # Prometheus auto-discovery
   otel-collector.yaml  # OpenTelemetry Collector deployment
   alertmanager-config.yaml  # PagerDuty + Slack alert routing
@@ -327,7 +339,7 @@ schemas/
   sensitivity, reference_suite, fidelity_gate_config schemas
 
 tests/
-  unit/          # 100+ unit tests (CLI, API, schemas, secrets, adapters, simulation, property-based)
+  unit/          # 300+ unit tests (CLI, API, schemas, secrets, adapters, simulation, property-based, security, concurrency, error paths)
   integration/   # API and protocol integration tests + E2E smoke test
   load/          # API load/concurrency tests
   conftest.py    # Shared fixtures (api_client, sample_trace_path, stress_dataset)
@@ -632,10 +644,12 @@ hpcopt serve api --host 0.0.0.0 --port 8080
 Available endpoints:
 
 - `GET /health` -- service health
-- `GET /ready` -- readiness check (model availability)
+- `GET /ready` -- readiness check (model availability; returns 503 when degraded)
 - `GET /v1/system/status` -- process uptime + model/metrics availability status
 - `POST /v1/runtime/predict` -- runtime quantile predictions
 - `POST /v1/resource-fit/predict` -- resource fit and fragmentation risk
+- `GET /v1/recommendations/{run_id}` -- retrieve stored recommendation results
+- `POST /v1/admin/log-level` -- dynamic log level (admin RBAC required)
 - `GET /metrics` -- Prometheus metrics (when `prometheus_client` is installed)
 
 OpenAPI docs: `http://localhost:8080/docs`
@@ -657,7 +671,7 @@ API response contract:
 - every response includes `X-Trace-ID` and `X-Correlation-ID`,
 - prediction responses include `X-Model-Version` and `X-Fallback-Used`,
 - deprecated endpoints include `Deprecation`, `Sunset`, and `Link` headers (RFC 8594/9745),
-- validation/auth/rate-limit/timeout/internal failures return an `error` object with `code`, `message`, and `trace_id` (`VALIDATION_ERROR`, `UNAUTHORIZED`, `RATE_LIMITED`, `GATEWAY_TIMEOUT`, `INTERNAL_ERROR`).
+- error responses follow **RFC 7807 Problem Details** format with `type` (urn:hpcopt:error:*), `title`, `status`, `detail`, `instance` (trace ID), and optional `errors` array. Status codes: `422 VALIDATION_ERROR`, `401 UNAUTHORIZED`, `403 FORBIDDEN` (admin paths), `413 PAYLOAD_TOO_LARGE` (requests > 1MB), `429 RATE_LIMITED`, `504 GATEWAY_TIMEOUT`, `500 INTERNAL_ERROR`.
 
 ## Reproducibility and Contracts
 
@@ -701,22 +715,28 @@ hpcopt data lock-reference-suite \
 pytest -v
 ```
 
-Current baseline: **130 tests passing** with **58% minimum coverage** (enforced in CI).
+Current baseline: **324 tests passing** with **82% minimum coverage** (enforced in CI, 83% actual).
 
 Test suite covers:
 
 - unit tests (ingestion, profiling, training, simulation, fidelity, recommendation, benchmarks, reproducibility),
-- **property-based tests** (Hypothesis) for simulation invariants, fidelity metrics, adapter contracts, objective bounds, and recommendation engine,
+- **property-based tests** (Hypothesis, max_examples=100) for CPU conservation law, temporal ordering invariant, metric monotonicity, adapter contracts, objective bounds, and recommendation engine,
 - CLI tests (ingest swf/slurm/pbs, train, simulate, pipeline, model, report — all 14 command groups),
 - schema validation tests (all 10 JSON schemas checked for well-formedness and `additionalProperties` lockdown),
-- secrets module tests (file-based, Docker mount, legacy env, missing file),
-- API contract tests (rate limiting, request timeout, validation error envelope),
+- **security tests** (request body size limits, input bounds validation, admin RBAC, extra field rejection),
+- **concurrency tests** (thread-safe cache, circuit breaker state transitions),
+- **error path tests** (specific exception types across 11 modules, replacing broad `except Exception`),
+- secrets module tests (file-based, Docker mount, legacy env, missing file, read timeout),
+- API contract tests (rate limiting, request timeout, RFC 7807 error responses),
 - API deprecation header tests,
+- API metrics, model cache, and rate limit unit tests,
+- model registry, drift detection, tuning, resource-fit, and credibility dossier tests,
+- ingestion tests (PBS, shadow, Slurm helpers), retention, report export, feature importance, config validation, env config, logging, and tracing tests,
 - integration tests (API endpoints, auth, credibility protocol, Slurm ingestion),
 - **E2E pipeline smoke test** (ingest → features → train → predict),
-- load tests (concurrent API predictions, health under load).
+- **load tests**: spike (0→100 concurrent), sustained (5s continuous), error rate verification (<1%), tail latency assertions (p99 < 2x p95).
 
-Coverage enforcement: `pytest-cov` with `--cov-fail-under=58` and Codecov PR comments in CI.
+Coverage enforcement: `pytest-cov` with `--cov-fail-under=82` and Codecov PR comments in CI.
 
 ### Unified Verification Gate (PowerShell)
 
@@ -804,8 +824,10 @@ kubectl apply -f k8s/secret.yaml        # replace placeholder with base64-encode
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 kubectl apply -f k8s/hpa.yaml
-kubectl apply -f k8s/servicemonitor.yaml  # requires Prometheus Operator
-kubectl apply -f k8s/otel-collector.yaml  # optional: distributed tracing
+kubectl apply -f k8s/pdb.yaml              # PodDisruptionBudget (minAvailable: 1)
+kubectl apply -f k8s/network-policy.yaml   # ingress from ingress-nginx + monitoring only
+kubectl apply -f k8s/servicemonitor.yaml   # requires Prometheus Operator
+kubectl apply -f k8s/otel-collector.yaml   # optional: distributed tracing
 kubectl apply -f k8s/alertmanager-config.yaml  # optional: alert routing
 ```
 
@@ -814,13 +836,16 @@ kubectl apply -f k8s/alertmanager-config.yaml  # optional: alert routing
 ```mermaid
 flowchart LR
   subgraph K8s["Kubernetes Cluster (namespace: hpcopt)"]
+    NP["NetworkPolicy\ningress-nginx + monitoring"] -.-> SVC
     ING["Ingress / LoadBalancer"] --> SVC["Service\n:8080"]
-    SVC --> POD1["Pod 1\nhpcopt-api"]
-    SVC --> POD2["Pod 2\nhpcopt-api"]
+    SVC --> POD1["Pod 1\nhpcopt-api\n(preStop: sleep 5s)"]
+    SVC --> POD2["Pod 2\nhpcopt-api\n(preStop: sleep 5s)"]
     POD1 --> OTEL["OTel Collector\nsidecar/daemon"]
     POD2 --> OTEL
     HPA["HPA\n2-8 replicas"] -.-> POD1
     HPA -.-> POD2
+    PDB["PDB\nminAvailable: 1"] -.-> POD1
+    PDB -.-> POD2
   end
 
   subgraph Obs["Observability"]
@@ -874,7 +899,7 @@ flowchart TD
   subgraph Gate["Merge Gate"]
     E2E
     XPARITY
-    COV_CHECK["Coverage ≥ 58%"]
+    COV_CHECK["Coverage ≥ 82%"]
   end
 
   subgraph Release["Release Gate (v* tags)"]

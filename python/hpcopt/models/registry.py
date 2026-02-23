@@ -309,7 +309,7 @@ class ModelRegistry:
             try:
                 from hpcopt.utils.audit import audit_log
                 audit_log("model.promote", details={"model_id": model_id})
-            except Exception:
+            except (ImportError, OSError):
                 pass
             return target.to_dict()
 
@@ -333,6 +333,6 @@ class ModelRegistry:
             try:
                 from hpcopt.utils.audit import audit_log
                 audit_log("model.archive", details={"model_id": model_id})
-            except Exception:
+            except (ImportError, OSError):
                 pass
             return target.to_dict()

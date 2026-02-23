@@ -166,7 +166,7 @@ Correlation IDs can be set explicitly or auto-generated for request tracing.
 
 ## 8. Validation and Test Coverage
 
-Current tests validate (89 tests, 59% coverage with 58% CI gate):
+Current tests validate (324 tests, 83% coverage with 82% CI gate):
 
 - ingestion (SWF, Slurm, PBS) and schema-critical fields,
 - trace profile sections,

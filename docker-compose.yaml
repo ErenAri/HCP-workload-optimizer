@@ -6,12 +6,20 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./data:/app/data
-      - ./outputs/models:/app/models
+      - ./data:/app/data:ro
+      - ./outputs/models:/app/models:ro
     environment:
       HPCOPT_API_KEYS_FILE: /run/secrets/hpcopt_api_keys
     secrets:
       - hpcopt_api_keys
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     healthcheck:
       test: [ "CMD", "curl", "--fail", "http://localhost:8080/health" ]
       interval: 30s

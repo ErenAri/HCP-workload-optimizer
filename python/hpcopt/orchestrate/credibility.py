@@ -285,7 +285,7 @@ def run_credibility_protocol(
             result.recommendation_status,
         )
 
-    except Exception as exc:
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
         result.status = "error"
         result.error_message = str(exc)
         logger.error("[%s] Credibility protocol failed: %s", trace_id, exc)

@@ -415,6 +415,25 @@ Behavior:
 - else deterministic capacity-fit baseline,
 - returns fragmentation risk category (`low`, `medium`, `high`) and recommended node size.
 
+### Recommendation Retrieval
+
+- `GET /v1/recommendations/{run_id}`
+
+Response: stored recommendation report JSON for the given run ID.
+
+Errors:
+- `400` -- invalid `run_id` (forbidden characters),
+- `404` -- recommendation not found,
+- `500` -- internal error.
+
+### Admin Log Level
+
+- `POST /v1/admin/log-level`
+
+Request body: `{"level": "DEBUG|INFO|WARNING|ERROR"}`.
+
+Requires admin RBAC (API key with `admin-` prefix). Changes are audit-logged (who, when, old→new level). Returns `403 FORBIDDEN` for non-admin keys.
+
 ### Prometheus Metrics
 
 - `GET /metrics`
@@ -424,7 +443,11 @@ Response: Prometheus text exposition format with:
 - `hpcopt_request_duration_seconds` (histogram by endpoint),
 - `hpcopt_fallback_total` (counter),
 - `hpcopt_model_loaded` (gauge),
-- `hpcopt_model_staleness_seconds` (gauge).
+- `hpcopt_model_staleness_seconds` (gauge),
+- `hpcopt_rate_limit_rejections_total` (counter),
+- `hpcopt_auth_failures_total` (counter),
+- `hpcopt_cache_hits_total` (counter),
+- `hpcopt_model_load_duration_seconds` (histogram).
 
 Requires `prometheus_client` package. Returns empty response if unavailable.
 
@@ -445,6 +468,36 @@ Behavior:
 - Requests must include `X-API-Key` header with a valid key.
 - `GET /health`, `GET /ready`, `GET /metrics`, `GET /docs`, `GET /openapi.json`, and `GET /v1/system/status` are always exempt.
 - If no keys are configured, all requests pass through without authentication.
+
+## 5a. Admin Role-Based Access Control (RBAC)
+
+API endpoints under `/v1/admin/*` require admin-level access controlled via API key prefix:
+
+- **Admin key prefix**: API keys with the `admin-` prefix (e.g., `admin-production-key-12345`) are granted admin access.
+- **Non-admin keys**: rejected on admin paths with `403 FORBIDDEN`.
+- **Current admin endpoints**: `POST /v1/admin/log-level`.
+- **Audit logging**: admin operations (e.g., log-level changes) are audit-logged with the API key, timestamp, and old→new value.
+- **Development mode**: when no API keys are configured, all paths are unrestricted.
+
+Implementation: `python/hpcopt/api/auth.py` (`check_admin_auth()`, `ADMIN_KEY_PREFIX = "admin-"`).
+
+## 5b. Request Body Size Limit
+
+All request bodies are limited to **1 MB**. Requests exceeding this limit receive `413 PAYLOAD_TOO_LARGE` with an RFC 7807 error response.
+
+Implementation: `api/app.py:body_size_limit_middleware()`, `_MAX_BODY_BYTES = 1 * 1024 * 1024`.
+
+## 5c. Input Validation Bounds
+
+All Pydantic request models enforce strict input bounds:
+
+- `requested_cpus`: ≤ 100,000
+- `queue_depth_jobs`: ≤ 1,000,000
+- `requested_runtime_sec`: ≤ 31,536,000 (1 year)
+- `candidate_node_cpus`: max length 1,000
+- All models use `extra="forbid"` to reject unknown fields.
+
+Ingestion file size guards: 2GB max file size, 1M max line length, 50M row cap (SWF, Slurm, PBS parsers).
 
 ## 6. Request Timeout
 
@@ -480,7 +533,47 @@ When API is running:
 
 - OpenAPI UI: `http://localhost:8080/docs`
 
-## 10. Interface Stability Notes
+## 10. Error Response Format (RFC 7807 Problem Details)
+
+All error responses follow the [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) Problem Details specification:
+
+```json
+{
+  "type": "urn:hpcopt:error:VALIDATION_ERROR",
+  "title": "VALIDATION_ERROR",
+  "status": 422,
+  "detail": "Human-readable error message",
+  "instance": "<trace-id>",
+  "errors": ["<validation-details>"]
+}
+```
+
+Status codes returned:
+
+| Status | Error Code | Description |
+|--------|------------|-------------|
+| 401 | UNAUTHORIZED | Invalid or missing API key |
+| 403 | FORBIDDEN | Valid key but lacks admin prefix for `/v1/admin/*` paths |
+| 413 | PAYLOAD_TOO_LARGE | Request body exceeds 1 MB |
+| 422 | VALIDATION_ERROR | Request validation failed (includes `errors` array) |
+| 429 | RATE_LIMITED | Rate limit exceeded (includes `Retry-After` header) |
+| 504 | GATEWAY_TIMEOUT | Request exceeded timeout (default 30s) |
+| 500 | INTERNAL_ERROR | Unhandled exception |
+
+Implementation: `api/app.py:_error_content()`, exception handlers.
+
+## 11. Circuit Breaker (Prediction Path)
+
+The prediction path is protected by a circuit breaker that fails fast if model I/O repeatedly fails:
+
+- **Failure threshold**: 5 consecutive errors.
+- **Reset timeout**: 60 seconds.
+- **When open**: returns deterministic heuristic fallback response (no model I/O attempted).
+- **Half-open**: allows one trial request to test recovery.
+
+Implementation: `api/app.py:_prediction_circuit`, `utils/resilience.py:CircuitBreaker`.
+
+## 12. Interface Stability Notes
 
 - CLI commands and report schemas are treated as contract-bearing interfaces.
 - Artifact keys used by evaluation/recommendation pipelines should be considered stable unless versioned migration is introduced.

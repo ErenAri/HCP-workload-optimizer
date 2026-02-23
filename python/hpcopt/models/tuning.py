@@ -192,7 +192,7 @@ def _random_search(
                 }
             )
             logger.info("Trial %d: score=%.6f params=%s", trial_idx, score, params.to_dict())
-        except Exception as exc:
+        except (ValueError, OSError) as exc:
             trials.append(
                 {
                     "trial": trial_idx,

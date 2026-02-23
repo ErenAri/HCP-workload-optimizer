@@ -34,9 +34,9 @@ def test_rate_limit_error_contract() -> None:
         )
         assert second.status_code == 429
         payload = second.json()
-        assert payload["error"]["code"] == "RATE_LIMITED"
-        assert payload["error"]["message"] == "Rate limit exceeded"
-        assert "trace_id" in payload["error"]
+        assert payload["title"] == "RATE_LIMITED"
+        assert payload["detail"] == "Rate limit exceeded"
+        assert "instance" in payload  # trace_id in RFC 7807
         assert "Retry-After" in second.headers
         assert second.headers["X-Trace-ID"] == second.headers["X-Correlation-ID"]
     finally:
@@ -60,9 +60,9 @@ def test_request_timeout_returns_504(monkeypatch) -> None:
         )
     assert response.status_code == 504
     payload = response.json()
-    assert payload["error"]["code"] == "GATEWAY_TIMEOUT"
-    assert payload["error"]["message"] == "Request timed out"
-    assert "trace_id" in payload["error"]
+    assert payload["title"] == "GATEWAY_TIMEOUT"
+    assert payload["detail"] == "Request timed out"
+    assert "instance" in payload  # trace_id in RFC 7807
     assert "X-Trace-ID" in response.headers
 
 
@@ -70,6 +70,6 @@ def test_validation_error_headers() -> None:
     response = client.post("/v1/runtime/predict", json={"requested_cpus": 0})
     assert response.status_code == 422
     payload = response.json()
-    assert payload["error"]["code"] == "VALIDATION_ERROR"
-    assert payload["error"]["message"] == "Request validation failed"
+    assert payload["title"] == "VALIDATION_ERROR"
+    assert payload["detail"] == "Request validation failed"
     assert response.headers["X-Trace-ID"] == response.headers["X-Correlation-ID"]

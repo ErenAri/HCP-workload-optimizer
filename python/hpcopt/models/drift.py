@@ -133,7 +133,7 @@ def _load_thresholds(config_path: Path | None) -> dict[str, Any]:
     except ImportError:
         logger.warning("PyYAML not installed; using default drift thresholds.")
         return dict(_DEFAULT_THRESHOLDS)
-    except Exception as exc:
+    except (OSError, ValueError, yaml.YAMLError) as exc:
         logger.warning("Failed to load drift config %s: %s; using defaults.", config_path, exc)
         return dict(_DEFAULT_THRESHOLDS)
 
@@ -329,7 +329,7 @@ def compute_drift_report(
         pipeline = joblib.load(model_path)
         try:
             preds = np.maximum(pipeline.predict(x_eval), 1.0)
-        except Exception as exc:
+        except (ValueError, OSError) as exc:
             logger.warning("Prediction failed for %s: %s", q_name, exc)
             continue
 

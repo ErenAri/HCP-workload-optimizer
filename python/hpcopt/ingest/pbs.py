@@ -14,6 +14,10 @@ from hpcopt.utils.io import ensure_dir
 
 logger = logging.getLogger(__name__)
 
+MAX_INPUT_FILE_BYTES = 2 * 1024**3  # 2 GB
+MAX_LINE_LENGTH = 1_000_000
+MAX_ROWS = 50_000_000
+
 # ---------------------------------------------------------------------------
 # PBS/Torque accounting log format
 # ---------------------------------------------------------------------------
@@ -224,10 +228,16 @@ def _iter_rows(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     with path.open("r", encoding="utf-8", errors="strict") as fh:
         for raw_line in fh:
             stats["total_lines"] += 1
+            if len(raw_line) > MAX_LINE_LENGTH:
+                stats["malformed_lines"] += 1
+                continue
             line = raw_line.strip()
             if not line or line.startswith("#"):
                 stats["blank_lines"] += 1
                 continue
+
+            if stats["parsed_rows"] >= MAX_ROWS:
+                break
 
             m = _PBS_LINE_RE.match(line)
             if not m:
@@ -371,6 +381,13 @@ def ingest_pbs(
     report_dir = Path(report_dir)
     ensure_dir(out_dir)
     ensure_dir(report_dir)
+
+    file_size = input_path.stat().st_size
+    if file_size > MAX_INPUT_FILE_BYTES:
+        raise ValueError(
+            f"Input file too large ({file_size / (1024**3):.1f} GB). "
+            f"Maximum allowed: {MAX_INPUT_FILE_BYTES / (1024**3):.0f} GB."
+        )
 
     rows, stats = _iter_rows(input_path)
     if not rows:

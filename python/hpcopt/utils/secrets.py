@@ -26,10 +26,25 @@ _cache_ts: float = 0.0
 _CACHE_LOCK = threading.Lock()
 
 
+_READ_TIMEOUT_SEC = 5.0
+
+
 def _read_keys_file(path: Path) -> set[str]:
-    """Read one API key per line, stripping blanks and comments."""
+    """Read one API key per line, stripping blanks and comments.
+
+    Enforces a timeout via a thread to prevent hangs on stale NFS mounts.
+    """
+    import concurrent.futures
+
+    def _read() -> str:
+        return path.read_text(encoding="utf-8")
+
     try:
-        text = path.read_text(encoding="utf-8")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            text = pool.submit(_read).result(timeout=_READ_TIMEOUT_SEC)
+    except concurrent.futures.TimeoutError:
+        logger.warning("Timed out reading API keys file after %.0fs: %s", _READ_TIMEOUT_SEC, path)
+        return set()
     except OSError:
         logger.warning("Cannot read API keys file: %s", path)
         return set()

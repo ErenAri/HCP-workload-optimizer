@@ -34,6 +34,10 @@ _fallback_total: Optional["Counter"] = None
 _request_duration: Optional["Histogram"] = None
 _model_loaded: Optional["Gauge"] = None
 _model_staleness: Optional["Gauge"] = None
+_rate_limit_rejections_total: Optional["Counter"] = None
+_auth_failures_total: Optional["Counter"] = None
+_cache_hits_total: Optional["Counter"] = None
+_model_load_duration: Optional["Histogram"] = None
 
 
 def _ensure_metrics() -> bool:
@@ -42,6 +46,8 @@ def _ensure_metrics() -> bool:
     """
     global _requests_total, _fallback_total, _request_duration
     global _model_loaded, _model_staleness
+    global _rate_limit_rejections_total, _auth_failures_total
+    global _cache_hits_total, _model_load_duration
 
     if not _PROMETHEUS_AVAILABLE:
         return False
@@ -76,6 +82,28 @@ def _ensure_metrics() -> bool:
     _model_staleness = Gauge(
         "hpcopt_model_staleness_seconds",
         "Seconds since the active model was last refreshed",
+    )
+
+    _rate_limit_rejections_total = Counter(
+        "hpcopt_rate_limit_rejections_total",
+        "Total number of requests rejected by rate limiting",
+    )
+
+    _auth_failures_total = Counter(
+        "hpcopt_auth_failures_total",
+        "Total number of authentication failures",
+    )
+
+    _cache_hits_total = Counter(
+        "hpcopt_cache_hits_total",
+        "Total number of model cache hits",
+        labelnames=["cache_type"],
+    )
+
+    _model_load_duration = Histogram(
+        "hpcopt_model_load_duration_seconds",
+        "Time to load a model from disk",
+        buckets=(0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0),
     )
 
     return True
@@ -119,6 +147,38 @@ def record_fallback() -> None:
         return
     assert _fallback_total is not None
     _fallback_total.inc()
+
+
+def record_rate_limit_rejection() -> None:
+    """Increment the rate-limit rejection counter."""
+    if not _ensure_metrics():
+        return
+    assert _rate_limit_rejections_total is not None
+    _rate_limit_rejections_total.inc()
+
+
+def record_auth_failure() -> None:
+    """Increment the auth failure counter."""
+    if not _ensure_metrics():
+        return
+    assert _auth_failures_total is not None
+    _auth_failures_total.inc()
+
+
+def record_cache_hit(cache_type: str = "model") -> None:
+    """Increment the cache hit counter."""
+    if not _ensure_metrics():
+        return
+    assert _cache_hits_total is not None
+    _cache_hits_total.labels(cache_type=cache_type).inc()
+
+
+def record_model_load_duration(duration: float) -> None:
+    """Record time to load a model."""
+    if not _ensure_metrics():
+        return
+    assert _model_load_duration is not None
+    _model_load_duration.observe(duration)
 
 
 def set_model_loaded(loaded: bool) -> None:

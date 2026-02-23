@@ -73,7 +73,7 @@ def _make_snapshot(
     n_running=st.integers(min_value=0, max_value=10),
     seed=st.integers(min_value=0, max_value=10000),
 )
-@settings(max_examples=20, suppress_health_check=[HealthCheck.too_slow], deadline=None)
+@settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow], deadline=None)
 def test_fifo_decisions_sorted_by_submit_ts(n_queued: int, n_running: int, seed: int) -> None:
     """FIFO_STRICT must only dispatch head-of-queue jobs (head-of-line blocking)."""
     snapshot = _make_snapshot(n_queued, n_running, capacity_cpus=64, seed=seed)
@@ -91,7 +91,7 @@ def test_fifo_decisions_sorted_by_submit_ts(n_queued: int, n_running: int, seed:
     n_running=st.integers(min_value=0, max_value=10),
     seed=st.integers(min_value=0, max_value=10000),
 )
-@settings(max_examples=20, suppress_health_check=[HealthCheck.too_slow], deadline=None)
+@settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow], deadline=None)
 def test_easy_backfill_never_exceeds_capacity(n_queued: int, n_running: int, seed: int) -> None:
     """EASY_BACKFILL must never dispatch more CPUs than free."""
     snapshot = _make_snapshot(n_queued, n_running, capacity_cpus=64, seed=seed)
@@ -103,10 +103,34 @@ def test_easy_backfill_never_exceeds_capacity(n_queued: int, n_running: int, see
 
 
 @given(
+    n_queued=st.integers(min_value=1, max_value=30),
+    n_running=st.integers(min_value=0, max_value=10),
+    seed=st.integers(min_value=0, max_value=10000),
+)
+@settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow], deadline=None)
+def test_cpu_conservation_law(n_queued: int, n_running: int, seed: int) -> None:
+    """Dispatched jobs' total CPUs must never exceed cluster capacity."""
+    snapshot = _make_snapshot(n_queued, n_running, capacity_cpus=64, seed=seed)
+
+    # Check FIFO
+    fifo_decision = choose_fifo_strict(snapshot)
+    running_cpus = sum(j.allocated_cpus for j in snapshot.running_jobs)
+    fifo_dispatched = sum(d.requested_cpus for d in fifo_decision.decisions)
+    assert running_cpus + fifo_dispatched <= snapshot.capacity_cpus, \
+        f"FIFO conservation violated: {running_cpus} running + {fifo_dispatched} dispatched > {snapshot.capacity_cpus}"
+
+    # Check EASY backfill
+    easy_decision = choose_easy_backfill(snapshot)
+    easy_dispatched = sum(d.requested_cpus for d in easy_decision.decisions)
+    assert running_cpus + easy_dispatched <= snapshot.capacity_cpus, \
+        f"EASY conservation violated: {running_cpus} running + {easy_dispatched} dispatched > {snapshot.capacity_cpus}"
+
+
+@given(
     n_queued=st.integers(min_value=1, max_value=20),
     seed=st.integers(min_value=0, max_value=10000),
 )
-@settings(max_examples=15, suppress_health_check=[HealthCheck.too_slow], deadline=None)
+@settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow], deadline=None)
 def test_state_hash_deterministic(n_queued: int, seed: int) -> None:
     """Same snapshot must produce identical state hashes."""
     snapshot = _make_snapshot(n_queued, 2, capacity_cpus=64, seed=seed)

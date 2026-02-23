@@ -28,7 +28,7 @@ def load_deprecation_config() -> list[dict[str, str]]:
             if _DEPRECATION_CONFIG_PATH.exists():
                 data = yaml.safe_load(_DEPRECATION_CONFIG_PATH.read_text(encoding="utf-8"))
                 _DEPRECATION_ENTRIES = data.get("deprecated_endpoints", []) or []
-        except Exception:
+        except (OSError, ValueError, yaml.YAMLError):
             logger.debug("Could not load deprecation config", exc_info=True)
         return _DEPRECATION_ENTRIES
 

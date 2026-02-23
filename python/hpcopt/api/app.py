@@ -17,15 +17,19 @@ from typing import Any, Literal, cast
 from fastapi import FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from hpcopt import __version__
-from hpcopt.api.auth import EXEMPT_PATHS, check_api_key_auth
+from hpcopt.api.auth import EXEMPT_PATHS, check_admin_auth, check_api_key_auth
 from hpcopt.api.deprecation import load_deprecation_config
 from hpcopt.api.model_cache import get_runtime_predictor
 from hpcopt.api.rate_limit import check_rate_limit
 from hpcopt.models.runtime_quantile import resolve_runtime_model_dir
+from hpcopt.utils.resilience import CircuitBreaker
+
+# Circuit breaker for model prediction I/O
+_prediction_circuit = CircuitBreaker(failure_threshold=5, reset_timeout=60.0)
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +62,46 @@ _WASTE_RATIO_LOW_RISK = 0.15
 _WASTE_RATIO_MEDIUM_RISK = 0.35
 
 
+# ---------- Startup validation ----------
+
+
+def _validate_startup_env() -> None:
+    """Validate environment variables at startup; log warnings for invalid values."""
+    rate_limit_raw = os.getenv("HPCOPT_RATE_LIMIT")
+    if rate_limit_raw is not None:
+        try:
+            val = int(rate_limit_raw)
+            if val <= 0:
+                logger.warning("HPCOPT_RATE_LIMIT=%s must be > 0; using default", rate_limit_raw)
+        except ValueError:
+            logger.warning("HPCOPT_RATE_LIMIT=%s is not a valid integer; using default", rate_limit_raw)
+
+    timeout_raw = os.getenv("HPCOPT_REQUEST_TIMEOUT_SEC")
+    if timeout_raw is not None:
+        try:
+            val = float(timeout_raw)
+            if val <= 0:
+                logger.warning("HPCOPT_REQUEST_TIMEOUT_SEC=%s must be > 0; using default", timeout_raw)
+        except ValueError:
+            logger.warning("HPCOPT_REQUEST_TIMEOUT_SEC=%s is not a valid number; using default", timeout_raw)
+
+    env = os.getenv("HPCOPT_ENV")
+    valid_envs = {"dev", "staging", "prod"}
+    if env is not None and env not in valid_envs:
+        logger.warning("HPCOPT_ENV=%s is not in %s; defaulting to 'dev'", env, valid_envs)
+
+    # Validate config files if available
+    fidelity_config = Path("configs/simulation/fidelity_gate.yaml")
+    if fidelity_config.exists():
+        try:
+            from hpcopt.utils.config_validation import validate_config
+            result = validate_config(fidelity_config, "fidelity_gate_config")
+            if not result.get("valid", True):
+                logger.warning("Fidelity gate config validation errors: %s", result.get("errors"))
+        except (ImportError, FileNotFoundError):
+            pass
+
+
 # ---------- Lifespan (graceful shutdown) ----------
 
 
@@ -84,6 +128,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception:
         logger.debug("OpenTelemetry instrumentation skipped", exc_info=True)
 
+    # Validate critical environment configuration at startup
+    _validate_startup_env()
+
     # Pre-warm runtime predictor cache
     from hpcopt.api.model_cache import warm_cache
     if warm_cache():
@@ -106,6 +153,26 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ---------- Request body size limit ----------
+
+_MAX_BODY_BYTES = 1 * 1024 * 1024  # 1 MB
+
+
+@app.middleware("http")
+async def body_size_limit_middleware(request: Request, call_next: Any) -> Response:
+    """Reject requests with Content-Length exceeding the configured limit."""
+    content_length = request.headers.get("content-length")
+    if content_length is not None:
+        try:
+            if int(content_length) > _MAX_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"error": {"code": "PAYLOAD_TOO_LARGE", "message": "Request body exceeds 1 MB limit"}},
+                )
+        except ValueError:
+            pass
+    return await call_next(request)
+
 
 # ---------- Middleware ----------
 
@@ -121,11 +188,19 @@ def _error_content(
     message: str,
     trace_id: str,
     details: dict[str, object] | list[object] | None = None,
+    status: int | None = None,
 ) -> dict[str, Any]:
-    error: dict[str, Any] = {"code": code, "message": message, "trace_id": trace_id}
+    """Build an RFC 7807 Problem Details response body."""
+    body: dict[str, Any] = {
+        "type": f"urn:hpcopt:error:{code.lower().replace('_', '-')}",
+        "title": code,
+        "status": status,
+        "detail": message,
+        "instance": trace_id,
+    }
     if details is not None:
-        error["details"] = details
-    return {"error": error}
+        body["errors"] = details
+    return body
 
 
 def _set_telemetry_headers(
@@ -154,7 +229,8 @@ async def request_validation_exception_handler(
             code="VALIDATION_ERROR",
             message="Request validation failed",
             trace_id=trace_id,
-            details={"errors": exc.errors()},
+            details=exc.errors(),
+            status=422,
         ),
     )
     _set_telemetry_headers(response, trace_id)
@@ -170,6 +246,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
             code="HTTP_ERROR",
             message=str(exc.detail),
             trace_id=trace_id,
+            status=exc.status_code,
         ),
     )
     _set_telemetry_headers(response, trace_id)
@@ -186,6 +263,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
             code="INTERNAL_ERROR",
             message="Internal server error",
             trace_id=trace_id,
+            status=500,
         ),
     )
     _set_telemetry_headers(response, trace_id)
@@ -209,6 +287,7 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
                 code="SERVICE_UNAVAILABLE",
                 message="Server is shutting down",
                 trace_id=trace_id,
+                status=503,
             ),
         )
         _set_telemetry_headers(error_response, trace_id)
@@ -219,12 +298,38 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
     provided_key = request.headers.get("X-API-Key", "")
     if not check_api_key_auth(path, provided_key):
         logger.warning("Auth failed for path=%s trace_id=%s", path, trace_id)
+        try:
+            from hpcopt.api.metrics import record_auth_failure
+            record_auth_failure()
+        except ImportError:
+            pass
         error_response = JSONResponse(
             status_code=401,
             content=_error_content(
                 code="UNAUTHORIZED",
                 message="Invalid or missing API key",
                 trace_id=trace_id,
+                status=401,
+            ),
+        )
+        _set_telemetry_headers(error_response, trace_id)
+        return error_response
+
+    # Admin RBAC: /v1/admin/* paths require admin-prefixed API key
+    if not check_admin_auth(path, provided_key):
+        logger.warning("Admin auth failed for path=%s trace_id=%s", path, trace_id)
+        try:
+            from hpcopt.api.metrics import record_auth_failure
+            record_auth_failure()
+        except ImportError:
+            pass
+        error_response = JSONResponse(
+            status_code=403,
+            content=_error_content(
+                code="FORBIDDEN",
+                message="Admin privileges required",
+                trace_id=trace_id,
+                status=403,
             ),
         )
         _set_telemetry_headers(error_response, trace_id)
@@ -235,12 +340,18 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
         api_key = request.headers.get("X-API-Key")
         allowed, retry_after = check_rate_limit(api_key, path)
         if not allowed:
+            try:
+                from hpcopt.api.metrics import record_rate_limit_rejection
+                record_rate_limit_rejection()
+            except ImportError:
+                pass
             error_response = JSONResponse(
                 status_code=429,
                 content=_error_content(
                     code="RATE_LIMITED",
                     message="Rate limit exceeded",
                     trace_id=trace_id,
+                    status=429,
                 ),
                 headers={"Retry-After": str(retry_after)},
             )
@@ -260,6 +371,7 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
                 code="GATEWAY_TIMEOUT",
                 message="Request timed out",
                 trace_id=trace_id,
+                status=504,
             ),
         )
     except Exception as exc:
@@ -270,6 +382,7 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
                 code="INTERNAL_ERROR",
                 message="Internal server error",
                 trace_id=trace_id,
+                status=500,
             ),
         )
     duration = time.time() - start_time
@@ -312,14 +425,16 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
 # ---------- Request/Response Models ----------
 
 class RuntimePredictRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     user_id: int | None = Field(default=None, description="User id when available")
-    requested_runtime_sec: int | None = Field(default=None, ge=1)
-    requested_cpus: int = Field(..., ge=1)
+    requested_runtime_sec: int | None = Field(default=None, ge=1, le=31_536_000)
+    requested_cpus: int = Field(..., ge=1, le=100_000)
     requested_mem: int | None = Field(default=None, ge=1)
     queue_id: int | None = Field(default=None)
     partition_id: int | None = Field(default=None)
     group_id: int | None = Field(default=None)
-    queue_depth_jobs: int | None = Field(default=None, ge=0)
+    queue_depth_jobs: int | None = Field(default=None, ge=0, le=1_000_000)
     runtime_guard_k: float = Field(default=0.5, ge=0.0, le=2.0)
 
 
@@ -333,9 +448,11 @@ class RuntimePredictResponse(BaseModel):
 
 
 class ResourceFitRequest(BaseModel):
-    requested_cpus: int = Field(..., ge=1)
-    candidate_node_cpus: list[int] = Field(..., min_length=1)
-    queue_depth_jobs: int | None = Field(default=None, ge=0)
+    model_config = ConfigDict(extra="forbid")
+
+    requested_cpus: int = Field(..., ge=1, le=100_000)
+    candidate_node_cpus: list[int] = Field(..., min_length=1, max_length=1000)
+    queue_depth_jobs: int | None = Field(default=None, ge=0, le=1_000_000)
 
 
 class ResourceFitResponse(BaseModel):
@@ -403,13 +520,27 @@ def health() -> dict[str, object]:
     }
 
 
-@app.get("/ready")
-def ready() -> dict[str, str]:
-    """Kubernetes readiness probe."""
-    model_dir = resolve_runtime_model_dir()
-    if model_dir is not None and model_dir.exists():
-        return {"status": "ok"}
-    return {"status": "ok"}  # Accept even without model (fallback available)
+@app.get("/ready", response_model=None)
+def ready() -> dict[str, str] | JSONResponse:
+    """Kubernetes readiness probe.
+
+    Returns 503 when the service is degraded (low disk, shutting down) while
+    still accepting requests when running in fallback mode (no model).
+    """
+    # Refuse if shutdown is in progress
+    if getattr(app.state, "shutdown_requested", False):
+        return JSONResponse(status_code=503, content={"status": "shutting_down"})
+
+    # Check disk health
+    try:
+        disk = shutil.disk_usage(".")
+        disk_free_gb = disk.free / (1024**3)
+        if disk_free_gb < _HEALTH_MIN_DISK_FREE_GB:
+            return JSONResponse(status_code=503, content={"status": "degraded", "reason": "disk_low"})
+    except OSError:
+        pass
+
+    return {"status": "ok"}
 
 
 @app.get("/v1/system/status")
@@ -462,7 +593,12 @@ def predict_runtime(
     request: Request,
     response: Response,
 ) -> RuntimePredictResponse:
-    predictor, model_dir = get_runtime_predictor()
+    # Use circuit breaker to fail fast if model I/O is repeatedly failing
+    try:
+        predictor, model_dir = get_runtime_predictor()
+    except _prediction_circuit.CircuitOpenError:
+        logger.warning("Prediction circuit open; using fallback. trace_id=%s", _request_trace_id(request))
+        predictor, model_dir = None, None
 
     if predictor is not None:
         features = {
@@ -474,7 +610,12 @@ def predict_runtime(
             "user_id": payload.user_id,
             "group_id": payload.group_id,
         }
-        quantiles = predictor.predict_one(features)
+        try:
+            quantiles = predictor.predict_one(features)
+            _prediction_circuit.record_success()
+        except Exception:
+            _prediction_circuit.record_failure()
+            raise
         runtime_p50 = int(max(1, round(quantiles["p50"])))
         runtime_p90 = int(max(runtime_p50, round(quantiles["p90"])))
         runtime_guard = int(runtime_p50 + payload.runtime_guard_k * (runtime_p90 - runtime_p50))
@@ -532,11 +673,13 @@ def predict_runtime(
 
 
 class LogLevelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     level: str = Field(..., description="Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL")
 
 
 @app.post("/v1/admin/log-level", response_model=None)
-def set_log_level(payload: LogLevelRequest) -> dict[str, str] | JSONResponse:
+def set_log_level(payload: LogLevelRequest, request: Request) -> dict[str, str] | JSONResponse:
     """Dynamically change the root log level at runtime."""
     level_name = payload.level.upper()
     numeric = getattr(logging, level_name, None)
@@ -545,8 +688,20 @@ def set_log_level(payload: LogLevelRequest) -> dict[str, str] | JSONResponse:
             status_code=400,
             content={"error": {"code": "INVALID_LEVEL", "message": f"Unknown level: {payload.level}"}},
         )
+    old_level = logging.getLevelName(logging.getLogger().level)
     logging.getLogger().setLevel(numeric)
     logger.info("Log level changed to %s", level_name)
+
+    try:
+        from hpcopt.utils.audit import audit_log
+        audit_log(
+            "admin.log_level_change",
+            actor=request.headers.get("X-API-Key", "unknown")[:8] + "...",
+            details={"old_level": old_level, "new_level": level_name},
+        )
+    except Exception:
+        pass
+
     return {"status": "ok", "level": level_name}
 
 
@@ -594,3 +749,52 @@ def predict_resource_fit(
         fallback_used=False,
     )
     return result
+
+
+@app.get("/v1/recommendations/{run_id}", response_model=None)
+def get_recommendation(run_id: str, request: Request, response: Response) -> dict[str, Any] | JSONResponse:
+    """Retrieve stored recommendation results for a given run ID."""
+    # Validate run_id to prevent path traversal
+    forbidden = {"\\", "/", "..", "*", "?", "[", "]"}
+    for ch in forbidden:
+        if ch in run_id:
+            return JSONResponse(
+                status_code=400,
+                content=_error_content(
+                    code="INVALID_RUN_ID",
+                    message=f"run_id contains forbidden character: {ch!r}",
+                    trace_id=_request_trace_id(request),
+                    status=400,
+                ),
+            )
+
+    artifacts_dir = Path(os.getenv("HPCOPT_ARTIFACTS_DIR", "outputs"))
+    recommendation_path = artifacts_dir / "recommendations" / f"{run_id}.json"
+
+    if not recommendation_path.exists():
+        return JSONResponse(
+            status_code=404,
+            content=_error_content(
+                code="NOT_FOUND",
+                message=f"No recommendation found for run_id: {run_id}",
+                trace_id=_request_trace_id(request),
+                status=404,
+            ),
+        )
+
+    try:
+        payload = json.loads(recommendation_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as exc:
+        logger.error("Failed to load recommendation %s: %s", run_id, exc)
+        return JSONResponse(
+            status_code=500,
+            content=_error_content(
+                code="INTERNAL_ERROR",
+                message="Failed to load recommendation",
+                trace_id=_request_trace_id(request),
+                status=500,
+            ),
+        )
+
+    _set_telemetry_headers(response, trace_id=_request_trace_id(request))
+    return cast(dict[str, Any], payload)

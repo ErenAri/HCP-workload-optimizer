@@ -1,5 +1,31 @@
 # Horizontal Scaling Guide
 
+## Kubernetes Resilience Features
+
+HPCOpt ships with three resilience-focused K8s manifests for production hardening:
+
+### PodDisruptionBudget (`k8s/pdb.yaml`)
+
+- Ensures at least 1 pod is always available during voluntary disruptions (node drain, cluster upgrades).
+- Protects against accidental eviction of all replicas.
+- Spec: `minAvailable: 1`.
+
+### NetworkPolicy (`k8s/network-policy.yaml`)
+
+- Restricts ingress to only authorized namespaces:
+  - `ingress-nginx` namespace (external traffic via ingress controller),
+  - `monitoring` namespace (Prometheus scraping).
+- Blocks pod-to-pod traffic from other namespaces.
+- Ingress on TCP port 8080.
+
+### Deployment Lifecycle (`k8s/deployment.yaml`)
+
+- **preStop hook**: `sleep 5s` before SIGTERM to allow in-flight connection draining.
+- **Readiness probe**: returns `503` when degraded (disk low, shutting down), removing the pod from Service endpoints.
+- **Graceful shutdown**: drains in-flight requests over the termination grace period.
+
+---
+
 ## Current Architecture
 
 HPCOpt runs as a **single-instance** API server by default. Key constraints:

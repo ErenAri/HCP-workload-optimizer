@@ -310,6 +310,21 @@ def train_runtime_quantile_models(
             "updated_at_utc": metrics["timestamp_utc"],
         },
     )
+
+    # Generate model card
+    try:
+        from hpcopt.models.model_card import generate_model_card
+        generate_model_card(
+            model_dir=model_dir,
+            dataset_path=dataset_path,
+            metrics=metrics,
+            metadata=metadata,
+            feature_columns=FEATURE_COLUMNS,
+            target_column=TARGET_COLUMN,
+        )
+    except (ImportError, OSError) as exc:
+        logger.warning("Could not generate model card: %s", exc)
+
     return RuntimeTrainResult(model_dir=model_dir, metrics_path=metrics_path, metadata_path=metadata_path)
 
 

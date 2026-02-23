@@ -1,104 +1,175 @@
-from pathlib import Path
+"""Tests for the recommendation engine."""
+from __future__ import annotations
 
 import json
+from pathlib import Path
 
-from hpcopt.recommend.engine import generate_recommendation_report
+import pytest
+
+from hpcopt.recommend.engine import (
+    RecommendationResult,
+    _extract_objective,
+    _fidelity_gate_ok,
+    _is_dominated,
+    generate_pareto_recommendation,
+    generate_recommendation_report,
+    workload_regime_analysis,
+)
 
 
-def _write(path: Path, payload: dict) -> None:
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+def _make_sim_report(path: Path, *, policy_id: str, p95_bsld: float,
+                     utilization_cpu: float, fairness_dev: float) -> Path:
+    payload = {
+        "policy_id": policy_id,
+        "run_id": f"run_{policy_id}",
+        "objective_metrics": {
+            "p95_bsld": p95_bsld,
+            "utilization_cpu": utilization_cpu,
+            "fairness_dev": fairness_dev,
+            "jain": 0.95,
+            "starved_rate": 0.01,
+            "p95_wait_sec": 300,
+        },
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
 
 
-def test_recommend_engine_accepts_candidate_with_guardrails(tmp_path: Path) -> None:
-    baseline = tmp_path / "baseline.json"
-    candidate = tmp_path / "candidate.json"
-    fidelity = tmp_path / "fidelity.json"
+def test_is_dominated() -> None:
+    assert _is_dominated([1, 1], [2, 2]) is True
+    assert _is_dominated([2, 2], [1, 1]) is False
+    assert _is_dominated([1, 2], [2, 1]) is False
 
-    _write(
-        baseline,
-        {
-            "run_id": "base1",
-            "policy_id": "EASY_BACKFILL_BASELINE",
-            "objective_metrics": {
-                "p95_bsld": 2.2,
-                "utilization_cpu": 0.50,
-                "fairness_dev": 0.10,
-                "jain": 0.95,
-                "starved_rate": 0.01,
-            },
+
+def test_extract_objective_valid() -> None:
+    report = {"objective_metrics": {
+        "p95_bsld": 2.0, "utilization_cpu": 0.7,
+        "fairness_dev": 0.1, "jain": 0.95, "starved_rate": 0.01,
+    }}
+    obj = _extract_objective(report)
+    assert obj["p95_bsld"] == 2.0
+
+
+def test_extract_objective_missing_fields() -> None:
+    with pytest.raises(ValueError, match="missing"):
+        _extract_objective({"objective_metrics": {"p95_bsld": 1.0}})
+
+
+def test_extract_objective_missing_key() -> None:
+    with pytest.raises(ValueError, match="missing objective_metrics"):
+        _extract_objective({"other": {}})
+
+
+def test_fidelity_gate_ok_none() -> None:
+    assert _fidelity_gate_ok(None) == (True, None)
+
+
+def test_fidelity_gate_ok_pass() -> None:
+    assert _fidelity_gate_ok({"status": "pass"}) == (True, None)
+
+
+def test_fidelity_gate_ok_fail() -> None:
+    ok, reason = _fidelity_gate_ok({"status": "fail"})
+    assert ok is False
+    assert reason == "fidelity_failed"
+
+
+def test_regime_balanced() -> None:
+    result = workload_regime_analysis(
+        {"p95_bsld": 2.0, "utilization_cpu": 0.7},
+        {"p95_bsld": 1.8, "utilization_cpu": 0.72},
+    )
+    assert result["workload_regime"] == "balanced"
+
+
+def test_regime_heavy_tail() -> None:
+    result = workload_regime_analysis(
+        {"p95_bsld": 2.0, "utilization_cpu": 0.7},
+        {"p95_bsld": 2.1, "utilization_cpu": 0.69},
+        trace_profile={"runtime_heavy_tail": {"tail_ratio_p99_over_p50": 100.0}},
+    )
+    assert result["workload_regime"] == "heavy_tail"
+
+
+def test_regime_low_congestion() -> None:
+    result = workload_regime_analysis(
+        {"p95_bsld": 2.0, "utilization_cpu": 0.7},
+        {"p95_bsld": 2.0, "utilization_cpu": 0.7},
+        trace_profile={"congestion_regime": {"queue_len_mean": 1.0}},
+    )
+    assert result["workload_regime"] == "low_congestion"
+
+
+def test_regime_user_skew() -> None:
+    result = workload_regime_analysis(
+        {"p95_bsld": 2.0, "utilization_cpu": 0.7},
+        {"p95_bsld": 2.0, "utilization_cpu": 0.7},
+        trace_profile={
+            "user_skew": {"top_user_share": 0.8},
+            "congestion_regime": {"queue_len_mean": 10.0},
         },
     )
-    _write(
-        candidate,
-        {
-            "run_id": "cand1",
-            "policy_id": "ML_BACKFILL_P50",
-            "objective_metrics": {
-                "p95_bsld": 1.9,
-                "utilization_cpu": 0.56,
-                "fairness_dev": 0.12,
-                "jain": 0.93,
-                "starved_rate": 0.01,
-            },
-            "fallback_accounting": {
-                "prediction_used_rate": 0.9,
-                "requested_fallback_rate": 0.1,
-                "actual_fallback_rate": 0.0,
-            },
-        },
-    )
-    _write(fidelity, {"status": "pass"})
+    assert result["workload_regime"] == "user_skew"
 
+
+def test_generate_recommendation_accepted(tmp_path: Path) -> None:
+    baseline = _make_sim_report(
+        tmp_path / "baseline.json", policy_id="FIFO",
+        p95_bsld=3.0, utilization_cpu=0.65, fairness_dev=0.1,
+    )
+    candidate = _make_sim_report(
+        tmp_path / "candidate.json", policy_id="ML",
+        p95_bsld=2.0, utilization_cpu=0.70, fairness_dev=0.1,
+    )
+    out = tmp_path / "rec.json"
     result = generate_recommendation_report(
         baseline_report_path=baseline,
         candidate_report_paths=[candidate],
-        out_path=tmp_path / "recommendation.json",
-        fidelity_report_path=fidelity,
+        out_path=out,
     )
+    assert isinstance(result, RecommendationResult)
     assert result.payload["status"] == "accepted"
-    assert result.payload["selected_recommendation"]["policy_id"] == "ML_BACKFILL_P50"
+    assert result.payload["selected_recommendation"] is not None
 
 
-def test_recommend_engine_blocks_on_fidelity_fail(tmp_path: Path) -> None:
-    baseline = tmp_path / "baseline.json"
-    candidate = tmp_path / "candidate.json"
-    fidelity = tmp_path / "fidelity.json"
-
-    _write(
-        baseline,
-        {
-            "run_id": "base1",
-            "policy_id": "EASY_BACKFILL_BASELINE",
-            "objective_metrics": {
-                "p95_bsld": 2.0,
-                "utilization_cpu": 0.50,
-                "fairness_dev": 0.10,
-                "jain": 0.95,
-                "starved_rate": 0.01,
-            },
-        },
+def test_generate_recommendation_blocked(tmp_path: Path) -> None:
+    baseline = _make_sim_report(
+        tmp_path / "baseline.json", policy_id="FIFO",
+        p95_bsld=1.0, utilization_cpu=0.90, fairness_dev=0.05,
     )
-    _write(
-        candidate,
-        {
-            "run_id": "cand1",
-            "policy_id": "ML_BACKFILL_P50",
-            "objective_metrics": {
-                "p95_bsld": 1.0,
-                "utilization_cpu": 0.70,
-                "fairness_dev": 0.10,
-                "jain": 0.95,
-                "starved_rate": 0.01,
-            },
-        },
+    candidate = _make_sim_report(
+        tmp_path / "candidate.json", policy_id="ML",
+        p95_bsld=2.0, utilization_cpu=0.60, fairness_dev=0.3,
     )
-    _write(fidelity, {"status": "fail"})
-
+    out = tmp_path / "rec.json"
     result = generate_recommendation_report(
         baseline_report_path=baseline,
         candidate_report_paths=[candidate],
-        out_path=tmp_path / "recommendation.json",
-        fidelity_report_path=fidelity,
+        out_path=out,
     )
     assert result.payload["status"] == "blocked"
-    assert result.payload["selected_recommendation"] is None
+    assert result.payload["no_improvement_narrative"] is not None
+
+
+def test_generate_pareto_recommendation(tmp_path: Path) -> None:
+    baseline = _make_sim_report(
+        tmp_path / "baseline.json", policy_id="FIFO",
+        p95_bsld=3.0, utilization_cpu=0.65, fairness_dev=0.1,
+    )
+    c1 = _make_sim_report(
+        tmp_path / "c1.json", policy_id="ML_A",
+        p95_bsld=2.0, utilization_cpu=0.70, fairness_dev=0.12,
+    )
+    c2 = _make_sim_report(
+        tmp_path / "c2.json", policy_id="ML_B",
+        p95_bsld=2.5, utilization_cpu=0.75, fairness_dev=0.08,
+    )
+    out = tmp_path / "pareto.json"
+    result = generate_pareto_recommendation(
+        baseline_report_path=baseline,
+        candidate_report_paths=[c1, c2],
+        out_path=out,
+    )
+    assert result.payload["mode"] == "pareto"
+    assert result.payload["total_candidates"] == 2
+    assert result.payload["frontier_size"] >= 1

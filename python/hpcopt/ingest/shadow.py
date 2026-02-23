@@ -195,7 +195,7 @@ class ShadowIngestionDaemon:
                     success=False,
                     error=f"Unsupported source_type: {source_type}",
                 )
-        except Exception as exc:
+        except (OSError, ValueError, pd.errors.ParserError) as exc:
             logger.error("Ingestion failed during poll: %s", exc)
             return PollResult(success=False, error=str(exc))
 
@@ -204,7 +204,7 @@ class ShadowIngestionDaemon:
         # ----------------------------------------------------------
         try:
             df = pd.read_parquet(result.dataset_path)
-        except Exception as exc:
+        except (OSError, ValueError) as exc:
             logger.error("Could not read ingested parquet: %s", exc)
             return PollResult(success=False, error=str(exc))
 
@@ -324,7 +324,7 @@ class ShadowIngestionDaemon:
                     )
                 else:
                     logger.warning("Poll failed: %s", result.error)
-            except Exception as exc:
+            except (OSError, ValueError) as exc:
                 logger.exception("Unexpected error during poll cycle: %s", exc)
 
             self._stop_event.wait(timeout=self._interval_sec)

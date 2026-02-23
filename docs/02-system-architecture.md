@@ -131,7 +131,7 @@ No other transition is permitted to mutate queue or resource state.
 
 Control plane:
 - `hpcopt` CLI (14 command groups across 6 modular files + assembler),
-- FastAPI endpoints with modular auth (`api/auth.py`), rate limiting (`api/rate_limit.py`), model cache with pre-warming (`api/model_cache.py`), deprecation headers (`api/deprecation.py`), request timeout, and observability,
+- FastAPI endpoints with request body size limit (1MB), modular auth (`api/auth.py` with admin RBAC for `/v1/admin/*` paths), rate limiting (`api/rate_limit.py`), model cache with pre-warming (`api/model_cache.py`), deprecation headers (`api/deprecation.py`), request timeout (configurable, default 30s), circuit breaker on prediction path (5-failure threshold, 60s reset), RFC 7807 Problem Details error responses, startup config validation, and observability,
 - model registry lifecycle,
 - credibility protocol orchestration,
 - manifest generation and artifact export.
@@ -191,5 +191,5 @@ The project enforces quality through a multi-job CI pipeline:
 - **Security**: dependency audit (pip-audit), secret scanning (gitleaks), SAST (bandit)
 - **Infrastructure**: Docker build, OpenAPI compatibility, production readiness checklist validation
 
-All schemas enforce `additionalProperties: false` at root level, validated by automated test.
+All schemas enforce `additionalProperties: false` at root level, validated by automated test. Pydantic request models enforce input bounds (`le=`, `max_length=`, `extra="forbid"`) on `RuntimePredictRequest`, `ResourceFitRequest`, and `LogLevelRequest`. Ingestion file size guards: 2GB max file size, 1M max line length, 50M row cap.
 

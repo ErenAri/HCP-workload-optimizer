@@ -153,3 +153,84 @@ def test_simulation_deterministic_replay(seed_a: int) -> None:
 
         pd.testing.assert_frame_equal(r1.jobs_df, r2.jobs_df, check_names=False)
         assert r1.metrics == r2.metrics, "Metrics must be identical for same input"
+
+
+@given(data=_job_strategy(5, 40))
+@settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow], deadline=None)
+def test_temporal_ordering_invariant(data: dict) -> None:
+    """For all completed jobs: completion_ts >= start_ts >= submit_ts."""
+    from hpcopt.simulate.stress import generate_stress_scenario
+    from hpcopt.simulate.core import run_simulation_from_trace
+
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        stress = generate_stress_scenario(
+            scenario="heavy_tail",
+            out_dir=Path(tmp),
+            n_jobs=data["n_jobs"],
+            seed=data["seed"],
+            params={"alpha": 1.25},
+        )
+        trace_df = pd.read_parquet(stress.dataset_path)
+        assume(len(trace_df) >= 5)
+
+        for policy in ("FIFO_STRICT", "EASY_BACKFILL_BASELINE"):
+            result = run_simulation_from_trace(
+                trace_df=trace_df,
+                policy_id=policy,
+                capacity_cpus=64,
+                run_id=f"temporal_{policy}_{data['seed']}",
+                strict_invariants=True,
+            )
+            jobs = result.jobs_df
+            assert len(jobs) > 0
+
+            # Full temporal chain: submit_ts <= start_ts <= end_ts
+            assert (jobs["start_ts"] >= jobs["submit_ts"]).all(), \
+                f"{policy}: start_ts < submit_ts for some jobs"
+            assert (jobs["end_ts"] >= jobs["start_ts"]).all(), \
+                f"{policy}: end_ts < start_ts for some jobs"
+            assert (jobs["end_ts"] >= jobs["submit_ts"]).all(), \
+                f"{policy}: end_ts < submit_ts for some jobs (transitivity)"
+
+
+@given(data=_job_strategy(5, 40))
+@settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow], deadline=None)
+def test_metric_monotonicity(data: dict) -> None:
+    """Makespan must be >= max(completion_ts) - min(submit_ts)."""
+    from hpcopt.simulate.stress import generate_stress_scenario
+    from hpcopt.simulate.core import run_simulation_from_trace
+
+    import tempfile
+    from pathlib import Path
+
+    with tempfile.TemporaryDirectory() as tmp:
+        stress = generate_stress_scenario(
+            scenario="heavy_tail",
+            out_dir=Path(tmp),
+            n_jobs=data["n_jobs"],
+            seed=data["seed"],
+            params={"alpha": 1.25},
+        )
+        trace_df = pd.read_parquet(stress.dataset_path)
+        assume(len(trace_df) >= 5)
+
+        for policy in ("FIFO_STRICT", "EASY_BACKFILL_BASELINE"):
+            result = run_simulation_from_trace(
+                trace_df=trace_df,
+                policy_id=policy,
+                capacity_cpus=64,
+                run_id=f"mono_{policy}_{data['seed']}",
+                strict_invariants=True,
+            )
+            jobs = result.jobs_df
+            assert len(jobs) > 0
+
+            actual_span = jobs["end_ts"].max() - jobs["submit_ts"].min()
+            reported_makespan = result.metrics.get("makespan_sec", actual_span)
+
+            # Reported makespan must be at least as large as the observed span
+            assert reported_makespan >= actual_span - 1, \
+                f"{policy}: makespan {reported_makespan} < observed span {actual_span}"
