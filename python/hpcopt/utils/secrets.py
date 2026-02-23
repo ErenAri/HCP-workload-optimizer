@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 from pathlib import Path
 
@@ -22,6 +23,7 @@ _DOCKER_SECRET_PATH = Path("/run/secrets/hpcopt_api_keys")
 _CACHE_TTL_SEC = float(os.getenv("HPCOPT_API_KEYS_CACHE_TTL", "30"))
 _cached_keys: set[str] = set()
 _cache_ts: float = 0.0
+_CACHE_LOCK = threading.Lock()
 
 
 def _read_keys_file(path: Path) -> set[str]:
@@ -57,15 +59,17 @@ def _load_api_keys_uncached() -> set[str]:
 def load_api_keys() -> set[str]:
     """Return the current set of valid API keys (cached with TTL)."""
     global _cached_keys, _cache_ts
-    now = time.monotonic()
-    if now - _cache_ts < _CACHE_TTL_SEC and _cached_keys:
+    with _CACHE_LOCK:
+        now = time.monotonic()
+        if now - _cache_ts < _CACHE_TTL_SEC and _cached_keys:
+            return _cached_keys
+        _cached_keys = _load_api_keys_uncached()
+        _cache_ts = now
         return _cached_keys
-    _cached_keys = _load_api_keys_uncached()
-    _cache_ts = now
-    return _cached_keys
 
 
 def invalidate_api_keys_cache() -> None:
     """Force the next ``load_api_keys`` call to re-read from source."""
     global _cache_ts
-    _cache_ts = 0.0
+    with _CACHE_LOCK:
+        _cache_ts = 0.0

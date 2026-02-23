@@ -7,6 +7,7 @@ file-based, Docker/K8s mount, and legacy env-var strategies with TTL caching.
 """
 from __future__ import annotations
 
+import hmac
 import logging
 
 from hpcopt.utils.secrets import load_api_keys
@@ -36,4 +37,4 @@ def check_api_key_auth(path: str, provided_key: str) -> bool:
     api_keys = load_api_keys()
     if not api_keys:
         return True
-    return provided_key in api_keys
+    return any(hmac.compare_digest(provided_key, k) for k in api_keys)

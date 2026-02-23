@@ -397,7 +397,7 @@ class RuntimeQuantilePredictor:
                 ts = pd.Timestamp.now(tz="UTC")
             row["submit_hour"] = int(ts.hour)
             row["submit_dow"] = int(ts.dayofweek)
-        frame = pd.DataFrame([row], columns=FEATURE_COLUMNS)
+        frame = pd.DataFrame({k: [v] for k, v in row.items()})
 
         p10 = float(max(MIN_PREDICTION_SEC, self.models["p10"].predict(frame)[0]))
         p50 = float(max(MIN_PREDICTION_SEC, self.models["p50"].predict(frame)[0]))
