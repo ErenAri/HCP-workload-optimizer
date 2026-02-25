@@ -1,8 +1,9 @@
 [package]
 name = "sim-runner"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
-license = "Proprietary"
+license = "Apache-2.0"
+description = "High-performance discrete-event HPC scheduling simulator"
 
 [dependencies]
 anyhow = "1.0"

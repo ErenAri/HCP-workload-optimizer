@@ -4,7 +4,7 @@
 [![Coverage](https://codecov.io/gh/ErenAri/HCP-workload-optimizer/branch/main/graph/badge.svg)](https://codecov.io/gh/ErenAri/HCP-workload-optimizer)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
-[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 Systems-first HPC scheduling research and engineering platform (Python + Rust) focused on reproducible policy evaluation under uncertainty.
 
