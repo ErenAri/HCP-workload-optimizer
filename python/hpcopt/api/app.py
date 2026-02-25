@@ -137,8 +137,8 @@ app.middleware("http")(body_size_limit_middleware)
 app.middleware("http")(request_middleware)
 
 # Register exception handlers
-app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
-app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, request_validation_exception_handler)  # type: ignore[arg-type]
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)  # type: ignore[arg-type]
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # Register route handlers

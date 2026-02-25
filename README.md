@@ -1,5 +1,11 @@
 # HPC Workload Optimizer
 
+[![CI](https://github.com/ErenAri/HCP-workload-optimizer/actions/workflows/ci.yaml/badge.svg)](https://github.com/ErenAri/HCP-workload-optimizer/actions/workflows/ci.yaml)
+[![Coverage](https://codecov.io/gh/ErenAri/HCP-workload-optimizer/branch/main/graph/badge.svg)](https://codecov.io/gh/ErenAri/HCP-workload-optimizer)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
+[![License: Proprietary](https://img.shields.io/badge/license-Proprietary-red.svg)](LICENSE)
+
 Systems-first HPC scheduling research and engineering platform (Python + Rust) focused on reproducible policy evaluation under uncertainty.
 
 ## Abstract
@@ -385,6 +391,16 @@ docker run -p 8080:8080 -e HPCOPT_API_KEYS=my-key hpcopt
 ```
 
 ## Quickstart (Minimal End-to-End)
+
+**Automated demo** (runs the full pipeline in one command):
+
+```bash
+python examples/quickstart.py
+```
+
+This ingests a real SWF trace, profiles it, builds features, trains quantile models, replays 3 scheduling policies, runs the fidelity gate, and generates a recommendation report. Outputs go to `outputs/quickstart/`.
+
+**Manual steps** (for fine-grained control):
 
 ### 1) Ingest a trace
 
