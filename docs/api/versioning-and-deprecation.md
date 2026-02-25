@@ -25,7 +25,7 @@
 Deprecation configuration is managed by `python/hpcopt/api/deprecation.py`:
 - Loads deprecated endpoint entries from `configs/api/deprecation.yaml` (cached after first load).
 - Provides `set_entries_for_testing()` and `reset_for_testing()` for test isolation.
-- The middleware in `api/app.py` adds `Deprecation`, `Sunset`, and `Link` headers for matching endpoints.
+- The middleware in `api/middleware.py` adds `Deprecation`, `Sunset`, and `Link` headers for matching endpoints.
 
 ## Enforcement
 

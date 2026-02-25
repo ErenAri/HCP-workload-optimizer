@@ -365,12 +365,17 @@ hpcopt serve api --host 0.0.0.0 --port 8080
 ```
 
 Implementation modules:
-- `python/hpcopt/api/app.py` -- FastAPI application, middleware orchestration, and endpoint handlers
+- `python/hpcopt/api/app.py` -- FastAPI application assembler, lifespan management, startup validation
+- `python/hpcopt/api/models.py` -- Pydantic request/response schemas (`extra="forbid"`)
+- `python/hpcopt/api/errors.py` -- RFC 7807 error helpers and exception handlers
+- `python/hpcopt/api/middleware.py` -- Body size limit, auth, rate limiting, timeout, deprecation headers
+- `python/hpcopt/api/endpoints.py` -- All route handlers (`register_routes()`)
 - `python/hpcopt/api/auth.py` -- API key authentication and `EXEMPT_PATHS` constant
 - `python/hpcopt/api/rate_limit.py` -- Token-bucket rate limiter (per-endpoint, keyed by API key)
 - `python/hpcopt/api/model_cache.py` -- Thread-safe runtime predictor cache with startup pre-warming
 - `python/hpcopt/api/deprecation.py` -- Deprecation config loading (RFC 8594/9745)
 - `python/hpcopt/api/metrics.py` -- Prometheus metrics integration
+- `python/hpcopt/api/tracing.py` -- OpenTelemetry distributed tracing
 - `python/hpcopt/utils/secrets.py` -- File-based API key loading
 
 ## 4. API Endpoints
@@ -485,7 +490,7 @@ Implementation: `python/hpcopt/api/auth.py` (`check_admin_auth()`, `ADMIN_KEY_PR
 
 All request bodies are limited to **1 MB**. Requests exceeding this limit receive `413 PAYLOAD_TOO_LARGE` with an RFC 7807 error response.
 
-Implementation: `api/app.py:body_size_limit_middleware()`, `_MAX_BODY_BYTES = 1 * 1024 * 1024`.
+Implementation: `api/middleware.py:body_size_limit_middleware()`, `_MAX_BODY_BYTES` (configurable via `max_body_bytes` in environment config).
 
 ## 5c. Input Validation Bounds
 
@@ -560,7 +565,7 @@ Status codes returned:
 | 504 | GATEWAY_TIMEOUT | Request exceeded timeout (default 30s) |
 | 500 | INTERNAL_ERROR | Unhandled exception |
 
-Implementation: `api/app.py:_error_content()`, exception handlers.
+Implementation: `api/errors.py:error_content()`, exception handlers in `api/errors.py`.
 
 ## 11. Circuit Breaker (Prediction Path)
 
@@ -571,7 +576,7 @@ The prediction path is protected by a circuit breaker that fails fast if model I
 - **When open**: returns deterministic heuristic fallback response (no model I/O attempted).
 - **Half-open**: allows one trial request to test recovery.
 
-Implementation: `api/app.py:_prediction_circuit`, `utils/resilience.py:CircuitBreaker`.
+Implementation: `api/endpoints.py:_prediction_circuit`, `utils/resilience.py:CircuitBreaker`.
 
 ## 12. Interface Stability Notes
 
