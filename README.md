@@ -32,6 +32,23 @@ Operational target:
 - avoid fairness/starvation regressions,
 - produce auditable artifacts for every claim.
 
+## Benchmark Results (Parallel Workloads Archive)
+
+All simulations executed with the **Rust sim-runner** (< 0.3s per run for 200K+ jobs).
+
+| Trace | Jobs | Policy | p95 BSLD | Utilization | Mean Wait |
+|---|---|---|---|---|---|
+| CTC-SP2 | 77,222 | FIFO | 195.73 | 55.5% | 6,183s |
+| CTC-SP2 | 77,222 | **EASY_BACKFILL** | **3.94** | 55.5% | 1,883s |
+| HPC2N | 202,870 | FIFO | 749.60 | 59.6% | 16,189s |
+| HPC2N | 202,870 | **EASY_BACKFILL** | **60.22** | 59.6% | 11,193s |
+| SDSC-SP2 | 54,044 | FIFO | 82,864.67 | 76.8% | 1,552,128s |
+| SDSC-SP2 | 54,044 | **EASY_BACKFILL** | **340.71** | 83.3% | 22,882s |
+
+**EASY_BACKFILL vs FIFO p95 BSLD improvement**: CTC-SP2 **+98.0%**, HPC2N **+92.0%**, SDSC-SP2 **+99.6%**
+
+Reproduce: `python scripts/benchmark_suite.py` (requires `cargo build --release` in `rust/`)
+
 ## Why This Project Is Different
 
 Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces a stronger standard:

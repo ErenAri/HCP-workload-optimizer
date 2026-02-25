@@ -22,6 +22,16 @@ from hpcopt.utils.io import ensure_dir, write_json
 
 logger = logging.getLogger(__name__)
 
+# Backend auto-detection
+try:
+    import lightgbm as lgb  # noqa: F401
+    _HAS_LIGHTGBM = True
+except ImportError:
+    _HAS_LIGHTGBM = False
+
+BACKENDS = ["sklearn", "lightgbm"]
+DEFAULT_BACKEND = "lightgbm" if _HAS_LIGHTGBM else "sklearn"
+
 # Time-based split ratios for train/valid/test partitioning
 TIME_SPLIT_TRAIN_RATIO = 0.7
 TIME_SPLIT_VALID_END_RATIO = 0.85
@@ -111,6 +121,7 @@ def _build_pipeline(
     alpha: float,
     seed: int,
     hyperparams: dict[str, Any] | None = None,
+    backend: str = "sklearn",
 ) -> Pipeline:
     preprocessor = ColumnTransformer(
         transformers=[
@@ -139,17 +150,43 @@ def _build_pipeline(
         ]
     )
     hp = hyperparams or {}
-    estimator = GradientBoostingRegressor(
-        loss="quantile",
-        alpha=alpha,
-        random_state=seed,
-        n_estimators=int(hp.get("n_estimators", 120)),
-        learning_rate=float(hp.get("learning_rate", 0.05)),
-        max_depth=int(hp.get("max_depth", 3)),
-        subsample=float(hp.get("subsample", 0.8)),
-        min_samples_leaf=int(hp.get("min_samples_leaf", 10)),
-        min_samples_split=int(hp.get("min_samples_split", 20)),
-    )
+
+    if backend == "lightgbm":
+        if not _HAS_LIGHTGBM:
+            raise ImportError(
+                "LightGBM backend requested but lightgbm is not installed. "
+                "Install with: pip install 'hpc-workload-optimizer[lightgbm]'"
+            )
+        device = str(hp.get("device", "cpu"))
+        estimator = lgb.LGBMRegressor(
+            objective="quantile",
+            alpha=alpha,
+            random_state=seed,
+            n_estimators=int(hp.get("n_estimators", 200)),
+            learning_rate=float(hp.get("learning_rate", 0.05)),
+            max_depth=int(hp.get("max_depth", 6)),
+            num_leaves=int(hp.get("num_leaves", 31)),
+            subsample=float(hp.get("subsample", 0.8)),
+            colsample_bytree=float(hp.get("colsample_bytree", 0.8)),
+            min_child_samples=int(hp.get("min_child_samples", 10)),
+            device=device,
+            verbose=-1,
+        )
+        logger.info("Using LightGBM backend (device=%s, alpha=%.2f)", device, alpha)
+    else:
+        estimator = GradientBoostingRegressor(
+            loss="quantile",
+            alpha=alpha,
+            random_state=seed,
+            n_estimators=int(hp.get("n_estimators", 120)),
+            learning_rate=float(hp.get("learning_rate", 0.05)),
+            max_depth=int(hp.get("max_depth", 3)),
+            subsample=float(hp.get("subsample", 0.8)),
+            min_samples_leaf=int(hp.get("min_samples_leaf", 10)),
+            min_samples_split=int(hp.get("min_samples_split", 20)),
+        )
+        logger.info("Using sklearn GBR backend (alpha=%.2f)", alpha)
+
     return Pipeline([("preprocess", preprocessor), ("regressor", estimator)])
 
 
@@ -180,6 +217,7 @@ def train_runtime_quantile_models(
     model_id: str,
     seed: int = 42,
     hyperparams: dict[str, Any] | None = None,
+    backend: str | None = None,
 ) -> RuntimeTrainResult:
     ensure_dir(out_dir)
     model_dir = out_dir / model_id
@@ -208,8 +246,11 @@ def train_runtime_quantile_models(
     trained_models: dict[str, Pipeline] = {}
     test_predictions: dict[str, np.ndarray] = {}
 
+    resolved_backend = backend or DEFAULT_BACKEND
+    logger.info("Training with backend=%s (available: lightgbm=%s)", resolved_backend, _HAS_LIGHTGBM)
+
     for quantile_name, quantile in QUANTILES.items():
-        pipeline = _build_pipeline(alpha=quantile, seed=seed, hyperparams=hyperparams)
+        pipeline = _build_pipeline(alpha=quantile, seed=seed, hyperparams=hyperparams, backend=resolved_backend)
         pipeline.fit(x_train, y_train)
         pred_test = pipeline.predict(x_test)
         pred_test = np.maximum(pred_test, MIN_PREDICTION_SEC)
@@ -286,6 +327,7 @@ def train_runtime_quantile_models(
 
     metadata = {
         "model_id": model_id,
+        "backend": resolved_backend,
         "model_type": "gradient_boosting_quantile",
         "target_column": TARGET_COLUMN,
         "feature_columns": FEATURE_COLUMNS,
