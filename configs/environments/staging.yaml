@@ -2,3 +2,8 @@ rate_limit_per_minute: 60
 log_level: INFO
 model_staleness_warn_days: 30
 health_min_disk_free_gb: 0.5
+request_timeout_sec: 30
+circuit_breaker_failure_threshold: 5
+circuit_breaker_reset_timeout_sec: 60
+max_body_bytes: 1048576
+readiness_require_model: false

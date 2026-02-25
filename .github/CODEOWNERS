@@ -1,0 +1,26 @@
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default: platform team owns everything
+* @platform-team
+
+# API layer
+python/hpcopt/api/ @platform-team
+
+# Simulation engine
+python/hpcopt/simulate/ @simulation-team
+
+# ML models
+python/hpcopt/models/ @ml-team
+
+# Infrastructure & deployment
+Dockerfile @platform-team
+docker-compose.yaml @platform-team
+k8s/ @platform-team
+.github/workflows/ @platform-team
+
+# Configuration & schemas
+configs/ @platform-team
+schemas/ @platform-team @simulation-team
+
+# Documentation
+docs/ @platform-team

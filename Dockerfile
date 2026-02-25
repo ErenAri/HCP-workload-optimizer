@@ -10,9 +10,9 @@ FROM python:3.12-slim@sha256:48006ff57afe15f247ad3da166e9487da0f66a94adbc92810b0
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt /tmp/requirements.txt
+COPY requirements.lock /tmp/requirements.lock
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r /tmp/requirements.txt
+    && pip install --no-cache-dir -r /tmp/requirements.lock
 
 # ---- Stage 2: runtime – lean image with only what we need -----------------
 FROM python:3.12-slim@sha256:48006ff57afe15f247ad3da166e9487da0f66a94adbc92810b0e189382d79246 AS runtime

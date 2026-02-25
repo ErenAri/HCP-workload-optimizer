@@ -127,7 +127,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   rust-check:
-    name: Rust check + clippy + build
+    name: Rust check + clippy + test + build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -141,6 +141,8 @@ jobs:
         run: cargo check --workspace
       - name: Clippy (deny warnings)
         run: cargo clippy --workspace -- -D warnings
+      - name: Run tests
+        run: cargo test --workspace
       - name: Build release
         run: cargo build --release
 
@@ -203,6 +205,54 @@ jobs:
         with:
           context: .
           push: false
+          load: true
           tags: hpc-workload-optimizer:ci-${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  docker-smoke:
+    name: Docker container smoke test
+    runs-on: ubuntu-latest
+    needs: [docker-build]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: hpc-workload-optimizer:smoke
+      - name: Run container
+        run: |
+          docker run -d --name hpcopt-smoke -p 8080:8080 hpc-workload-optimizer:smoke
+          sleep 10
+      - name: Verify /health
+        run: curl --fail --retry 5 --retry-delay 2 http://localhost:8080/health
+      - name: Verify /ready
+        run: curl --fail http://localhost:8080/ready
+      - name: Verify prediction endpoint
+        run: |
+          curl --fail -X POST http://localhost:8080/v1/runtime/predict \
+            -H 'Content-Type: application/json' \
+            -d '{"requested_cpus": 8, "requested_runtime_sec": 1200}'
+      - name: Cleanup
+        if: always()
+        run: docker rm -f hpcopt-smoke || true
+
+  validate-dashboards:
+    name: Validate Grafana dashboards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate dashboard JSON files
+        run: |
+          for f in configs/monitoring/dashboards/*.json; do
+            if [ -f "$f" ]; then
+              python -m json.tool "$f" > /dev/null || { echo "Invalid JSON: $f"; exit 1; }
+              echo "✓ $f"
+            fi
+          done
+          echo "Dashboard validation complete."

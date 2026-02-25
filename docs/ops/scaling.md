@@ -64,6 +64,33 @@ See [`k8s/hpa.yaml`](../../k8s/hpa.yaml) for the Horizontal Pod Autoscaler confi
 - **Scale-up trigger**: CPU > 70% sustained for 60s
 - **Scale-down**: Conservative (1 pod per 2 minutes, 5-minute stabilization)
 
+## Load Testing
+
+Current load tests (`tests/load/`) run **in-process** via FastAPI's `TestClient`,
+which exercises the handler logic but does _not_ test network I/O, container
+startup time, or reverse-proxy behavior. For production validation, run an
+external load test tool (e.g. `locust`, `k6`, `wrk`) against the Docker image:
+
+```bash
+# Build and run the container
+docker build -t hpcopt-api:load .
+docker run -d --name hpcopt-load -p 8080:8080 hpcopt-api:load
+
+# Example k6 command
+k6 run --vus 50 --duration 60s scripts/load/k6_prediction.js
+```
+
+## Rate Limit Persistence
+
+The token-bucket rate limiter is **in-memory only**:
+
+- State is lost on pod restart.
+- State is not shared across replicas (each pod enforces independently).
+- With N replicas, effective limit = N × configured limit.
+
+For workloads requiring strict global rate limiting, replace the in-memory
+limiter with a Redis-backed sliding window (see Future Path below).
+
 ## Future Path: Distributed Components
 
 | Component           | Current                | Target                          |

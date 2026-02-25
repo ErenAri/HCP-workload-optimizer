@@ -2,3 +2,8 @@ rate_limit_per_minute: 120
 log_level: DEBUG
 model_staleness_warn_days: 90
 health_min_disk_free_gb: 0.05
+request_timeout_sec: 60
+circuit_breaker_failure_threshold: 10
+circuit_breaker_reset_timeout_sec: 30
+max_body_bytes: 2097152
+readiness_require_model: false
