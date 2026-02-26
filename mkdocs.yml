@@ -1,0 +1,100 @@
+site_name: HPC Workload Optimizer
+site_description: Systems-first HPC scheduling research platform — Python + Rust
+site_url: https://erenari.github.io/HCP-workload-optimizer/
+repo_url: https://github.com/ErenAri/HCP-workload-optimizer
+repo_name: ErenAri/HCP-workload-optimizer
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: deep purple
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/server-network
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+    - search.suggest
+    - search.highlight
+    - toc.follow
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quickstart: tutorials/quickstart.md
+    - Installation: tutorials/installation.md
+  - Architecture:
+    - Project Charter: 01-project-charter.md
+    - System Architecture: 02-system-architecture.md
+    - Data Model & Ingestion: 03-data-model-and-ingestion.md
+    - Policy & Simulation: 04-policy-and-simulation-contract.md
+    - ML Runtime Modeling: 05-ml-runtime-modeling.md
+    - Fidelity & Recommendation: 06-fidelity-objective-and-recommendation.md
+    - Interfaces (CLI & API): 07-interfaces-cli-and-api.md
+    - Reproducibility: 08-reproducibility-and-artifacts.md
+    - Experiment Protocol: 09-experiment-protocol-mvp.md
+    - Roadmap: 10-roadmap-and-open-problems.md
+  - Tutorials:
+    - Rust Simulation Engine: tutorials/rust-sim-runner.md
+    - Benchmark Suite: tutorials/benchmark-suite.md
+    - LightGBM Training: tutorials/lightgbm-training.md
+    - RL Policy Search: tutorials/rl-policy-search.md
+    - Live Integration: tutorials/live-integration.md
+  - Operations:
+    - Deployment Guide: tutorials/deployment.md
+    - Production Readiness: production-readiness-checklist.md
+  - Benchmark Results: dashboard.md
+  - Paper Outline: paper_outline.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - tables
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+  - minify:
+      minify_html: true
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/ErenAri/HCP-workload-optimizer
+  generator: false

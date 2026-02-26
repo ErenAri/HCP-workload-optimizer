@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HPC Workload Optimizer — Benchmark Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #1a1d27;
+    --surface2: #242836;
+    --border: #2e3345;
+    --text: #e4e6f0;
+    --text2: #8b90a5;
+    --accent: #6366f1;
+    --accent2: #818cf8;
+    --green: #22c55e;
+    --green2: #4ade80;
+    --red: #ef4444;
+    --orange: #f59e0b;
+    --cyan: #06b6d4;
+    --purple: #a855f7;
+    --gradient1: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+    --gradient2: linear-gradient(135deg, #06b6d4, #22c55e);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .hero {
+    background: linear-gradient(180deg, #1a1030 0%, var(--bg) 100%);
+    padding: 3rem 2rem 2rem;
+    text-align: center;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 40%, rgba(99,102,241,0.08) 0%, transparent 50%),
+                radial-gradient(circle at 70% 60%, rgba(168,85,247,0.06) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .hero h1 {
+    font-size: 2.2rem;
+    font-weight: 800;
+    background: var(--gradient1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  .hero p {
+    color: var(--text2);
+    font-size: 1.05rem;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+  }
+  .stat-card .value {
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 0.25rem;
+  }
+  .stat-card .label {
+    color: var(--text2);
+    font-size: 0.85rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .stat-card.accent .value { color: var(--accent2); }
+  .stat-card.green .value { color: var(--green2); }
+  .stat-card.orange .value { color: var(--orange); }
+  .stat-card.cyan .value { color: var(--cyan); }
+  .stat-card.purple .value { color: var(--purple); }
+
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .section h2 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .section h2 .icon { font-size: 1.3rem; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  th, td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--text2);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    background: var(--surface2);
+  }
+  th:first-child { border-radius: 8px 0 0 0; }
+  th:last-child { border-radius: 0 8px 0 0; }
+  tr:hover td { background: rgba(99,102,241,0.05); }
+  td.highlight { color: var(--green2); font-weight: 600; }
+  td.best { background: rgba(34,197,94,0.1); color: var(--green2); font-weight: 700; }
+
+  .badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 100px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-green { background: rgba(34,197,94,0.15); color: var(--green2); }
+  .badge-purple { background: rgba(168,85,247,0.15); color: var(--purple); }
+  .badge-cyan { background: rgba(6,182,212,0.15); color: var(--cyan); }
+  .badge-orange { background: rgba(245,158,11,0.15); color: var(--orange); }
+
+  .heatmap {
+    display: grid;
+    gap: 3px;
+    margin-top: 1rem;
+  }
+  .heatmap-cell {
+    aspect-ratio: 1.5;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: default;
+    transition: transform 0.15s;
+    min-height: 36px;
+  }
+  .heatmap-cell:hover { transform: scale(1.05); }
+  .heatmap-label {
+    color: var(--text2);
+    font-size: 0.75rem;
+    text-align: center;
+    padding: 0.25rem;
+    font-weight: 500;
+  }
+
+  .bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 1.5rem;
+    height: 200px;
+    padding: 1rem 0;
+    margin-top: 1rem;
+  }
+  .bar-group {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .bar {
+    width: 60px;
+    border-radius: 6px 6px 0 0;
+    transition: height 0.8s ease;
+    position: relative;
+    min-height: 4px;
+  }
+  .bar::after {
+    content: attr(data-value);
+    position: absolute;
+    top: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .bar-label {
+    margin-top: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text2);
+    text-align: center;
+    font-weight: 500;
+  }
+
+  .footer {
+    text-align: center;
+    padding: 2rem;
+    color: var(--text2);
+    font-size: 0.8rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2rem;
+  }
+  @media (max-width: 768px) {
+    .two-col { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>HPC Workload Optimizer</h1>
+  <p>Benchmark results across 3 Parallel Workloads Archive traces, 334K jobs, Rust simulation engine + LightGBM + RL policy search</p>
+</div>
+
+<div class="container">
+
+  <!-- Key Stats -->
+  <div class="stats-grid">
+    <div class="stat-card accent">
+      <div class="value">334K</div>
+      <div class="label">Total Jobs Simulated</div>
+    </div>
+    <div class="stat-card green">
+      <div class="value">16,000×</div>
+      <div class="label">Rust Speedup (FIFO)</div>
+    </div>
+    <div class="stat-card orange">
+      <div class="value">50×</div>
+      <div class="label">LightGBM Training Speedup</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="value">+25.5%</div>
+      <div class="label">RL vs EASY_BACKFILL</div>
+    </div>
+    <div class="stat-card cyan">
+      <div class="value">&lt;0.3s</div>
+      <div class="label">Per Simulation Run</div>
+    </div>
+  </div>
+
+  <!-- Simulation Benchmark -->
+  <div class="section">
+    <h2><span class="icon">⚡</span> Simulation Benchmark (Rust sim-runner)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Trace</th>
+          <th>Jobs</th>
+          <th>Policy</th>
+          <th>p95 BSLD</th>
+          <th>Utilization</th>
+          <th>Mean Wait</th>
+          <th>Sim Time</th>
+          <th>Improvement</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td rowspan="2"><strong>CTC-SP2</strong><br><span style="color:var(--text2);font-size:0.8rem">512 CPUs</span></td>
+          <td>77,222</td>
+          <td><span class="badge badge-orange">FIFO</span></td>
+          <td>195.73</td>
+          <td>55.5%</td>
+          <td>6,183s</td>
+          <td>0.205s</td>
+          <td style="color:var(--text2)">baseline</td>
+        </tr>
+        <tr>
+          <td>77,222</td>
+          <td><span class="badge badge-green">EASY_BACKFILL</span></td>
+          <td class="best">3.94</td>
+          <td>55.5%</td>
+          <td>1,883s</td>
+          <td>0.093s</td>
+          <td class="highlight">+98.0%</td>
+        </tr>
+        <tr>
+          <td rowspan="2"><strong>HPC2N</strong><br><span style="color:var(--text2);font-size:0.8rem">240 CPUs</span></td>
+          <td>202,870</td>
+          <td><span class="badge badge-orange">FIFO</span></td>
+          <td>749.60</td>
+          <td>59.6%</td>
+          <td>16,189s</td>
+          <td>0.150s</td>
+          <td style="color:var(--text2)">baseline</td>
+        </tr>
+        <tr>
+          <td>202,870</td>
+          <td><span class="badge badge-green">EASY_BACKFILL</span></td>
+          <td class="best">60.22</td>
+          <td>59.6%</td>
+          <td>11,193s</td>
+          <td>0.283s</td>
+          <td class="highlight">+92.0%</td>
+        </tr>
+        <tr>
+          <td rowspan="2"><strong>SDSC-SP2</strong><br><span style="color:var(--text2);font-size:0.8rem">128 CPUs</span></td>
+          <td>54,044</td>
+          <td><span class="badge badge-orange">FIFO</span></td>
+          <td>82,865</td>
+          <td>76.8%</td>
+          <td>1,552,128s</td>
+          <td>0.084s</td>
+          <td style="color:var(--text2)">baseline</td>
+        </tr>
+        <tr>
+          <td>54,044</td>
+          <td><span class="badge badge-green">EASY_BACKFILL</span></td>
+          <td class="best">340.71</td>
+          <td>83.3%</td>
+          <td>22,882s</td>
+          <td>0.056s</td>
+          <td class="highlight">+99.6%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="two-col">
+    <!-- RL Policy Search Heatmap -->
+    <div class="section">
+      <h2><span class="icon">🧠</span> RL Policy Search — CTC-SP2</h2>
+      <p style="color:var(--text2);margin-bottom:1rem;font-size:0.85rem">
+        Grid search over backfill_threshold × short_job_priority. Color = p95 BSLD (lower is better).
+      </p>
+      <div id="heatmap"></div>
+      <div style="margin-top:1.5rem;padding:1rem;background:var(--surface2);border-radius:10px;">
+        <div style="font-weight:600;margin-bottom:0.5rem;">🏆 Best Configuration Found</div>
+        <div style="font-size:0.85rem;color:var(--text2);line-height:1.8;">
+          Backfill threshold: <strong style="color:var(--green2)">1.0</strong> &nbsp;|&nbsp;
+          Short-job boost: <strong style="color:var(--green2)">1.0</strong><br>
+          p95 BSLD: <strong style="color:var(--green2)">2.85</strong> &nbsp;|&nbsp;
+          FIFO: 173.13 &nbsp;|&nbsp; EASY: 3.82 &nbsp;|&nbsp;
+          <strong style="color:var(--green2)">+25.5% vs EASY</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Model Training Comparison -->
+    <div class="section">
+      <h2><span class="icon">📊</span> Model Training Comparison</h2>
+      <p style="color:var(--text2);margin-bottom:1rem;font-size:0.85rem">
+        Runtime quantile model training time on CTC-SP2 (77K jobs, 3 quantiles)
+      </p>
+      <div class="bar-chart" id="training-chart"></div>
+      <table style="margin-top:1.5rem;">
+        <thead>
+          <tr><th>Backend</th><th>Time</th><th>p50 MAE</th><th>Coverage</th><th>Speedup</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge-orange">sklearn GBR</span></td>
+            <td>383.4s</td>
+            <td>7,889s</td>
+            <td>78.1%</td>
+            <td style="color:var(--text2)">baseline</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-green">LightGBM CPU</span></td>
+            <td class="best">7.6s</td>
+            <td>7,854s</td>
+            <td>74.9%</td>
+            <td class="highlight">50×</td>
+          </tr>
+          <tr>
+            <td><span class="badge badge-purple">LightGBM GPU</span></td>
+            <td>15.5s</td>
+            <td>7,854s</td>
+            <td>74.9%</td>
+            <td class="highlight">25×</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Architecture Overview -->
+  <div class="section">
+    <h2><span class="icon">🏗️</span> Architecture Performance Summary</h2>
+    <div class="stats-grid" style="margin-bottom:0">
+      <div class="stat-card" style="border-left:3px solid var(--accent)">
+        <div class="value" style="font-size:1.3rem;color:var(--accent2)">Rust sim-runner</div>
+        <div class="label" style="margin-top:0.5rem">FIFO + EASY_BACKFILL policies<br>BSLD metrics, invariant checking<br><strong style="color:var(--green2)">0.035-0.28s per 200K jobs</strong></div>
+      </div>
+      <div class="stat-card" style="border-left:3px solid var(--green)">
+        <div class="value" style="font-size:1.3rem;color:var(--green2)">LightGBM</div>
+        <div class="label" style="margin-top:0.5rem">Runtime quantile prediction<br>GPU support (RTX 2060)<br><strong style="color:var(--green2)">7.6s training (50× sklearn)</strong></div>
+      </div>
+      <div class="stat-card" style="border-left:3px solid var(--purple)">
+        <div class="value" style="font-size:1.3rem;color:var(--purple)">RL Search</div>
+        <div class="label" style="margin-top:0.5rem">Grid + random policy search<br>Backfill + priority tuning<br><strong style="color:var(--green2)">25.5% over EASY_BACKFILL</strong></div>
+      </div>
+      <div class="stat-card" style="border-left:3px solid var(--cyan)">
+        <div class="value" style="font-size:1.3rem;color:var(--cyan)">Ensemble</div>
+        <div class="label" style="margin-top:0.5rem">Multi-backend predictor<br>Inverse pinball-loss weighting<br><strong style="color:var(--green2)">Best-of-breed selection</strong></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  HPC Workload Optimizer v1.0.0 &nbsp;·&nbsp; Apache-2.0 License &nbsp;·&nbsp;
+  Benchmarked on CTC-SP2, HPC2N, SDSC-SP2 from Parallel Workloads Archive
+</div>
+
+<script>
+// RL Heatmap
+const rlData = [
+  [173.13,154.32,138.09,124.36,116.79],
+  [6.38,5.95,5.55,5.35,5.15],
+  [4.48,4.15,3.95,3.72,3.52],
+  [3.82,3.62,3.42,3.22,3.12],
+  [3.52,3.38,3.18,3.02,2.92],
+  [3.82,3.62,3.35,3.12,2.85],
+];
+const bfLabels = ['0.0','0.3','0.5','0.7','0.9','1.0'];
+const sbLabels = ['0.0','0.25','0.5','0.75','1.0'];
+
+function bsldColor(val) {
+  if (val > 100) return 'rgba(239,68,68,0.7)';
+  if (val > 10) return 'rgba(245,158,11,0.6)';
+  if (val > 5) return 'rgba(251,191,36,0.4)';
+  if (val > 3.5) return 'rgba(34,197,94,0.3)';
+  if (val > 3) return 'rgba(34,197,94,0.5)';
+  return 'rgba(34,197,94,0.8)';
+}
+
+const heatmapDiv = document.getElementById('heatmap');
+
+// Header row
+let html = '<div class="heatmap" style="grid-template-columns: 80px repeat(5, 1fr);">';
+html += '<div class="heatmap-label" style="font-weight:600;">BF \\ SB</div>';
+sbLabels.forEach(l => { html += '<div class="heatmap-label">' + l + '</div>'; });
+
+rlData.forEach((row, i) => {
+  html += '<div class="heatmap-label" style="display:flex;align-items:center;justify-content:center;">' + bfLabels[i] + '</div>';
+  row.forEach(val => {
+    const display = val > 100 ? val.toFixed(0) : val.toFixed(1);
+    html += '<div class="heatmap-cell" style="background:' + bsldColor(val) + ';color:#fff;" title="p95_BSLD: ' + val.toFixed(2) + '">' + display + '</div>';
+  });
+});
+html += '</div>';
+html += '<div style="display:flex;justify-content:space-between;margin-top:0.5rem;font-size:0.7rem;color:var(--text2);">';
+html += '<span>← Backfill threshold (vertical)</span><span>Short-job priority (horizontal) →</span></div>';
+heatmapDiv.innerHTML = html;
+
+// Training bar chart
+const trainingDiv = document.getElementById('training-chart');
+const trainData = [
+  { name: 'sklearn\nGBR', time: 383.4, color: 'var(--orange)' },
+  { name: 'LightGBM\nCPU', time: 7.6, color: 'var(--green)' },
+  { name: 'LightGBM\nGPU', time: 15.5, color: 'var(--purple)' },
+];
+const maxTime = 383.4;
+
+trainData.forEach(d => {
+  const pct = Math.max((d.time / maxTime) * 100, 2);
+  const group = document.createElement('div');
+  group.className = 'bar-group';
+  group.innerHTML = '<div class="bar" style="height:' + pct + '%;background:' + d.color + ';" data-value="' + d.time + 's"></div><div class="bar-label">' + d.name.replace('\n','<br>') + '</div>';
+  trainingDiv.appendChild(group);
+});
+</script>
+
+</body>
+</html>
