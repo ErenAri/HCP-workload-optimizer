@@ -1,4 +1,5 @@
 """Negative / error-path tests for API, simulation, ingest, and model cache."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,10 +7,8 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
-
 from hpcopt.api.app import app
 from hpcopt.api.rate_limit import reset_for_testing as reset_rate_limit
-
 
 client = TestClient(app)
 
@@ -75,6 +74,7 @@ def test_empty_candidate_node_cpus() -> None:
 
 def test_swf_empty_file(tmp_path: Path) -> None:
     from hpcopt.ingest.swf import ingest_swf
+
     empty = tmp_path / "empty.swf"
     empty.write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="No parsable SWF"):
@@ -83,6 +83,7 @@ def test_swf_empty_file(tmp_path: Path) -> None:
 
 def test_slurm_empty_file(tmp_path: Path) -> None:
     from hpcopt.ingest.slurm import ingest_slurm
+
     empty = tmp_path / "empty.txt"
     empty.write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="No parsable Slurm"):
@@ -91,6 +92,7 @@ def test_slurm_empty_file(tmp_path: Path) -> None:
 
 def test_slurm_malformed_elapsed() -> None:
     from hpcopt.ingest.slurm import _parse_elapsed
+
     assert _parse_elapsed("") is None
     assert _parse_elapsed("Unknown") is None
     assert _parse_elapsed("not:a:time:at:all:really") is None
@@ -98,6 +100,7 @@ def test_slurm_malformed_elapsed() -> None:
 
 def test_slurm_overflow_timestamp() -> None:
     from hpcopt.ingest.slurm import _parse_slurm_datetime
+
     assert _parse_slurm_datetime("Unknown") is None
     assert _parse_slurm_datetime("None") is None
     assert _parse_slurm_datetime("not-a-date") is None
@@ -109,6 +112,7 @@ def test_slurm_overflow_timestamp() -> None:
 def test_model_cache_transient_io_error() -> None:
     """IOError during model load should fail gracefully."""
     from hpcopt.api.model_cache import get_runtime_predictor, reset_for_testing
+
     reset_for_testing()
 
     fake_dir = Path("/tmp/hpcopt_test_nonexistent_model_dir_abc123")
@@ -122,15 +126,17 @@ def test_model_cache_transient_io_error() -> None:
 
 
 def test_simulation_unsupported_policy() -> None:
-    from hpcopt.simulate.core import run_simulation_from_trace
     import pandas as pd
+    from hpcopt.simulate.core import run_simulation_from_trace
 
-    df = pd.DataFrame({
-        "job_id": [1, 2],
-        "submit_ts": [100, 200],
-        "runtime_actual_sec": [60, 120],
-        "requested_cpus": [4, 8],
-    })
+    df = pd.DataFrame(
+        {
+            "job_id": [1, 2],
+            "submit_ts": [100, 200],
+            "runtime_actual_sec": [60, 120],
+            "requested_cpus": [4, 8],
+        }
+    )
     with pytest.raises((ValueError, KeyError)):
         run_simulation_from_trace(
             trace_df=df,

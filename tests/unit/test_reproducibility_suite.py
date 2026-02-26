@@ -2,15 +2,13 @@ import json
 from pathlib import Path
 
 import pandas as pd
-from pandas.testing import assert_frame_equal
-
-from hpcopt.artifacts.manifest import build_manifest, write_manifest
+from hpcopt.artifacts.manifest import build_manifest
 from hpcopt.features.pipeline import build_feature_dataset
 from hpcopt.ingest.swf import ingest_swf
-from hpcopt.profile.trace_profile import build_trace_profile
 from hpcopt.simulate.core import run_simulation_from_trace
 from hpcopt.simulate.fidelity import run_baseline_fidelity_gate
 from hpcopt.simulate.stress import generate_stress_scenario
+from pandas.testing import assert_frame_equal
 
 
 class _DeterministicPredictor:
@@ -166,4 +164,3 @@ def test_manifest_includes_enhanced_fields(tmp_path: Path) -> None:
     assert "system" in manifest["os_fingerprint"]
     assert "model_hash" in manifest
     assert "git_commit" in manifest
-

@@ -1,6 +1,5 @@
-from pathlib import Path
-
 import json
+from pathlib import Path
 
 from hpcopt.models.runtime_quantile import RuntimeQuantilePredictor, train_runtime_quantile_models
 from hpcopt.simulate.stress import generate_stress_scenario

@@ -3,6 +3,7 @@
 Reads from ``configs/environments/{env}.yaml`` based on the ``HPCOPT_ENV``
 environment variable (default: ``dev``).
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,6 +44,7 @@ def load_env_config() -> dict[str, Any]:
 
     try:
         import yaml
+
         with config_path.open("r", encoding="utf-8") as fh:
             file_config = yaml.safe_load(fh) or {}
         if isinstance(file_config, dict):

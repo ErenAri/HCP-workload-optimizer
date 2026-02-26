@@ -29,7 +29,11 @@ def train_runtime_cmd(
     if hyperparams_config is not None and hyperparams_config.exists():
         hp = yaml.safe_load(hyperparams_config.read_text(encoding="utf-8"))
     result = train_runtime_quantile_models(
-        dataset_path=dataset, out_dir=out, model_id=resolved_model_id, seed=seed, hyperparams=hp,
+        dataset_path=dataset,
+        out_dir=out,
+        model_id=resolved_model_id,
+        seed=seed,
+        hyperparams=hp,
     )
     manifest = build_manifest(
         command="hpcopt train runtime",
@@ -54,11 +58,16 @@ def train_tune_cmd(
     n_folds: int = typer.Option(3, min=1, help="Chronological CV folds"),
 ) -> None:
     from hpcopt.models.tuning import build_tuning_report
+
     ensure_dir(out)
     report_path = out / f"tuning_q{quantile:.2f}_report.json"
     result = build_tuning_report(
-        dataset_path=dataset, out_path=report_path,
-        quantile=quantile, seed=seed, n_trials=n_trials, n_folds=n_folds,
+        dataset_path=dataset,
+        out_path=report_path,
+        quantile=quantile,
+        seed=seed,
+        n_trials=n_trials,
+        n_folds=n_folds,
     )
     typer.echo(f"Best params: {result.best_params.to_dict()}")
     typer.echo(f"Best score: {result.best_score:.6f}")
@@ -73,6 +82,7 @@ def train_resource_fit_cmd(
     seed: int = typer.Option(42, help="Training seed"),
 ) -> None:
     from hpcopt.models.resource_fit import train_resource_fit_model
+
     resolved_id = model_id or f"resource_fit_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
     result = train_resource_fit_model(dataset_path=dataset, out_dir=out, model_id=resolved_id, seed=seed)
     typer.echo(f"Model dir: {result.model_dir}")

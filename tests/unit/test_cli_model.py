@@ -1,11 +1,11 @@
 """CLI tests for model management commands."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-from typer.testing import CliRunner
-
 from hpcopt.cli.main import app
+from typer.testing import CliRunner
 
 
 def test_model_list_empty(tmp_path: Path, monkeypatch) -> None:
@@ -21,11 +21,16 @@ def test_stress_gen_cli(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "stress", "gen",
-            "--scenario", "heavy_tail",
-            "--out", str(tmp_path),
-            "--n-jobs", "200",
-            "--seed", "7",
+            "stress",
+            "gen",
+            "--scenario",
+            "heavy_tail",
+            "--out",
+            str(tmp_path),
+            "--n-jobs",
+            "200",
+            "--seed",
+            "7",
         ],
     )
     assert result.exit_code == 0, result.output

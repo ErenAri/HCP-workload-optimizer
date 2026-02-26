@@ -2,7 +2,6 @@ import json
 from pathlib import Path
 
 import pandas as pd
-
 from hpcopt.simulate.batsim import (
     build_batsim_run_config,
     invoke_batsim_run,
@@ -87,7 +86,7 @@ def test_build_batsim_run_config_with_provided_inputs(tmp_path: Path) -> None:
     workload = tmp_path / "workload.json"
     write_json(workload, {"jobs": [], "profiles": {}, "nb_res": 8})
     platform = tmp_path / "platform.xml"
-    platform.write_text("<platform version=\"4.1\"></platform>\n", encoding="utf-8")
+    platform.write_text('<platform version="4.1"></platform>\n', encoding="utf-8")
 
     result = build_batsim_run_config(
         run_id="provided_case",

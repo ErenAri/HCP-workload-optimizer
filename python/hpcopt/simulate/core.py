@@ -94,19 +94,11 @@ def _build_prediction_features(job: dict[str, Any]) -> dict[str, Any]:
         "submit_ts": int(job["submit_ts"]),
         "requested_cpus": int(job["requested_cpus"]),
         "runtime_requested_sec": (
-            int(job["runtime_requested_sec"])
-            if pd.notna(job.get("runtime_requested_sec"))
-            else None
+            int(job["runtime_requested_sec"]) if pd.notna(job.get("runtime_requested_sec")) else None
         ),
-        "requested_mem": (
-            int(job["requested_mem"])
-            if pd.notna(job.get("requested_mem"))
-            else None
-        ),
+        "requested_mem": (int(job["requested_mem"]) if pd.notna(job.get("requested_mem")) else None),
         "queue_id": int(job["queue_id"]) if pd.notna(job.get("queue_id")) else None,
-        "partition_id": (
-            int(job["partition_id"]) if pd.notna(job.get("partition_id")) else None
-        ),
+        "partition_id": (int(job["partition_id"]) if pd.notna(job.get("partition_id")) else None),
         "user_id": int(job["user_id"]) if pd.notna(job.get("user_id")) else None,
         "group_id": int(job["group_id"]) if pd.notna(job.get("group_id")) else None,
     }
@@ -212,7 +204,10 @@ def _check_invariants(
 
 
 def _invariant_report(
-    run_id: str, strict_mode: bool, step_count: int, violations: list[dict[str, Any]],
+    run_id: str,
+    strict_mode: bool,
+    step_count: int,
+    violations: list[dict[str, Any]],
 ) -> dict[str, Any]:
     return {
         "run_id": run_id,
@@ -266,11 +261,7 @@ def run_simulation_from_trace(
 
     while len(completed) < total_jobs:
         next_submit_ts = int(jobs[submit_idx]["submit_ts"]) if submit_idx < total_jobs else 10**18
-        next_complete_ts = (
-            min(int(job["end_ts"]) for job in running)
-            if running
-            else 10**18
-        )
+        next_complete_ts = min(int(job["end_ts"]) for job in running) if running else 10**18
         next_ts = min(next_submit_ts, next_complete_ts)
         if next_ts >= 10**18:
             raise RuntimeError("Simulation deadlock: no next event; check resource sizing/policy.")
@@ -324,11 +315,7 @@ def run_simulation_from_trace(
         )
         for dispatch in decision.decisions:
             idx = next(
-                (
-                    i
-                    for i, job in enumerate(queue)
-                    if int(job["job_id"]) == int(dispatch.job_id)
-                ),
+                (i for i, job in enumerate(queue) if int(job["job_id"]) == int(dispatch.job_id)),
                 None,
             )
             if idx is None:
@@ -437,9 +424,7 @@ def run_simulation_from_trace(
     fallback_accounting = {
         **fallback_counts,
         "prediction_used_rate": float(fallback_counts["prediction_used_count"] / denominator),
-        "requested_fallback_rate": float(
-            fallback_counts["requested_fallback_count"] / denominator
-        ),
+        "requested_fallback_rate": float(fallback_counts["requested_fallback_count"] / denominator),
         "actual_fallback_rate": float(fallback_counts["actual_fallback_count"] / denominator),
         "total_scheduled_jobs": total_scheduled,
         "runtime_guard_k": float(runtime_guard_k),

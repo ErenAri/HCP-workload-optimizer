@@ -6,13 +6,12 @@ Tests invariants:
 - Empty dataframe returns safe defaults
 - Constraint evaluation is deterministic
 """
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
-
-from hypothesis import given, settings, HealthCheck
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 
@@ -28,14 +27,16 @@ def _make_jobs_df(
     runtime = rng.integers(60, 7200, size=n_jobs)
     start_ts = submit_ts + wait
     end_ts = start_ts + runtime
-    return pd.DataFrame({
-        "job_id": range(1, n_jobs + 1),
-        "submit_ts": submit_ts,
-        "start_ts": start_ts,
-        "end_ts": end_ts,
-        "requested_cpus": rng.choice([1, 2, 4, 8, 16], size=n_jobs),
-        "user_id": rng.integers(1, n_users + 1, size=n_jobs),
-    })
+    return pd.DataFrame(
+        {
+            "job_id": range(1, n_jobs + 1),
+            "submit_ts": submit_ts,
+            "start_ts": start_ts,
+            "end_ts": end_ts,
+            "requested_cpus": rng.choice([1, 2, 4, 8, 16], size=n_jobs),
+            "user_id": rng.integers(1, n_users + 1, size=n_jobs),
+        }
+    )
 
 
 @given(
@@ -103,8 +104,7 @@ def test_utilization_between_zero_and_one(n_jobs: int, seed: int) -> None:
 
     jobs_df = _make_jobs_df(n_jobs, seed)
     metrics = compute_job_metrics(jobs_df, capacity_cpus=64)
-    assert 0.0 <= metrics["utilization_cpu"] <= 1.0, \
-        f"Utilization out of bounds: {metrics['utilization_cpu']}"
+    assert 0.0 <= metrics["utilization_cpu"] <= 1.0, f"Utilization out of bounds: {metrics['utilization_cpu']}"
     assert metrics["job_count"] == n_jobs
     assert metrics["p95_bsld"] >= 0.0
 

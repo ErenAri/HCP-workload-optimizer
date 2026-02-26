@@ -4,7 +4,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from hpcopt.simulate.adapter import (
     SchedulerDecision,
     choose_easy_backfill,

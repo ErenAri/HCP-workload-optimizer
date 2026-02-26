@@ -5,6 +5,7 @@ and provides a single function to check whether a request is authorised.
 Keys are loaded via ``hpcopt.utils.secrets.load_api_keys`` which supports
 file-based, Docker/K8s mount, and legacy env-var strategies with TTL caching.
 """
+
 from __future__ import annotations
 
 import hmac
@@ -14,14 +15,16 @@ from hpcopt.utils.secrets import load_api_keys
 
 logger = logging.getLogger(__name__)
 
-EXEMPT_PATHS: frozenset[str] = frozenset({
-    "/health",
-    "/ready",
-    "/metrics",
-    "/docs",
-    "/openapi.json",
-    "/v1/system/status",
-})
+EXEMPT_PATHS: frozenset[str] = frozenset(
+    {
+        "/health",
+        "/ready",
+        "/metrics",
+        "/docs",
+        "/openapi.json",
+        "/v1/system/status",
+    }
+)
 
 
 ADMIN_KEY_PREFIX = "admin-"

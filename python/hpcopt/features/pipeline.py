@@ -185,10 +185,7 @@ def build_chronological_splits(
         if train["row_count"] == 0 or val["row_count"] == 0 or test["row_count"] == 0:
             continue
 
-        chronology_ok = (
-            train["submit_ts_max"] <= val["submit_ts_min"]
-            and val["submit_ts_max"] <= test["submit_ts_min"]
-        )
+        chronology_ok = train["submit_ts_max"] <= val["submit_ts_min"] and val["submit_ts_max"] <= test["submit_ts_min"]
         folds.append(
             {
                 "fold_id": int(fold_idx + 1),
@@ -246,24 +243,16 @@ def build_feature_dataset(
     # User lookback features.
     df["user_key"] = pd.to_numeric(df["user_id"], errors="coerce").fillna(-1).astype(int)
     group_runtime = df.groupby("user_key", sort=False)["runtime_actual_sec"]
-    df["user_runtime_median_lookback"] = group_runtime.transform(
-        lambda s: s.shift(1).expanding().median()
-    )
-    df["user_runtime_var_lookback"] = group_runtime.transform(
-        lambda s: s.shift(1).expanding().var(ddof=0)
-    )
+    df["user_runtime_median_lookback"] = group_runtime.transform(lambda s: s.shift(1).expanding().median())
+    df["user_runtime_var_lookback"] = group_runtime.transform(lambda s: s.shift(1).expanding().var(ddof=0))
     df["user_job_count_lookback"] = df.groupby("user_key", sort=False).cumcount().astype("int64")
     df["user_submit_gap_sec_lookback"] = (
         df.groupby("user_key", sort=False)["submit_ts"].diff().fillna(0).clip(lower=0).astype("int64")
     )
 
-    overrequest_ratio = (
-        df["runtime_requested_sec"] / df["runtime_actual_sec"].replace(0.0, np.nan)
-    )
+    overrequest_ratio = df["runtime_requested_sec"] / df["runtime_actual_sec"].replace(0.0, np.nan)
     group_or = overrequest_ratio.groupby(df["user_key"], sort=False)
-    df["user_overrequest_mean_lookback"] = group_or.transform(
-        lambda s: s.shift(1).expanding().mean()
-    )
+    df["user_overrequest_mean_lookback"] = group_or.transform(lambda s: s.shift(1).expanding().mean())
 
     global_runtime_median = float(df["runtime_actual_sec"].median()) if not df.empty else 0.0
     global_runtime_var = float(df["runtime_actual_sec"].var(ddof=0)) if len(df) > 1 else 0.0
@@ -345,10 +334,7 @@ def build_feature_dataset(
             "feature_dataset_path": str(feature_dataset_path),
             "row_count": int(len(features_df)),
             "column_count": int(len(features_df.columns)),
-            "null_rates": {
-                col: float(features_df[col].isna().mean())
-                for col in features_df.columns
-            },
+            "null_rates": {col: float(features_df[col].isna().mean()) for col in features_df.columns},
             "lookback_features": [
                 "user_runtime_median_lookback",
                 "user_runtime_var_lookback",

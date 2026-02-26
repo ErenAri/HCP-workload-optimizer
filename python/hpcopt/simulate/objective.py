@@ -35,9 +35,7 @@ def compute_fairness_starvation_metrics(
     users = pd.to_numeric(user_series, errors="coerce").fillna(-1).astype(int)
 
     cpu_sec = requested * runtime
-    user_cpu = pd.DataFrame({"user_id": users, "cpu_sec": cpu_sec}).groupby("user_id", as_index=False)[
-        "cpu_sec"
-    ].sum()
+    user_cpu = pd.DataFrame({"user_id": users, "cpu_sec": cpu_sec}).groupby("user_id", as_index=False)["cpu_sec"].sum()
     total_cpu = float(user_cpu["cpu_sec"].sum())
     if total_cpu <= 0:
         fairness_dev = 0.0
@@ -48,7 +46,7 @@ def compute_fairness_starvation_metrics(
         active_users = float(len(shares))
         target = 1.0 / len(shares) if len(shares) else 0.0
         fairness_dev = float(0.5 * np.sum(np.abs(shares - target))) if len(shares) else 0.0
-        denom = float(len(shares) * np.sum(shares ** 2))
+        denom = float(len(shares) * np.sum(shares**2))
         jain = float((np.sum(shares) ** 2) / denom) if denom > 0 else 1.0
 
     return {
@@ -109,8 +107,7 @@ def compute_weighted_analysis_score(
     delta_p95_bsld = float(baseline["p95_bsld"] - candidate["p95_bsld"])
     delta_utilization = float(candidate["utilization_cpu"] - baseline["utilization_cpu"])
     fairness_penalty = float(
-        max(0.0, candidate["fairness_dev"] - baseline["fairness_dev"])
-        + max(0.0, baseline["jain"] - candidate["jain"])
+        max(0.0, candidate["fairness_dev"] - baseline["fairness_dev"]) + max(0.0, baseline["jain"] - candidate["jain"])
     )
     score = float((w1 * delta_p95_bsld) + (w2 * delta_utilization) - (w3 * fairness_penalty))
     return {

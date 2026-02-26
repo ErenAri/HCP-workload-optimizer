@@ -18,9 +18,7 @@ from typing import Any
 # Correlation-ID management (thread-safe via contextvars)
 # ---------------------------------------------------------------------------
 
-_correlation_id_var: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "correlation_id", default=""
-)
+_correlation_id_var: contextvars.ContextVar[str] = contextvars.ContextVar("correlation_id", default="")
 
 
 def set_correlation_id(cid: str) -> None:
@@ -120,11 +118,7 @@ class StructuredFormatter(logging.Formatter):
         }
 
         # Collect extra fields supplied by the caller.
-        extra = {
-            k: v
-            for k, v in record.__dict__.items()
-            if k not in self._BUILTIN_ATTRS and not k.startswith("_")
-        }
+        extra = {k: v for k, v in record.__dict__.items() if k not in self._BUILTIN_ATTRS and not k.startswith("_")}
         if extra:
             payload["extra"] = extra
 
@@ -138,19 +132,14 @@ class StructuredFormatter(logging.Formatter):
 
     @staticmethod
     def _iso_timestamp(record: logging.LogRecord) -> str:
-        return time.strftime(
-            "%Y-%m-%dT%H:%M:%S", time.gmtime(record.created)
-        ) + f".{int(record.msecs):03d}Z"
+        return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(record.created)) + f".{int(record.msecs):03d}Z"
 
 
 # ---------------------------------------------------------------------------
 # Setup helper
 # ---------------------------------------------------------------------------
 
-_STANDARD_FORMAT = (
-    "%(asctime)s [%(levelname)-8s] %(name)s "
-    "(%(correlation_id)s) %(message)s"
-)
+_STANDARD_FORMAT = "%(asctime)s [%(levelname)-8s] %(name)s (%(correlation_id)s) %(message)s"
 
 
 def setup_logging(

@@ -38,9 +38,7 @@ def _validate_run_id(run_id: str) -> None:
     forbidden = {"\\", "/", "..", "*", "?", "[", "]"}
     for ch in forbidden:
         if ch in run_id:
-            raise ValueError(
-                f"run_id contains forbidden character or sequence {ch!r}: {run_id!r}"
-            )
+            raise ValueError(f"run_id contains forbidden character or sequence {ch!r}: {run_id!r}")
 
 
 def export_run_report(

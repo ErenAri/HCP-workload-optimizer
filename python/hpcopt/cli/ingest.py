@@ -71,6 +71,7 @@ def ingest_slurm_cmd(
     report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
 ) -> None:
     from hpcopt.ingest.slurm import ingest_slurm
+
     ds_id = dataset_id or input.stem
     result = ingest_slurm(input_path=input, out_dir=out, dataset_id=ds_id, report_dir=report_out)
     typer.echo(f"Dataset: {result.dataset_path}")
@@ -85,6 +86,7 @@ def ingest_pbs_cmd(
     report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
 ) -> None:
     from hpcopt.ingest.pbs import ingest_pbs
+
     ds_id = dataset_id or input.stem
     result = ingest_pbs(input_path=input, out_dir=out, dataset_id=ds_id, report_dir=report_out)
     typer.echo(f"Dataset: {result.dataset_path}")
@@ -100,6 +102,7 @@ def ingest_shadow_start_cmd(
     watermark_path: Path = typer.Option(Path("outputs/shadow_watermark.json"), help="Watermark file"),
 ) -> None:
     from hpcopt.ingest.shadow import ShadowIngestionDaemon
+
     daemon = ShadowIngestionDaemon(
         out_dir=out,
         report_dir=out / "reports",

@@ -4,6 +4,7 @@ Caches the ``RuntimeQuantilePredictor`` instance so it is loaded once and
 reused across requests. Provides a ``warm_cache()`` function for eager
 loading at startup and a public testing API to reset state between tests.
 """
+
 from __future__ import annotations
 
 import logging

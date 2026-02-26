@@ -1,9 +1,7 @@
+import json
 from pathlib import Path
 
-import json
-
 import pandas as pd
-
 from hpcopt.artifacts.benchmark import run_benchmark_suite
 from hpcopt.ingest.swf import ingest_swf
 
@@ -107,4 +105,3 @@ def test_benchmark_suite_supports_parse_skip(tmp_path: Path) -> None:
     assert payload["parse_benchmark"]["status"] == "skipped"
     assert payload["simulation_benchmark"]["status"] == "ok"
     assert payload["pipeline_benchmark"]["status"] == "ok"
-

@@ -1,4 +1,5 @@
 """Run LightGBM GPU training on RTX 2060."""
+
 from __future__ import annotations
 
 import json
@@ -51,7 +52,15 @@ def main() -> None:
     print("=" * 60)
     print("  sklearn GBR:     383.4s  (MAE 7,889s, Coverage 78.1%)")
     print("  LightGBM CPU:      7.6s  (MAE 7,854s, Coverage 74.9%)")
-    print("  LightGBM GPU:  " + format(elapsed, ".1f") + "s  (MAE " + format(p50["mae"], ",.0f") + "s, Coverage " + format(coverage, ".1%") + ")")
+    print(
+        "  LightGBM GPU:  "
+        + format(elapsed, ".1f")
+        + "s  (MAE "
+        + format(p50["mae"], ",.0f")
+        + "s, Coverage "
+        + format(coverage, ".1%")
+        + ")"
+    )
     print()
     print("  sklearn -> LightGBM CPU: " + format(383.4 / 7.6, ".0f") + "x speedup")
     if elapsed > 0:

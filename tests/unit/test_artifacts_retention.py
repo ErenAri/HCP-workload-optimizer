@@ -1,12 +1,10 @@
 """Tests for the artifact retention/cleanup module."""
+
 from __future__ import annotations
 
-import datetime as dt
 import os
 import time
 from pathlib import Path
-
-import pytest
 
 from hpcopt.artifacts.retention import cleanup_artifacts
 

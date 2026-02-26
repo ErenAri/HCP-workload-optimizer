@@ -104,10 +104,7 @@ def lock_reference_suite_hashes(
         locked.append(record)
 
     if strict_missing and missing_files:
-        raise FileNotFoundError(
-            "missing reference suite files in raw dir: "
-            + ", ".join(sorted(missing_files))
-        )
+        raise FileNotFoundError("missing reference suite files in raw dir: " + ", ".join(sorted(missing_files)))
     if mismatch_files:
         # mismatch is informational; the lock action updates config to current file hash.
         updated = True
@@ -156,9 +153,7 @@ def assert_reference_trace_hash_match(trace_path: Path, config_path: Path) -> di
     expected = match["sha256_expected"]
     observed = match["sha256_observed"]
     if not expected:
-        raise ValueError(
-            f"reference suite trace '{match['trace_id']}' has no locked sha256 in config: {config_path}"
-        )
+        raise ValueError(f"reference suite trace '{match['trace_id']}' has no locked sha256 in config: {config_path}")
     if observed != expected:
         raise ValueError(
             f"reference suite hash mismatch for '{match['trace_id']}': expected={expected}, observed={observed}"
@@ -203,9 +198,7 @@ def assert_reference_by_filename_and_hash(
         return None
     expected = match["sha256_expected"]
     if not expected:
-        raise ValueError(
-            f"reference suite trace '{match['trace_id']}' has no locked sha256 in config: {config_path}"
-        )
+        raise ValueError(f"reference suite trace '{match['trace_id']}' has no locked sha256 in config: {config_path}")
     if sha256_observed != expected:
         raise ValueError(
             f"reference suite hash mismatch for '{match['trace_id']}': expected={expected}, observed={sha256_observed}"

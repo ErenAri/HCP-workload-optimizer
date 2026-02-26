@@ -4,6 +4,7 @@ Loads deprecated endpoint entries from ``configs/api/deprecation.yaml`` and
 provides a public testing API so tests can inject/reset entries without
 reaching into private module state.
 """
+
 from __future__ import annotations
 
 import logging
@@ -25,6 +26,7 @@ def load_deprecation_config() -> list[dict[str, str]]:
             return _DEPRECATION_ENTRIES
         try:
             import yaml
+
             if _DEPRECATION_CONFIG_PATH.exists():
                 data = yaml.safe_load(_DEPRECATION_CONFIG_PATH.read_text(encoding="utf-8"))
                 _DEPRECATION_ENTRIES = data.get("deprecated_endpoints", []) or []

@@ -123,6 +123,7 @@ def test_admin_rbac_non_admin_key_rejected(monkeypatch: pytest.MonkeyPatch) -> N
     """Non-admin API key should be rejected for admin paths when keys are configured."""
     monkeypatch.setenv("HPCOPT_API_KEYS", "u,admin-a")
     from hpcopt.utils.secrets import invalidate_api_keys_cache
+
     invalidate_api_keys_cache()
 
     response = client.post(
@@ -203,9 +204,7 @@ def test_recommendation_endpoint_success(tmp_path: Path, monkeypatch: pytest.Mon
 
     rec_dir = tmp_path / "recommendations"
     rec_dir.mkdir(parents=True)
-    (rec_dir / "test_run.json").write_text(
-        json.dumps({"run_id": "test_run", "recommendations": []}), encoding="utf-8"
-    )
+    (rec_dir / "test_run.json").write_text(json.dumps({"run_id": "test_run", "recommendations": []}), encoding="utf-8")
     monkeypatch.setenv("HPCOPT_ARTIFACTS_DIR", str(tmp_path))
 
     response = client.get("/v1/recommendations/test_run")

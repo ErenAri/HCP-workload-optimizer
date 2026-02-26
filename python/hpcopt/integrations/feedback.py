@@ -10,11 +10,12 @@ Usage:
     tracker.record(job_id=123, predicted={"p10": 60, "p50": 120, "p90": 300}, actual_sec=145)
     report = tracker.generate_report()
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PredictionRecord:
     """Single prediction-vs-actual record."""
+
     job_id: int
     predicted_p10: float
     predicted_p50: float
@@ -34,24 +36,25 @@ class PredictionRecord:
     actual_sec: float
     timestamp: str
     in_interval: bool  # True if actual is within [p10, p90]
-    error_sec: float   # p50 - actual
+    error_sec: float  # p50 - actual
     abs_pct_error: float  # |p50 - actual| / max(actual, 1)
 
 
 @dataclass
 class FeedbackReport:
     """Summary of prediction accuracy over a time window."""
+
     total_predictions: int
-    interval_coverage: float    # fraction within [p10, p90]
+    interval_coverage: float  # fraction within [p10, p90]
     mean_absolute_error: float  # seconds
     median_absolute_error: float
-    mape: float                 # mean absolute percentage error
-    p95_error: float            # 95th percentile error
-    overestimate_rate: float    # fraction where p50 > actual
-    underestimate_rate: float   # fraction where p50 < actual
-    drift_detected: bool        # True if coverage drops below threshold
-    drift_severity: str         # none, mild, severe
-    recommendation: str         # human-readable action recommendation
+    mape: float  # mean absolute percentage error
+    p95_error: float  # 95th percentile error
+    overestimate_rate: float  # fraction where p50 > actual
+    underestimate_rate: float  # fraction where p50 < actual
+    drift_detected: bool  # True if coverage drops below threshold
+    drift_severity: str  # none, mild, severe
+    recommendation: str  # human-readable action recommendation
 
 
 class FeedbackTracker:
@@ -93,17 +96,22 @@ class FeedbackTracker:
     def _save_record(self, record: PredictionRecord) -> None:
         """Append record to JSONL file."""
         with open(self.records_file, "a") as f:
-            f.write(json.dumps({
-                "job_id": record.job_id,
-                "predicted_p10": record.predicted_p10,
-                "predicted_p50": record.predicted_p50,
-                "predicted_p90": record.predicted_p90,
-                "actual_sec": record.actual_sec,
-                "timestamp": record.timestamp,
-                "in_interval": record.in_interval,
-                "error_sec": record.error_sec,
-                "abs_pct_error": record.abs_pct_error,
-            }) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "job_id": record.job_id,
+                        "predicted_p10": record.predicted_p10,
+                        "predicted_p50": record.predicted_p50,
+                        "predicted_p90": record.predicted_p90,
+                        "actual_sec": record.actual_sec,
+                        "timestamp": record.timestamp,
+                        "in_interval": record.in_interval,
+                        "error_sec": record.error_sec,
+                        "abs_pct_error": record.abs_pct_error,
+                    }
+                )
+                + "\n"
+            )
 
     def record(
         self,
@@ -137,7 +145,7 @@ class FeedbackTracker:
 
         # Trim if too many records
         if len(self._records) > self.max_records:
-            self._records = self._records[-self.max_records:]
+            self._records = self._records[-self.max_records :]
 
         return rec
 

@@ -40,6 +40,7 @@ def recommend_generate_cmd(
 
     if pareto:
         from hpcopt.recommend.engine import generate_pareto_recommendation
+
         result = generate_pareto_recommendation(
             baseline_report_path=baseline_report,
             candidate_report_paths=candidate_report,
@@ -47,9 +48,13 @@ def recommend_generate_cmd(
         )
     else:
         result = generate_recommendation_report(
-            baseline_report_path=baseline_report, candidate_report_paths=candidate_report,
-            out_path=recommendation_path, fidelity_report_path=fidelity_report,
-            w1=w1, w2=w2, w3=w3,
+            baseline_report_path=baseline_report,
+            candidate_report_paths=candidate_report,
+            out_path=recommendation_path,
+            fidelity_report_path=fidelity_report,
+            w1=w1,
+            w2=w2,
+            w3=w3,
         )
 
     manifest = build_manifest(
@@ -104,13 +109,22 @@ def report_benchmark_cmd(
     resolved_run_id = run_id or f"benchmark_{trace.stem}_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
     report_path = out / f"{resolved_run_id}_benchmark_report.json"
     result = run_benchmark_suite(
-        trace_dataset=trace, report_path=report_path, history_path=history,
-        raw_trace=raw_trace, policy_id=policy, capacity_cpus=capacity_cpus,
-        samples=samples, regression_max_drop=regression_max_drop, history_window=history_window,
+        trace_dataset=trace,
+        report_path=report_path,
+        history_path=history,
+        raw_trace=raw_trace,
+        policy_id=policy,
+        capacity_cpus=capacity_cpus,
+        samples=samples,
+        regression_max_drop=regression_max_drop,
+        history_window=history_window,
     )
     manifest = build_manifest(
-        command="hpcopt report benchmark", inputs=[trace], outputs=[result.report_path, result.history_path],
-        params={"run_id": resolved_run_id, "policy": policy, "samples": samples}, seeds=[],
+        command="hpcopt report benchmark",
+        inputs=[trace],
+        outputs=[result.report_path, result.history_path],
+        params={"run_id": resolved_run_id, "policy": policy, "samples": samples},
+        seeds=[],
     )
     manifest_path = out / f"{resolved_run_id}_benchmark_manifest.json"
     write_manifest(manifest_path, manifest)
@@ -130,6 +144,7 @@ def artifacts_cleanup_cmd(
     dry_run: bool = typer.Option(True, help="Preview only, do not delete"),
 ) -> None:
     from hpcopt.artifacts.retention import cleanup_artifacts
+
     result = cleanup_artifacts(outputs_dir=outputs_dir, max_age_days=max_age_days, dry_run=dry_run)
     summary = result.get("summary", {})
     count_key = "would_delete_count" if dry_run else "deleted_count"

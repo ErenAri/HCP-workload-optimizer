@@ -1,10 +1,10 @@
 """Tests for PBS/Torque accounting log ingestion."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-
 from hpcopt.ingest.pbs import (
     _canonical_job_id,
     _parse_mem_kb,
@@ -13,7 +13,6 @@ from hpcopt.ingest.pbs import (
     _parse_walltime,
     ingest_pbs,
 )
-
 
 # --- Helper parsing tests ---
 

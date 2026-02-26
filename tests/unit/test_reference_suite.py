@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from hpcopt.data.reference_suite import (
     assert_reference_by_filename_and_hash,
     lock_reference_suite_hashes,

@@ -1,10 +1,11 @@
 """Tests for Slurm ingestion helper functions."""
+
 from __future__ import annotations
 
 from hpcopt.ingest.slurm import _classify_job_id, _parse_elapsed, _parse_reqmem
 
-
 # --- _parse_elapsed ---
+
 
 def test_parse_elapsed_hhmmss() -> None:
     assert _parse_elapsed("01:30:00") == 5400
@@ -38,6 +39,7 @@ def test_parse_elapsed_bad_parts() -> None:
 
 # --- _parse_reqmem ---
 
+
 def test_parse_reqmem_megabytes() -> None:
     assert _parse_reqmem("4000Mc") == 4000
 
@@ -66,6 +68,7 @@ def test_parse_reqmem_invalid() -> None:
 
 
 # --- _classify_job_id ---
+
 
 def test_classify_plain_job() -> None:
     job_id, array_idx, is_step = _classify_job_id("12345")

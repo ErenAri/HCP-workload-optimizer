@@ -11,6 +11,7 @@ Usage:
         capacity_cpus=64,
     )
 """
+
 from __future__ import annotations
 
 import json
@@ -77,10 +78,7 @@ def run_rust_simulation(
     """
     binary = find_rust_binary()
     if binary is None:
-        raise FileNotFoundError(
-            "Rust sim-runner binary not found. "
-            "Build with: cd rust && cargo build --release"
-        )
+        raise FileNotFoundError("Rust sim-runner binary not found. Build with: cd rust && cargo build --release")
 
     trace_path = Path(trace_json_path)
     if not trace_path.exists():
@@ -89,15 +87,21 @@ def run_rust_simulation(
     use_temp = output_path is None
     if use_temp:
         tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
-        output_path = Path(tmp.name)
+        resolved_output = Path(tmp.name)
         tmp.close()
+    else:
+        resolved_output = Path(output_path)  # type: ignore[arg-type]
 
     cmd = [
         str(binary),
-        "--input", str(trace_path),
-        "--policy", policy,
-        "--capacity-cpus", str(capacity_cpus),
-        "--output", str(output_path),
+        "--input",
+        str(trace_path),
+        "--policy",
+        policy,
+        "--capacity-cpus",
+        str(capacity_cpus),
+        "--output",
+        str(resolved_output),
     ]
     if strict_invariants:
         cmd.append("--strict-invariants")
@@ -106,14 +110,12 @@ def run_rust_simulation(
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
 
     if result.returncode != 0:
-        raise RuntimeError(
-            f"sim-runner failed (exit {result.returncode}): {result.stderr}"
-        )
+        raise RuntimeError(f"sim-runner failed (exit {result.returncode}): {result.stderr}")
 
-    with open(output_path) as f:
-        report = json.load(f)
+    with open(resolved_output) as f:
+        report: dict[str, Any] = json.load(f)
 
     if use_temp:
-        Path(output_path).unlink(missing_ok=True)
+        resolved_output.unlink(missing_ok=True)
 
     return report

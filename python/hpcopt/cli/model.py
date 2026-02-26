@@ -21,6 +21,7 @@ serve_app = typer.Typer(help="Service commands")
 @model_app.command("list")
 def model_list_cmd() -> None:
     from hpcopt.models.registry import ModelRegistry
+
     registry = ModelRegistry()
     models = registry.list()
     if not models:
@@ -37,6 +38,7 @@ def model_promote_cmd(
     model_id: str = typer.Option(..., help="Model ID to promote to production"),
 ) -> None:
     from hpcopt.models.registry import ModelRegistry
+
     registry = ModelRegistry()
     registry.promote(model_id)
     typer.echo(f"Model '{model_id}' promoted to production.")
@@ -47,6 +49,7 @@ def model_archive_cmd(
     model_id: str = typer.Option(..., help="Model ID to archive"),
 ) -> None:
     from hpcopt.models.registry import ModelRegistry
+
     registry = ModelRegistry()
     registry.archive(model_id)
     typer.echo(f"Model '{model_id}' archived.")
@@ -59,6 +62,7 @@ def model_drift_check_cmd(
     out: Path = typer.Option(Path("outputs/reports")),
 ) -> None:
     from hpcopt.models.drift import compute_drift_report
+
     ensure_dir(out)
     resolved_model = resolve_runtime_model_dir(model_dir)
     if resolved_model is None:
@@ -100,4 +104,5 @@ def serve_api_cmd(
     port: int = typer.Option(8080, min=1, max=65535, help="Bind port"),
 ) -> None:
     import uvicorn
+
     uvicorn.run("hpcopt.api.app:app", host=host, port=port, reload=False)

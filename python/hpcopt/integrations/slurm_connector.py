@@ -10,6 +10,7 @@ Usage:
     connector = SlurmConnector(model_dir=Path("outputs/models/latest"))
     connector.sync()  # Pull recent jobs + push recommendations
 """
+
 from __future__ import annotations
 
 import csv
@@ -20,7 +21,6 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 
@@ -28,15 +28,30 @@ logger = logging.getLogger(__name__)
 
 # sacct fields to extract
 SACCT_FIELDS = [
-    "JobID", "JobName", "User", "Group", "Partition", "Account",
-    "State", "Submit", "Start", "End", "Elapsed", "Timelimit",
-    "NCPUS", "NNodes", "ReqMem", "MaxRSS", "ExitCode",
+    "JobID",
+    "JobName",
+    "User",
+    "Group",
+    "Partition",
+    "Account",
+    "State",
+    "Submit",
+    "Start",
+    "End",
+    "Elapsed",
+    "Timelimit",
+    "NCPUS",
+    "NNodes",
+    "ReqMem",
+    "MaxRSS",
+    "ExitCode",
 ]
 
 
 @dataclass
 class SlurmJob:
     """Parsed Slurm job record."""
+
     job_id: int
     job_name: str
     user: str
@@ -56,6 +71,7 @@ class SlurmJob:
 @dataclass
 class SyncResult:
     """Result of a sync operation."""
+
     jobs_ingested: int
     jobs_running: int
     recommendations_generated: int
@@ -184,22 +200,24 @@ class SlurmConnector:
             elapsed_sec = _parse_slurm_time(row.get("Elapsed", "0"))
             timelimit_sec = _parse_slurm_time(row.get("Timelimit", "0"))
 
-            jobs.append(SlurmJob(
-                job_id=job_id,
-                job_name=row.get("JobName", ""),
-                user=row.get("User", ""),
-                group=row.get("Group", ""),
-                partition=row.get("Partition", ""),
-                state=row.get("State", ""),
-                submit_ts=_parse_slurm_datetime(row.get("Submit", "")) or 0,
-                start_ts=_parse_slurm_datetime(row.get("Start", "")),
-                end_ts=_parse_slurm_datetime(row.get("End", "")),
-                runtime_actual_sec=elapsed_sec,
-                runtime_requested_sec=timelimit_sec,
-                requested_cpus=int(row.get("NCPUS", "1") or "1"),
-                requested_nodes=int(row.get("NNodes", "1") or "1"),
-                exit_code=row.get("ExitCode", "0:0"),
-            ))
+            jobs.append(
+                SlurmJob(
+                    job_id=job_id,
+                    job_name=row.get("JobName", ""),
+                    user=row.get("User", ""),
+                    group=row.get("Group", ""),
+                    partition=row.get("Partition", ""),
+                    state=row.get("State", ""),
+                    submit_ts=_parse_slurm_datetime(row.get("Submit", "")) or 0,
+                    start_ts=_parse_slurm_datetime(row.get("Start", "")),
+                    end_ts=_parse_slurm_datetime(row.get("End", "")),
+                    runtime_actual_sec=elapsed_sec,
+                    runtime_requested_sec=timelimit_sec,
+                    requested_cpus=int(row.get("NCPUS", "1") or "1"),
+                    requested_nodes=int(row.get("NNodes", "1") or "1"),
+                    exit_code=row.get("ExitCode", "0:0"),
+                )
+            )
 
         return jobs
 
@@ -217,20 +235,22 @@ class SlurmConnector:
         """Convert SlurmJob list to canonical DataFrame."""
         records = []
         for j in jobs:
-            records.append({
-                "job_id": j.job_id,
-                "submit_ts": j.submit_ts,
-                "start_ts": j.start_ts or 0,
-                "end_ts": j.end_ts or 0,
-                "runtime_actual_sec": j.runtime_actual_sec,
-                "runtime_requested_sec": j.runtime_requested_sec,
-                "requested_cpus": j.requested_cpus,
-                "user_id": j.user,
-                "group_id": j.group,
-                "queue_id": j.partition,
-                "partition_id": j.partition,
-                "requested_mem": 0,
-            })
+            records.append(
+                {
+                    "job_id": j.job_id,
+                    "submit_ts": j.submit_ts,
+                    "start_ts": j.start_ts or 0,
+                    "end_ts": j.end_ts or 0,
+                    "runtime_actual_sec": j.runtime_actual_sec,
+                    "runtime_requested_sec": j.runtime_requested_sec,
+                    "requested_cpus": j.requested_cpus,
+                    "user_id": j.user,
+                    "group_id": j.group,
+                    "queue_id": j.partition,
+                    "partition_id": j.partition,
+                    "requested_mem": 0,
+                }
+            )
         return pd.DataFrame(records)
 
     def sync(self) -> SyncResult:
@@ -248,13 +268,14 @@ class SlurmConnector:
 
             if self.model_dir and self.model_dir.exists():
                 from hpcopt.models.runtime_quantile import RuntimeQuantilePredictor
+
                 predictor = RuntimeQuantilePredictor(self.model_dir)
 
                 df = self.jobs_to_dataframe(jobs)
                 recs = 0
                 for _, row in df.iterrows():
                     try:
-                        pred = predictor.predict_one(row.to_dict())
+                        predictor.predict_one(row.to_dict())
                         recs += 1
                     except Exception as exc:
                         result.errors.append(f"Prediction failed for job {row['job_id']}: {exc}")
@@ -269,6 +290,7 @@ class SlurmConnector:
 
 
 # ── CLI entry point ─────────────────────────────────────────────
+
 
 def main() -> None:
     """CLI entry point for slurm sync."""

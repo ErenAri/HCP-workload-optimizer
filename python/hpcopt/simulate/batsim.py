@@ -205,14 +205,14 @@ def generate_simple_platform_xml(platform_path: Path, capacity_cpus: int) -> Pat
         '<!DOCTYPE platform SYSTEM "http://simgrid.gforge.inria.fr/simgrid/simgrid.dtd">\n'
         '<platform version="4.1">\n'
         '  <zone id="AS0" routing="Full">\n'
-        '    <cluster\n'
+        "    <cluster\n"
         '      id="A" prefix="a" suffix="" '
         f'radical="{radical}"\n'
         '      speed="1Gf"\n'
         '      bw="1GBps" lat="5us"\n'
         '      bb_bw="3GBps" bb_lat="3us"\n'
         "    />\n\n"
-        '    <cluster\n'
+        "    <cluster\n"
         '      id="M" prefix="m" suffix="" radical="0-0"\n'
         '      speed="1Gf" bw="1GBps" lat="5us"\n'
         '      bb_bw="3GBps" bb_lat="3us"\n'
@@ -395,9 +395,7 @@ def _build_jobs_df_from_batsim_csv(
         requested_cpus = max(1, _coerce_positive_int(row.get("requested_number_of_resources"), fallback=1))
         requested_time = pd.to_numeric(row.get("requested_time"), errors="coerce")
         runtime_requested_sec = (
-            float(requested_time)
-            if pd.notna(requested_time) and float(requested_time) > 0
-            else None
+            float(requested_time) if pd.notna(requested_time) and float(requested_time) > 0 else None
         )
 
         rows.append(
@@ -608,7 +606,7 @@ def invoke_batsim_run(
         def _to_wsl_arg(raw: Any) -> str:
             arg = str(raw)
             if arg.startswith("$HOME/") and wsl_home:
-                arg = f"{wsl_home}/{arg[len('$HOME/'):]}"
+                arg = f"{wsl_home}/{arg[len('$HOME/') :]}"
             if arg.startswith("ipc://"):
                 endpoint = arg[len("ipc://") :]
                 if _WINDOWS_ABS_PATH_RE.match(endpoint):

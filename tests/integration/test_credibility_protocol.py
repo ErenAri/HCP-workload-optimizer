@@ -1,12 +1,8 @@
 """Integration test: two invocations of orchestrated credibility run produce identical artifacts."""
 
+import json
 from pathlib import Path
 
-import json
-import pandas as pd
-from pandas.testing import assert_frame_equal
-
-from hpcopt.ingest.swf import ingest_swf
 from hpcopt.orchestrate.credibility import run_credibility_protocol
 
 

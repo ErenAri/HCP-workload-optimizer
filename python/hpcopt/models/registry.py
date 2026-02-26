@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 # Cross-platform advisory file lock
 # ---------------------------------------------------------------------------
 
+
 @contextmanager
 def _file_lock(lock_path: Path, timeout: float = 10.0) -> Iterator[None]:
     """Acquire an advisory file lock, blocking up to *timeout* seconds.
@@ -36,6 +37,7 @@ def _file_lock(lock_path: Path, timeout: float = 10.0) -> Iterator[None]:
     try:
         if sys.platform == "win32":
             import msvcrt
+
             while True:
                 try:
                     msvcrt.locking(fh.fileno(), msvcrt.LK_NBLCK, 1)
@@ -46,6 +48,7 @@ def _file_lock(lock_path: Path, timeout: float = 10.0) -> Iterator[None]:
                     time.sleep(0.05)
         else:
             import fcntl
+
             while True:
                 try:
                     fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -59,9 +62,11 @@ def _file_lock(lock_path: Path, timeout: float = 10.0) -> Iterator[None]:
         try:
             if sys.platform == "win32":
                 import msvcrt
+
                 msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
             else:
                 import fcntl
+
                 fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
         except (OSError, IOError):
             pass
@@ -136,9 +141,7 @@ class ModelRegistry:
             return []
 
         entries: list[RegistryEntry] = []
-        for line_no, raw_line in enumerate(
-            self._path.read_text(encoding="utf-8").splitlines(), start=1
-        ):
+        for line_no, raw_line in enumerate(self._path.read_text(encoding="utf-8").splitlines(), start=1):
             raw_line = raw_line.strip()
             if not raw_line:
                 continue
@@ -183,9 +186,7 @@ class ModelRegistry:
             with self._path.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(entry.to_dict(), sort_keys=True) + "\n")
 
-    def _find_entry(
-        self, entries: list[RegistryEntry], model_id: str
-    ) -> RegistryEntry | None:
+    def _find_entry(self, entries: list[RegistryEntry], model_id: str) -> RegistryEntry | None:
         for entry in entries:
             if entry.model_id == model_id:
                 return entry
@@ -289,10 +290,7 @@ class ModelRegistry:
             if target is None:
                 raise KeyError(f"No model registered with id '{model_id}'")
             if target.status == "archived":
-                raise ValueError(
-                    f"Cannot promote archived model '{model_id}'. "
-                    "Re-register it first."
-                )
+                raise ValueError(f"Cannot promote archived model '{model_id}'. Re-register it first.")
 
             # Demote any existing production model.
             for entry in entries:
@@ -308,6 +306,7 @@ class ModelRegistry:
             logger.info("Promoted model %s to production", model_id)
             try:
                 from hpcopt.utils.audit import audit_log
+
                 audit_log("model.promote", details={"model_id": model_id})
             except (ImportError, OSError):
                 pass
@@ -332,6 +331,7 @@ class ModelRegistry:
             logger.info("Archived model %s", model_id)
             try:
                 from hpcopt.utils.audit import audit_log
+
                 audit_log("model.archive", details={"model_id": model_id})
             except (ImportError, OSError):
                 pass

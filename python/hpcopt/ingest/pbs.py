@@ -29,9 +29,7 @@ MAX_ROWS = 50_000_000
 # We primarily care about 'E' (exit/end) records which carry the full accounting data.
 # ---------------------------------------------------------------------------
 
-_PBS_LINE_RE = re.compile(
-    r"^(?P<timestamp>[^;]+);(?P<record_type>[A-Z]);(?P<job_id>[^;]+);(?P<attrs>.*)$"
-)
+_PBS_LINE_RE = re.compile(r"^(?P<timestamp>[^;]+);(?P<record_type>[A-Z]);(?P<job_id>[^;]+);(?P<attrs>.*)$")
 
 # PBS datetime format: MM/DD/YYYY HH:MM:SS
 _PBS_DT_FORMATS = [
@@ -41,11 +39,11 @@ _PBS_DT_FORMATS = [
 ]
 
 # Common PBS attribute names for resource/time fields
-_ATTR_CTIME = "ctime"       # creation (submit) time
-_ATTR_QTIME = "qtime"       # queue time
-_ATTR_ETIME = "etime"       # eligible time
-_ATTR_START = "start"       # start time
-_ATTR_END = "end"           # end time
+_ATTR_CTIME = "ctime"  # creation (submit) time
+_ATTR_QTIME = "qtime"  # queue time
+_ATTR_ETIME = "etime"  # eligible time
+_ATTR_START = "start"  # start time
+_ATTR_END = "end"  # end time
 _ATTR_RESOURCES_USED_WALLTIME = "resources_used.walltime"
 _ATTR_RESOURCES_USED_CPUT = "resources_used.cput"
 _ATTR_RESOURCES_USED_MEM = "resources_used.mem"
@@ -268,12 +266,8 @@ def _iter_rows(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
             start_ts = _parse_pbs_timestamp(attrs.get(_ATTR_START, ""))
             end_ts = _parse_pbs_timestamp(attrs.get(_ATTR_END, ""))
 
-            walltime_used = _parse_walltime(
-                attrs.get(_ATTR_RESOURCES_USED_WALLTIME, "")
-            )
-            walltime_requested = _parse_walltime(
-                attrs.get(_ATTR_RESOURCE_LIST_WALLTIME, "")
-            )
+            walltime_used = _parse_walltime(attrs.get(_ATTR_RESOURCES_USED_WALLTIME, ""))
+            walltime_requested = _parse_walltime(attrs.get(_ATTR_RESOURCE_LIST_WALLTIME, ""))
 
             # Derive missing timestamps.
             if end_ts is None and start_ts is not None and walltime_used is not None:
@@ -286,9 +280,7 @@ def _iter_rows(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 else:
                     end_ts = start_ts
 
-            runtime_actual_sec = (
-                walltime_used if walltime_used is not None else max(end_ts - start_ts, 0)
-            )
+            runtime_actual_sec = walltime_used if walltime_used is not None else max(end_ts - start_ts, 0)
             wait_sec = max(start_ts - submit_ts, 0)
 
             # ----------------------------------------------------------
@@ -303,9 +295,7 @@ def _iter_rows(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                     pass
 
             if ncpus is None:
-                ncpus = _parse_ncpus_from_nodes(
-                    attrs.get(_ATTR_RESOURCE_LIST_NODES, "")
-                )
+                ncpus = _parse_ncpus_from_nodes(attrs.get(_ATTR_RESOURCE_LIST_NODES, ""))
             if ncpus is None:
                 ncpus = 1
 
@@ -391,9 +381,7 @@ def ingest_pbs(
 
     rows, stats = _iter_rows(input_path)
     if not rows:
-        raise ValueError(
-            f"No parsable PBS records were produced from input file: {input_path}"
-        )
+        raise ValueError(f"No parsable PBS records were produced from input file: {input_path}")
 
     df = pd.DataFrame(rows)
 
@@ -407,9 +395,7 @@ def ingest_pbs(
         source_format="pbs_torque_accounting",
     )
 
-    logger.info(
-        "PBS ingest complete: %d rows written to %s", len(df), dataset_path
-    )
+    logger.info("PBS ingest complete: %d rows written to %s", len(df), dataset_path)
     return IngestResult(
         dataset_path=dataset_path,
         quality_report_path=quality_report_path,

@@ -113,9 +113,7 @@ def build_manifest(
         }
         for path in config_paths
     ]
-    lock_hash = _lock_hash(
-        [Path("pyproject.toml"), Path("rust/Cargo.toml"), *config_paths]
-    )
+    lock_hash = _lock_hash([Path("pyproject.toml"), Path("rust/Cargo.toml"), *config_paths])
     return {
         "timestamp_utc": dt.datetime.now(tz=dt.UTC).isoformat(),
         "command": command,
@@ -139,14 +137,8 @@ def build_manifest(
         },
         "os_fingerprint": _os_fingerprint(),
         "pip_freeze_snapshot": _pip_freeze_snapshot(),
-        "inputs": [
-            {"path": str(path), "sha256": _sha256_path(path)}
-            for path in inputs
-        ],
-        "outputs": [
-            {"path": str(path), "sha256": _sha256_path(path)}
-            for path in outputs
-        ],
+        "inputs": [{"path": str(path), "sha256": _sha256_path(path)} for path in inputs],
+        "outputs": [{"path": str(path), "sha256": _sha256_path(path)} for path in outputs],
         "policy_hash_sha256": _sha256_path(policy_spec_path) if policy_spec_path else None,
         "dependency_lock_hash_sha256": lock_hash,
         "config_snapshots": config_snapshots,

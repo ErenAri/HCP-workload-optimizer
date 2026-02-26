@@ -12,6 +12,7 @@ Usage (headless):
         -u 50 -r 5 -t 60s --host http://localhost:8080 \\
         --csv outputs/load_results
 """
+
 from __future__ import annotations
 
 import json
@@ -34,12 +35,14 @@ class HPCOptUser(HttpUser):
         """POST /v1/runtime/predict — most common endpoint."""
         self.client.post(
             "/v1/runtime/predict",
-            data=json.dumps({
-                "requested_cpus": 8,
-                "requested_runtime_sec": 3600.0,
-                "queue_id": "batch",
-                "user_id": "benchuser",
-            }),
+            data=json.dumps(
+                {
+                    "requested_cpus": 8,
+                    "requested_runtime_sec": 3600.0,
+                    "queue_id": "batch",
+                    "user_id": "benchuser",
+                }
+            ),
             headers=self.headers,
         )
 
@@ -48,10 +51,12 @@ class HPCOptUser(HttpUser):
         """POST /v1/resource-fit/predict."""
         self.client.post(
             "/v1/resource-fit/predict",
-            data=json.dumps({
-                "requested_cpus": 16,
-                "candidate_node_cpus": [16, 32, 64, 128],
-            }),
+            data=json.dumps(
+                {
+                    "requested_cpus": 16,
+                    "candidate_node_cpus": [16, 32, 64, 128],
+                }
+            ),
             headers=self.headers,
         )
 

@@ -4,6 +4,7 @@ Generates structured model cards documenting dataset characteristics, features,
 performance metrics, fairness/bias evaluation, known limitations, and intended use.
 Output: ``model_card.json`` alongside existing model artifacts.
 """
+
 from __future__ import annotations
 
 import datetime as dt

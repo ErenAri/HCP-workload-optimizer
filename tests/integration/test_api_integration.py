@@ -13,6 +13,7 @@ from hpcopt.api.app import app
 @pytest.fixture
 def client() -> TestClient:
     from hpcopt.utils.secrets import invalidate_api_keys_cache
+
     invalidate_api_keys_cache()
     yield TestClient(app)
     invalidate_api_keys_cache()

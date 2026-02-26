@@ -1,4 +1,5 @@
 """RFC 7807 error response helpers and exception handlers for the HPC Workload Optimizer API."""
+
 from __future__ import annotations
 
 import logging

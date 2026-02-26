@@ -180,9 +180,7 @@ def _random_search(
             min_samples_split=rng.choice(MIN_SAMPLES_SPLIT_CHOICES),
         )
         try:
-            score = _chronological_cv_score(
-                df=df, params=params, alpha=alpha, seed=seed, n_folds=n_folds
-            )
+            score = _chronological_cv_score(df=df, params=params, alpha=alpha, seed=seed, n_folds=n_folds)
             trials.append(
                 {
                     "trial": trial_idx,
@@ -241,9 +239,7 @@ def _optuna_search(
                 MIN_SAMPLES_SPLIT_CHOICES,
             ),
         )
-        score = _chronological_cv_score(
-            df=df, params=params, alpha=alpha, seed=seed, n_folds=n_folds
-        )
+        score = _chronological_cv_score(df=df, params=params, alpha=alpha, seed=seed, n_folds=n_folds)
         trials_log.append(
             {
                 "trial": trial.number,

@@ -1,10 +1,10 @@
 """Tests for feature importance analysis."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-
 from hpcopt.analysis.feature_importance import (
     build_importance_report,
     compute_permutation_importance,
@@ -17,7 +17,11 @@ def _train_model(tmp_path: Path) -> tuple[Path, Path]:
     from hpcopt.simulate.stress import generate_stress_scenario
 
     stress = generate_stress_scenario(
-        scenario="heavy_tail", out_dir=tmp_path, n_jobs=100, seed=7, params={"alpha": 1.25},
+        scenario="heavy_tail",
+        out_dir=tmp_path,
+        n_jobs=100,
+        seed=7,
+        params={"alpha": 1.25},
     )
     result = train_runtime_quantile_models(
         dataset_path=stress.dataset_path,
@@ -52,6 +56,7 @@ def test_compute_permutation_importance(tmp_path: Path) -> None:
 
 def test_compute_permutation_importance_missing_model(tmp_path: Path) -> None:
     import pandas as pd
+
     empty_df = pd.DataFrame({"requested_cpus": [1], "runtime_actual_sec": [100]})
     with pytest.raises(FileNotFoundError):
         compute_permutation_importance(

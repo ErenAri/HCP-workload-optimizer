@@ -3,6 +3,7 @@
 Handles body size limits, auth, rate limiting, correlation IDs, deprecation
 headers, logging, metrics, request timeout, and shutdown draining.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -73,6 +74,7 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
         logger.warning("Auth failed for path=%s trace_id=%s", path, trace_id)
         try:
             from hpcopt.api.metrics import record_auth_failure
+
             record_auth_failure()
         except ImportError:
             pass
@@ -93,6 +95,7 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
         logger.warning("Admin auth failed for path=%s trace_id=%s", path, trace_id)
         try:
             from hpcopt.api.metrics import record_auth_failure
+
             record_auth_failure()
         except ImportError:
             pass
@@ -115,6 +118,7 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
         if not allowed:
             try:
                 from hpcopt.api.metrics import record_rate_limit_rejection
+
                 record_rate_limit_rejection()
             except ImportError:
                 pass
@@ -188,6 +192,7 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
     # Record metrics if prometheus available
     try:
         from hpcopt.api.metrics import record_request_metrics
+
         record_request_metrics(request.method, path, response.status_code, duration)
     except ImportError:
         pass

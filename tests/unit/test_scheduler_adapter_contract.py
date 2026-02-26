@@ -1,9 +1,9 @@
 from hpcopt.simulate.adapter import (
     AdapterEvent,
-    parse_state_snapshot,
     choose_easy_backfill,
     choose_ml_backfill_p50,
     order_events,
+    parse_state_snapshot,
 )
 
 
@@ -84,8 +84,24 @@ def test_ml_backfill_strict_mode_uses_p90_gate() -> None:
             "capacity_cpus": 8,
             "free_cpus": 2,
             "queued_jobs": [
-                {"job_id": 100, "submit_ts": 0, "requested_cpus": 8, "runtime_estimate_sec": 30, "runtime_p90_sec": 30, "runtime_guard_sec": 30, "estimate_source": "prediction"},
-                {"job_id": 101, "submit_ts": 1, "requested_cpus": 2, "runtime_estimate_sec": 5, "runtime_p90_sec": 20, "runtime_guard_sec": 7, "estimate_source": "prediction"},
+                {
+                    "job_id": 100,
+                    "submit_ts": 0,
+                    "requested_cpus": 8,
+                    "runtime_estimate_sec": 30,
+                    "runtime_p90_sec": 30,
+                    "runtime_guard_sec": 30,
+                    "estimate_source": "prediction",
+                },
+                {
+                    "job_id": 101,
+                    "submit_ts": 1,
+                    "requested_cpus": 2,
+                    "runtime_estimate_sec": 5,
+                    "runtime_p90_sec": 20,
+                    "runtime_guard_sec": 7,
+                    "estimate_source": "prediction",
+                },
             ],
             "running_jobs": [
                 {"job_id": 200, "end_ts": 10, "allocated_cpus": 6},

@@ -3,10 +3,10 @@
 Verifies that deprecated endpoints return proper headers when configured
 in configs/api/deprecation.yaml.
 """
+
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
-
 from hpcopt.api.deprecation import set_entries_for_testing
 
 
@@ -29,14 +29,16 @@ def test_deprecation_headers_present_when_configured() -> None:
     """When an endpoint is in the deprecation config, Sunset + Deprecation headers appear."""
     from hpcopt.api.app import app
 
-    old = set_entries_for_testing([
-        {
-            "path_prefix": "/v1/runtime/predict",
-            "deprecated_at": "2026-06-01",
-            "sunset_at": "2026-12-01",
-            "docs_url": "https://docs.hpcopt.dev/api/migration/v1-to-v2",
-        }
-    ])
+    old = set_entries_for_testing(
+        [
+            {
+                "path_prefix": "/v1/runtime/predict",
+                "deprecated_at": "2026-06-01",
+                "sunset_at": "2026-12-01",
+                "docs_url": "https://docs.hpcopt.dev/api/migration/v1-to-v2",
+            }
+        ]
+    )
 
     client = TestClient(app)
     response = client.post(
@@ -55,13 +57,15 @@ def test_no_deprecation_for_non_matching_endpoint() -> None:
     """Endpoints not in the deprecation config should not have sunset headers."""
     from hpcopt.api.app import app
 
-    old = set_entries_for_testing([
-        {
-            "path_prefix": "/v1/resource-fit/predict",
-            "deprecated_at": "2026-06-01",
-            "sunset_at": "2026-12-01",
-        }
-    ])
+    old = set_entries_for_testing(
+        [
+            {
+                "path_prefix": "/v1/resource-fit/predict",
+                "deprecated_at": "2026-06-01",
+                "sunset_at": "2026-12-01",
+            }
+        ]
+    )
 
     client = TestClient(app)
     response = client.get("/health")

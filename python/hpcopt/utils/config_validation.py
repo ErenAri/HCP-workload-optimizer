@@ -37,10 +37,7 @@ def _locate_schema(schema_name: str) -> Path:
     """
     candidate = _SCHEMAS_DIR / f"{schema_name}.schema.json"
     if not candidate.exists():
-        raise FileNotFoundError(
-            f"Schema file not found: {candidate}  "
-            f"(looked in {_SCHEMAS_DIR})"
-        )
+        raise FileNotFoundError(f"Schema file not found: {candidate}  (looked in {_SCHEMAS_DIR})")
     return candidate
 
 
@@ -49,10 +46,7 @@ def _load_yaml(path: Path) -> dict[str, Any]:
     with open(path, "r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
     if not isinstance(data, dict):
-        raise ValueError(
-            f"Expected a YAML mapping at the top level of {path}, "
-            f"got {type(data).__name__}"
-        )
+        raise ValueError(f"Expected a YAML mapping at the top level of {path}, got {type(data).__name__}")
     return data
 
 

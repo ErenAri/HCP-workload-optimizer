@@ -6,23 +6,21 @@ Tests invariants:
 - State hash is deterministic
 - Event ordering is deterministic
 """
+
 from __future__ import annotations
 
-import pytest
-
-from hypothesis import given, settings, assume, HealthCheck
-from hypothesis import strategies as st
-
 from hpcopt.simulate.adapter import (
+    AdapterEvent,
     AdapterQueuedJob,
     AdapterRunningJob,
     SchedulerStateSnapshot,
-    choose_fifo_strict,
     choose_easy_backfill,
-    snapshot_state_hash,
+    choose_fifo_strict,
     order_events,
-    AdapterEvent,
+    snapshot_state_hash,
 )
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 
 def _make_snapshot(
@@ -33,6 +31,7 @@ def _make_snapshot(
 ) -> SchedulerStateSnapshot:
     """Build a valid SchedulerStateSnapshot for testing."""
     import random
+
     random.seed(seed)
 
     running_cpus = 0
@@ -42,22 +41,26 @@ def _make_snapshot(
         if running_cpus + cpus > capacity_cpus:
             break
         running_cpus += cpus
-        running.append(AdapterRunningJob(
-            job_id=1000 + i,
-            end_ts=100 + random.randint(60, 3600),
-            allocated_cpus=cpus,
-        ))
+        running.append(
+            AdapterRunningJob(
+                job_id=1000 + i,
+                end_ts=100 + random.randint(60, 3600),
+                allocated_cpus=cpus,
+            )
+        )
 
     free_cpus = capacity_cpus - running_cpus
     queued = []
     for i in range(n_queued):
         cpus = random.choice([1, 2, 4, 8, 16])
-        queued.append(AdapterQueuedJob(
-            job_id=i + 1,
-            submit_ts=random.randint(1, 100),
-            requested_cpus=cpus,
-            runtime_estimate_sec=random.randint(60, 3600),
-        ))
+        queued.append(
+            AdapterQueuedJob(
+                job_id=i + 1,
+                submit_ts=random.randint(1, 100),
+                requested_cpus=cpus,
+                runtime_estimate_sec=random.randint(60, 3600),
+            )
+        )
 
     return SchedulerStateSnapshot(
         clock_ts=100,
@@ -82,8 +85,9 @@ def test_fifo_decisions_sorted_by_submit_ts(n_queued: int, n_running: int, seed:
     if len(decision.decisions) > 0:
         # All dispatched jobs must have fit within the free capacity
         dispatched_cpus = sum(d.requested_cpus for d in decision.decisions)
-        assert dispatched_cpus <= snapshot.free_cpus, \
+        assert dispatched_cpus <= snapshot.free_cpus, (
             f"Dispatched {dispatched_cpus} CPUs but only {snapshot.free_cpus} free"
+        )
 
 
 @given(
@@ -98,8 +102,9 @@ def test_easy_backfill_never_exceeds_capacity(n_queued: int, n_running: int, see
     decision = choose_easy_backfill(snapshot)
 
     dispatched_cpus = sum(d.requested_cpus for d in decision.decisions)
-    assert dispatched_cpus <= snapshot.free_cpus, \
+    assert dispatched_cpus <= snapshot.free_cpus, (
         f"Dispatched {dispatched_cpus} CPUs but only {snapshot.free_cpus} free"
+    )
 
 
 @given(
@@ -116,14 +121,16 @@ def test_cpu_conservation_law(n_queued: int, n_running: int, seed: int) -> None:
     fifo_decision = choose_fifo_strict(snapshot)
     running_cpus = sum(j.allocated_cpus for j in snapshot.running_jobs)
     fifo_dispatched = sum(d.requested_cpus for d in fifo_decision.decisions)
-    assert running_cpus + fifo_dispatched <= snapshot.capacity_cpus, \
+    assert running_cpus + fifo_dispatched <= snapshot.capacity_cpus, (
         f"FIFO conservation violated: {running_cpus} running + {fifo_dispatched} dispatched > {snapshot.capacity_cpus}"
+    )
 
     # Check EASY backfill
     easy_decision = choose_easy_backfill(snapshot)
     easy_dispatched = sum(d.requested_cpus for d in easy_decision.decisions)
-    assert running_cpus + easy_dispatched <= snapshot.capacity_cpus, \
+    assert running_cpus + easy_dispatched <= snapshot.capacity_cpus, (
         f"EASY conservation violated: {running_cpus} running + {easy_dispatched} dispatched > {snapshot.capacity_cpus}"
+    )
 
 
 @given(
@@ -145,10 +152,13 @@ def test_state_hash_deterministic(n_queued: int, seed: int) -> None:
 def test_event_ordering_deterministic(seed: int) -> None:
     """Event ordering must be deterministic for the same input."""
     import random
+
     random.seed(seed)
 
     events = [
-        AdapterEvent(ts=random.randint(1, 100), event_type=random.choice(["job_complete", "job_submit", "dispatch"]), job_id=i)
+        AdapterEvent(
+            ts=random.randint(1, 100), event_type=random.choice(["job_complete", "job_submit", "dispatch"]), job_id=i
+        )
         for i in range(20)
     ]
 

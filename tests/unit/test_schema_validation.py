@@ -1,4 +1,5 @@
 """Validate that all JSON schemas are well-formed and locked down."""
+
 from __future__ import annotations
 
 import json
@@ -22,6 +23,4 @@ def test_schema_is_valid_json_with_meta(schema_path: Path) -> None:
 def test_schema_root_not_permissive(schema_path: Path) -> None:
     data = json.loads(schema_path.read_text(encoding="utf-8"))
     root_additional = data.get("additionalProperties")
-    assert root_additional is not True, (
-        f"{schema_path.name} has additionalProperties: true at root — should be false"
-    )
+    assert root_additional is not True, f"{schema_path.name} has additionalProperties: true at root — should be false"

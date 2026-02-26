@@ -1,8 +1,7 @@
+import json
 from pathlib import Path
 
-import json
 import pandas as pd
-
 from hpcopt.features.pipeline import build_chronological_splits, build_feature_dataset
 from hpcopt.ingest.swf import ingest_swf
 
@@ -141,4 +140,3 @@ def test_chronological_split_contract_and_manifest(tmp_path: Path) -> None:
     folds = build_chronological_splits(feature_df, n_folds=2, train_fraction=0.6, val_fraction=0.2)
     assert len(folds) >= 1
     assert all(bool(fold["chronology_ok"]) for fold in folds)
-

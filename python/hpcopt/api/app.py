@@ -12,6 +12,7 @@ This module assembles the application from focused submodules:
 - ``api.metrics`` -- Prometheus metrics
 - ``api.tracing`` -- OpenTelemetry instrumentation
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -72,6 +73,7 @@ def _validate_startup_env() -> None:
     if fidelity_config.exists():
         try:
             from hpcopt.utils.config_validation import validate_config
+
             result = validate_config(fidelity_config, "fidelity_gate_config")
             if not result.get("valid", True):
                 logger.warning("Fidelity gate config validation errors: %s", result.get("errors"))
@@ -101,6 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Optional OpenTelemetry instrumentation
     try:
         from hpcopt.api.tracing import init_tracing
+
         init_tracing(app)
     except Exception:
         logger.debug("OpenTelemetry instrumentation skipped", exc_info=True)
@@ -110,6 +113,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Pre-warm runtime predictor cache
     from hpcopt.api.model_cache import warm_cache
+
     if warm_cache():
         logger.info("Runtime predictor pre-warmed successfully")
     else:

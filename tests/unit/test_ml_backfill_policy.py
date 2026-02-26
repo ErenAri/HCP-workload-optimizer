@@ -1,5 +1,4 @@
 import pandas as pd
-
 from hpcopt.simulate.core import run_simulation_from_trace
 
 
@@ -16,11 +15,46 @@ class StubPredictor:
 def test_ml_backfill_fallback_accounting_counts() -> None:
     trace = pd.DataFrame(
         [
-            {"job_id": 10, "submit_ts": 0, "runtime_actual_sec": 100, "requested_cpus": 6, "runtime_requested_sec": 120, "user_id": 1},
-            {"job_id": 20, "submit_ts": 1, "runtime_actual_sec": 50, "requested_cpus": 8, "runtime_requested_sec": 80, "user_id": 2},
-            {"job_id": 30, "submit_ts": 2, "runtime_actual_sec": 10, "requested_cpus": 2, "runtime_requested_sec": 30, "user_id": 3},
-            {"job_id": 40, "submit_ts": 3, "runtime_actual_sec": 10, "requested_cpus": 2, "runtime_requested_sec": 20, "user_id": 4},
-            {"job_id": 50, "submit_ts": 4, "runtime_actual_sec": 10, "requested_cpus": 2, "runtime_requested_sec": None, "user_id": 5},
+            {
+                "job_id": 10,
+                "submit_ts": 0,
+                "runtime_actual_sec": 100,
+                "requested_cpus": 6,
+                "runtime_requested_sec": 120,
+                "user_id": 1,
+            },
+            {
+                "job_id": 20,
+                "submit_ts": 1,
+                "runtime_actual_sec": 50,
+                "requested_cpus": 8,
+                "runtime_requested_sec": 80,
+                "user_id": 2,
+            },
+            {
+                "job_id": 30,
+                "submit_ts": 2,
+                "runtime_actual_sec": 10,
+                "requested_cpus": 2,
+                "runtime_requested_sec": 30,
+                "user_id": 3,
+            },
+            {
+                "job_id": 40,
+                "submit_ts": 3,
+                "runtime_actual_sec": 10,
+                "requested_cpus": 2,
+                "runtime_requested_sec": 20,
+                "user_id": 4,
+            },
+            {
+                "job_id": 50,
+                "submit_ts": 4,
+                "runtime_actual_sec": 10,
+                "requested_cpus": 2,
+                "runtime_requested_sec": None,
+                "user_id": 5,
+            },
         ]
     )
     result = run_simulation_from_trace(
@@ -43,9 +77,30 @@ def test_ml_backfill_fallback_accounting_counts() -> None:
 def test_ml_backfill_strict_uncertainty_changes_eligibility() -> None:
     trace = pd.DataFrame(
         [
-            {"job_id": 10, "submit_ts": 0, "runtime_actual_sec": 10, "requested_cpus": 6, "runtime_requested_sec": 20, "user_id": 1},
-            {"job_id": 20, "submit_ts": 1, "runtime_actual_sec": 50, "requested_cpus": 8, "runtime_requested_sec": 80, "user_id": 2},
-            {"job_id": 30, "submit_ts": 2, "runtime_actual_sec": 5, "requested_cpus": 2, "runtime_requested_sec": 15, "user_id": 3},
+            {
+                "job_id": 10,
+                "submit_ts": 0,
+                "runtime_actual_sec": 10,
+                "requested_cpus": 6,
+                "runtime_requested_sec": 20,
+                "user_id": 1,
+            },
+            {
+                "job_id": 20,
+                "submit_ts": 1,
+                "runtime_actual_sec": 50,
+                "requested_cpus": 8,
+                "runtime_requested_sec": 80,
+                "user_id": 2,
+            },
+            {
+                "job_id": 30,
+                "submit_ts": 2,
+                "runtime_actual_sec": 5,
+                "requested_cpus": 2,
+                "runtime_requested_sec": 15,
+                "user_id": 3,
+            },
         ]
     )
     predictor = StubPredictor()

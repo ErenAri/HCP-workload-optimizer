@@ -1,11 +1,11 @@
 """CLI tests for ingest commands (swf, slurm, pbs)."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-from typer.testing import CliRunner
-
 from hpcopt.cli.main import app
+from typer.testing import CliRunner
 
 
 def test_ingest_swf_cli(tmp_path: Path, sample_trace_path: Path) -> None:
@@ -15,11 +15,16 @@ def test_ingest_swf_cli(tmp_path: Path, sample_trace_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "ingest", "swf",
-            "--input", str(sample_trace_path),
-            "--out", str(out_dir),
-            "--report-out", str(report_dir),
-            "--dataset-id", "cli_test_swf",
+            "ingest",
+            "swf",
+            "--input",
+            str(sample_trace_path),
+            "--out",
+            str(out_dir),
+            "--report-out",
+            str(report_dir),
+            "--dataset-id",
+            "cli_test_swf",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -44,11 +49,16 @@ def test_ingest_slurm_cli(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "ingest", "slurm",
-            "--input", str(input_path),
-            "--out", str(out_dir),
-            "--report-out", str(report_dir),
-            "--dataset-id", "cli_test_slurm",
+            "ingest",
+            "slurm",
+            "--input",
+            str(input_path),
+            "--out",
+            str(out_dir),
+            "--report-out",
+            str(report_dir),
+            "--dataset-id",
+            "cli_test_slurm",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -76,11 +86,16 @@ def test_ingest_pbs_cli(tmp_path: Path) -> None:
     result = runner.invoke(
         app,
         [
-            "ingest", "pbs",
-            "--input", str(input_path),
-            "--out", str(out_dir),
-            "--report-out", str(report_dir),
-            "--dataset-id", "cli_test_pbs",
+            "ingest",
+            "pbs",
+            "--input",
+            str(input_path),
+            "--out",
+            str(out_dir),
+            "--report-out",
+            str(report_dir),
+            "--dataset-id",
+            "cli_test_pbs",
         ],
     )
     assert result.exit_code == 0, result.output

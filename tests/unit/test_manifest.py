@@ -1,6 +1,5 @@
-from pathlib import Path
-
 import json
+from pathlib import Path
 
 from hpcopt.artifacts.manifest import build_manifest, write_manifest
 

@@ -1,4 +1,5 @@
 """Route handlers for the HPC Workload Optimizer API."""
+
 from __future__ import annotations
 
 import datetime as dt
@@ -172,6 +173,7 @@ def register_routes(app: Any) -> None:
         """Prometheus metrics endpoint."""
         try:
             from hpcopt.api.metrics import get_metrics_response
+
             return PlainTextResponse(content=get_metrics_response(), media_type="text/plain")
         except ImportError:
             return PlainTextResponse(
@@ -233,6 +235,7 @@ def register_routes(app: Any) -> None:
         # Record fallback usage
         try:
             from hpcopt.api.metrics import record_fallback
+
             record_fallback()
         except ImportError:
             pass
@@ -279,6 +282,7 @@ def register_routes(app: Any) -> None:
 
         try:
             from hpcopt.utils.audit import audit_log
+
             audit_log(
                 "admin.log_level_change",
                 actor=request.headers.get("X-API-Key", "unknown")[:8] + "...",

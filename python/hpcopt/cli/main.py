@@ -33,6 +33,7 @@ app.add_typer(artifacts_app, name="artifacts")
 
 def run() -> None:
     from hpcopt.utils.logging import setup_logging
+
     try:
         setup_logging(level="INFO", format_mode="structured")
     except ImportError:

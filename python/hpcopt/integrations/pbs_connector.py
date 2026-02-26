@@ -8,6 +8,7 @@ Usage:
     connector = PBSConnector(model_dir=Path("outputs/models/latest"))
     result = connector.sync()
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,6 @@ import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PBSJob:
     """Parsed PBS/Torque job record."""
+
     job_id: str
     job_name: str
     user: str
@@ -46,6 +47,7 @@ class PBSJob:
 @dataclass
 class SyncResult:
     """Result of a sync operation."""
+
     jobs_ingested: int
     jobs_running: int
     recommendations_generated: int
@@ -117,7 +119,7 @@ class PBSConnector:
 
     def _parse_qstat_json(self, raw: str) -> list[PBSJob]:
         """Parse qstat JSON output."""
-        jobs = []
+        jobs: list[PBSJob] = []
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
@@ -143,22 +145,24 @@ class PBSConnector:
                 if match:
                     nodes = int(match.group(1))
 
-            jobs.append(PBSJob(
-                job_id=job_id.split(".")[0],  # strip server suffix
-                job_name=info.get("Job_Name", ""),
-                user=info.get("Job_Owner", "").split("@")[0],
-                group=info.get("group_list", ""),
-                queue=info.get("queue", ""),
-                state=info.get("job_state", ""),
-                submit_ts=_parse_pbs_datetime(info.get("ctime", "")) or 0,
-                start_ts=_parse_pbs_datetime(info.get("stime", "")),
-                end_ts=_parse_pbs_datetime(info.get("mtime", "")),
-                runtime_actual_sec=walltime_actual,
-                runtime_requested_sec=walltime_req,
-                requested_cpus=ncpus,
-                requested_nodes=nodes,
-                exit_status=int(info.get("Exit_status", 0) or 0),
-            ))
+            jobs.append(
+                PBSJob(
+                    job_id=job_id.split(".")[0],  # strip server suffix
+                    job_name=info.get("Job_Name", ""),
+                    user=info.get("Job_Owner", "").split("@")[0],
+                    group=info.get("group_list", ""),
+                    queue=info.get("queue", ""),
+                    state=info.get("job_state", ""),
+                    submit_ts=_parse_pbs_datetime(info.get("ctime", "")) or 0,
+                    start_ts=_parse_pbs_datetime(info.get("stime", "")),
+                    end_ts=_parse_pbs_datetime(info.get("mtime", "")),
+                    runtime_actual_sec=walltime_actual,
+                    runtime_requested_sec=walltime_req,
+                    requested_cpus=ncpus,
+                    requested_nodes=nodes,
+                    exit_status=int(info.get("Exit_status", 0) or 0),
+                )
+            )
 
         return jobs
 
@@ -166,20 +170,22 @@ class PBSConnector:
         """Convert PBSJob list to canonical DataFrame."""
         records = []
         for j in jobs:
-            records.append({
-                "job_id": j.job_id,
-                "submit_ts": j.submit_ts,
-                "start_ts": j.start_ts or 0,
-                "end_ts": j.end_ts or 0,
-                "runtime_actual_sec": j.runtime_actual_sec,
-                "runtime_requested_sec": j.runtime_requested_sec,
-                "requested_cpus": j.requested_cpus,
-                "user_id": j.user,
-                "group_id": j.group,
-                "queue_id": j.queue,
-                "partition_id": j.queue,
-                "requested_mem": 0,
-            })
+            records.append(
+                {
+                    "job_id": j.job_id,
+                    "submit_ts": j.submit_ts,
+                    "start_ts": j.start_ts or 0,
+                    "end_ts": j.end_ts or 0,
+                    "runtime_actual_sec": j.runtime_actual_sec,
+                    "runtime_requested_sec": j.runtime_requested_sec,
+                    "requested_cpus": j.requested_cpus,
+                    "user_id": j.user,
+                    "group_id": j.group,
+                    "queue_id": j.queue,
+                    "partition_id": j.queue,
+                    "requested_mem": 0,
+                }
+            )
         return pd.DataFrame(records)
 
     def sync(self) -> SyncResult:
@@ -199,6 +205,7 @@ class PBSConnector:
 
             if self.model_dir and self.model_dir.exists():
                 from hpcopt.models.runtime_quantile import RuntimeQuantilePredictor
+
                 predictor = RuntimeQuantilePredictor(self.model_dir)
                 df = self.jobs_to_dataframe(jobs)
                 for _, row in df.iterrows():

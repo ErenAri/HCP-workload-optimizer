@@ -1,13 +1,10 @@
 """Tests for the shadow ingestion daemon."""
+
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
-import pytest
-
 from hpcopt.ingest.shadow import (
-    PollResult,
     ShadowIngestionDaemon,
     WatermarkState,
     _load_watermark,

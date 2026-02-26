@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 # Backend auto-detection
 try:
     import lightgbm as lgb  # noqa: F401
+
     _HAS_LIGHTGBM = True
 except ImportError:
     _HAS_LIGHTGBM = False
@@ -356,6 +357,7 @@ def train_runtime_quantile_models(
     # Generate model card
     try:
         from hpcopt.models.model_card import generate_model_card
+
         generate_model_card(
             model_dir=model_dir,
             dataset_path=dataset_path,
@@ -406,10 +408,7 @@ def _verify_model_hash(model_path: Path, expected_hashes: dict[str, str] | None)
             digest.update(chunk)
     actual = digest.hexdigest()
     if actual != expected:
-        raise ValueError(
-            f"Model hash mismatch for {model_path.name}: "
-            f"expected={expected}, actual={actual}"
-        )
+        raise ValueError(f"Model hash mismatch for {model_path.name}: expected={expected}, actual={actual}")
 
 
 def _load_model_hashes(model_dir: Path) -> dict[str, str] | None:

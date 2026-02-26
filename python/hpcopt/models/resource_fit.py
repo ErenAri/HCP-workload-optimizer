@@ -148,12 +148,12 @@ def train_resource_fit_model(
     y_frag_train = train_df["frag_label"].to_numpy(dtype=int)
     y_frag_test = test_df["frag_label"].to_numpy(dtype=int)
 
-    frag_pipeline = Pipeline([
-        ("preprocess", _build_preprocessor()),
-        ("classifier", GradientBoostingClassifier(
-            n_estimators=80, max_depth=3, random_state=seed, subsample=0.8
-        )),
-    ])
+    frag_pipeline = Pipeline(
+        [
+            ("preprocess", _build_preprocessor()),
+            ("classifier", GradientBoostingClassifier(n_estimators=80, max_depth=3, random_state=seed, subsample=0.8)),
+        ]
+    )
     frag_pipeline.fit(x_train, y_frag_train)
     frag_accuracy = float(np.mean(frag_pipeline.predict(x_test) == y_frag_test))
 
@@ -161,12 +161,12 @@ def train_resource_fit_model(
     y_node_train = train_df["optimal_node_cpus"].to_numpy(dtype=float)
     y_node_test = test_df["optimal_node_cpus"].to_numpy(dtype=float)
 
-    node_pipeline = Pipeline([
-        ("preprocess", _build_preprocessor()),
-        ("regressor", GradientBoostingRegressor(
-            n_estimators=80, max_depth=3, random_state=seed, subsample=0.8
-        )),
-    ])
+    node_pipeline = Pipeline(
+        [
+            ("preprocess", _build_preprocessor()),
+            ("regressor", GradientBoostingRegressor(n_estimators=80, max_depth=3, random_state=seed, subsample=0.8)),
+        ]
+    )
     node_pipeline.fit(x_train, y_node_train)
     node_pred = node_pipeline.predict(x_test)
     node_mae = float(np.mean(np.abs(y_node_test - node_pred)))

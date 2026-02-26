@@ -41,10 +41,13 @@ def build_trace_profile(dataset_path: Path, report_dir: Path, dataset_id: str) -
     req_runtime = df["runtime_requested_sec"]
     queue_series = _queue_series(df)
 
-    overreq = df.loc[
-        (req_runtime.notna()) & (runtime > 0),
-        "runtime_requested_sec",
-    ] / df.loc[(req_runtime.notna()) & (runtime > 0), "runtime_actual_sec"]
+    overreq = (
+        df.loc[
+            (req_runtime.notna()) & (runtime > 0),
+            "runtime_requested_sec",
+        ]
+        / df.loc[(req_runtime.notna()) & (runtime > 0), "runtime_actual_sec"]
+    )
     user_counts = df["user_id"].fillna(-1).astype(int).value_counts()
     total_jobs = len(df)
     top_user_share = float(user_counts.iloc[0] / total_jobs) if len(user_counts) else 0.0
@@ -74,9 +77,7 @@ def build_trace_profile(dataset_path: Path, report_dir: Path, dataset_id: str) -
             "runtime_p95_sec": _float_or_none(runtime.quantile(0.95)),
             "runtime_p99_sec": _float_or_none(runtime.quantile(0.99)),
             "tail_ratio_p99_over_p50": _float_or_none(
-                runtime.quantile(0.99) / runtime.quantile(0.5)
-                if runtime.quantile(0.5) > 0
-                else None
+                runtime.quantile(0.99) / runtime.quantile(0.5) if runtime.quantile(0.5) > 0 else None
             ),
         },
         "overrequest_distribution": {

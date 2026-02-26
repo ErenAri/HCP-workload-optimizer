@@ -8,6 +8,7 @@ Supports three loading strategies (checked in order):
 Keys are cached with a short TTL (default 30 s) to reduce per-request I/O
 while still supporting rotation without a restart.
 """
+
 from __future__ import annotations
 
 import logging

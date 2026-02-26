@@ -62,13 +62,15 @@ def generate_pareto_recommendation(
             "neg_fairness_dev": neg_fairness,
         }
 
-        candidates.append({
-            "candidate_report_path": str(path),
-            "policy_id": cand.get("policy_id"),
-            "run_id": cand.get("run_id"),
-            "objective_metrics": cand_obj,
-            "pareto_objectives": obj_values,
-        })
+        candidates.append(
+            {
+                "candidate_report_path": str(path),
+                "policy_id": cand.get("policy_id"),
+                "run_id": cand.get("run_id"),
+                "objective_metrics": cand_obj,
+                "pareto_objectives": obj_values,
+            }
+        )
 
     # Compute Pareto frontier
     n = len(candidates)
@@ -160,8 +162,7 @@ def workload_regime_analysis(
                 "Little room for backfill improvement when queue is rarely deep."
             )
             sensitivity_hint = (
-                "Benefits emerge only under higher load; "
-                "consider testing with more concurrent submissions."
+                "Benefits emerge only under higher load; consider testing with more concurrent submissions."
             )
             suggested_next_step = "Validate with stress scenarios: hpcopt stress gen --scenario low_congestion."
         elif top_user_share > 0.5:

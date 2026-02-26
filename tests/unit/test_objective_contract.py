@@ -1,5 +1,4 @@
 import pandas as pd
-
 from hpcopt.simulate.objective import (
     compute_objective_contract_metrics,
     compute_weighted_analysis_score,

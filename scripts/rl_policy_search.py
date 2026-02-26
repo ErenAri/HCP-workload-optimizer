@@ -1,4 +1,5 @@
 """Run RL policy search on CTC-SP2 trace."""
+
 from __future__ import annotations
 
 import json
@@ -64,7 +65,12 @@ def main() -> None:
         )
     )
     print("EASY_BACKFILL:  p95_bsld=" + format(easy.p95_bsld, ".2f") + ", util=" + format(easy.utilization, ".1%"))
-    print("RL-OPTIMIZED:   p95_bsld=" + format(best_result.p95_bsld, ".2f") + ", util=" + format(best_result.utilization, ".1%"))
+    print(
+        "RL-OPTIMIZED:   p95_bsld="
+        + format(best_result.p95_bsld, ".2f")
+        + ", util="
+        + format(best_result.utilization, ".1%")
+    )
 
     if easy.p95_bsld > 0:
         improvement = (1 - best_result.p95_bsld / easy.p95_bsld) * 100
@@ -74,23 +80,27 @@ def main() -> None:
     out_dir = Path("outputs/benchmark/rl_search")
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "grid_search_results.json", "w") as f:
-        json.dump({
-            "best_action": {
-                "backfill_threshold": best_action.backfill_threshold,
-                "priority_boost_short": best_action.priority_boost_short,
+        json.dump(
+            {
+                "best_action": {
+                    "backfill_threshold": best_action.backfill_threshold,
+                    "priority_boost_short": best_action.priority_boost_short,
+                },
+                "best_metrics": {
+                    "p95_bsld": best_result.p95_bsld,
+                    "utilization": best_result.utilization,
+                    "mean_wait_sec": best_result.mean_wait_sec,
+                },
+                "baselines": {
+                    "fifo": {"p95_bsld": fifo.p95_bsld, "utilization": fifo.utilization},
+                    "easy_backfill": {"p95_bsld": easy.p95_bsld, "utilization": easy.utilization},
+                },
+                "all_results": all_results,
+                "search_time_sec": elapsed,
             },
-            "best_metrics": {
-                "p95_bsld": best_result.p95_bsld,
-                "utilization": best_result.utilization,
-                "mean_wait_sec": best_result.mean_wait_sec,
-            },
-            "baselines": {
-                "fifo": {"p95_bsld": fifo.p95_bsld, "utilization": fifo.utilization},
-                "easy_backfill": {"p95_bsld": easy.p95_bsld, "utilization": easy.utilization},
-            },
-            "all_results": all_results,
-            "search_time_sec": elapsed,
-        }, f, indent=2)
+            f,
+            indent=2,
+        )
     print("\nSaved to: " + str(out_dir / "grid_search_results.json"))
 
 

@@ -1,11 +1,11 @@
 """Tests for run report export (JSON + Markdown)."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 import pytest
-
 from hpcopt.artifacts.report_export import (
     _validate_run_id,
     export_run_report,
@@ -36,9 +36,7 @@ def test_export_with_matching_files(tmp_path: Path) -> None:
     run_id = "test_run_001"
     report_dir = tmp_path / "reports"
     report_dir.mkdir()
-    (report_dir / f"{run_id}_quality.json").write_text(
-        json.dumps({"quality": "ok"}), encoding="utf-8"
-    )
+    (report_dir / f"{run_id}_quality.json").write_text(json.dumps({"quality": "ok"}), encoding="utf-8")
     sim_dir = tmp_path / "simulations"
     sim_dir.mkdir()
     model_dir = tmp_path / "models"

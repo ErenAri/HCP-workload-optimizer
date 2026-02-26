@@ -115,9 +115,7 @@ def _load_thresholds(config_path: Path | None) -> dict[str, Any]:
     if config_path is None:
         config_path = Path("configs/models/drift_thresholds.yaml")
     if not config_path.exists():
-        logger.info(
-            "Drift threshold config not found at %s; using defaults.", config_path
-        )
+        logger.info("Drift threshold config not found at %s; using defaults.", config_path)
         return dict(_DEFAULT_THRESHOLDS)
 
     try:
@@ -189,9 +187,7 @@ def _prepare_eval_frame(df: pd.DataFrame) -> pd.DataFrame:
     # Derive time-of-day features if missing.
     if "submit_hour" not in df.columns or df["submit_hour"].isna().all():
         if "submit_ts" in df.columns:
-            ts = pd.to_datetime(
-                pd.to_numeric(df["submit_ts"], errors="coerce"), unit="s", utc=True
-            )
+            ts = pd.to_datetime(pd.to_numeric(df["submit_ts"], errors="coerce"), unit="s", utc=True)
             df["submit_hour"] = ts.dt.hour
             df["submit_dow"] = ts.dt.dayofweek
     return df
@@ -236,9 +232,7 @@ def compute_drift_report(
     thresholds = _load_thresholds(Path(config_path) if config_path else None)
 
     psi_threshold = float(thresholds.get("psi_threshold", DEFAULT_PSI_THRESHOLD))
-    degrad_factor = float(
-        thresholds.get("metric_degradation_factor", DEFAULT_METRIC_DEGRADATION_FACTOR)
-    )
+    degrad_factor = float(thresholds.get("metric_degradation_factor", DEFAULT_METRIC_DEGRADATION_FACTOR))
     n_bins = int(thresholds.get("n_bins", DEFAULT_N_BINS))
 
     # ------------------------------------------------------------------
@@ -298,9 +292,7 @@ def compute_drift_report(
                 )
                 continue
 
-            psi_value, train_counts, eval_counts = _compute_psi(
-                train_vals, eval_vals, n_bins=n_bins
-            )
+            psi_value, train_counts, eval_counts = _compute_psi(train_vals, eval_vals, n_bins=n_bins)
             feature_psi_results.append(
                 FeaturePSI(
                     feature=feat,
@@ -346,9 +338,7 @@ def compute_drift_report(
         else:
             degradation_ratio = None
 
-        flagged = (
-            degradation_ratio is not None and degradation_ratio > degrad_factor
-        )
+        flagged = degradation_ratio is not None and degradation_ratio > degrad_factor
 
         metric_degradations.append(
             MetricDegradation(

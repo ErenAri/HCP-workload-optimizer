@@ -121,9 +121,7 @@ class ShadowIngestionDaemon:
     ) -> None:
         self._out_dir = Path(out_dir)
         self._report_dir = Path(report_dir)
-        self._watermark_path = (
-            Path(watermark_path) if watermark_path else DEFAULT_WATERMARK_PATH
-        )
+        self._watermark_path = Path(watermark_path) if watermark_path else DEFAULT_WATERMARK_PATH
         self._dataset_id_prefix = dataset_id_prefix
 
         self._source_type: str = ""
@@ -210,10 +208,7 @@ class ShadowIngestionDaemon:
 
         if watermark.last_processed_ts is not None:
             original_len = len(df)
-            df = df[
-                pd.to_numeric(df["submit_ts"], errors="coerce")
-                > watermark.last_processed_ts
-            ]
+            df = df[pd.to_numeric(df["submit_ts"], errors="coerce") > watermark.last_processed_ts]
             logger.info(
                 "Filtered %d -> %d rows (watermark=%d)",
                 original_len,
@@ -319,9 +314,7 @@ class ShadowIngestionDaemon:
             try:
                 result = self.poll_once()
                 if result.success:
-                    logger.info(
-                        "Poll complete: %d new rows ingested.", result.rows_ingested
-                    )
+                    logger.info("Poll complete: %d new rows ingested.", result.rows_ingested)
                 else:
                     logger.warning("Poll failed: %s", result.error)
             except (OSError, ValueError) as exc:

@@ -228,6 +228,7 @@ def _load_regression_thresholds(
         return default_drop, default_window
 
     import yaml
+
     cfg = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     defaults = cfg.get("default", {})
     drop = float(defaults.get("regression_max_drop", default_drop))
@@ -306,9 +307,7 @@ def run_benchmark_suite(
         "baseline_median_events_per_sec": baseline_median,
         "current_events_per_sec": current_sim_rate,
         "allowed_floor_events_per_sec": (
-            float(baseline_median * (1.0 - regression_max_drop))
-            if baseline_median > 0
-            else None
+            float(baseline_median * (1.0 - regression_max_drop)) if baseline_median > 0 else None
         ),
     }
     if baseline_median > 0:
@@ -354,4 +353,3 @@ def run_benchmark_suite(
         regression_fail=regression_fail,
         payload=payload,
     )
-

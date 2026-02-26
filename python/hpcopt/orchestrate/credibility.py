@@ -111,9 +111,7 @@ def run_credibility_protocol(
                     config_path=reference_suite_config,
                 )
                 if ref_match is not None:
-                    metadata = json.loads(
-                        ingest_result.dataset_metadata_path.read_text(encoding="utf-8")
-                    )
+                    metadata = json.loads(ingest_result.dataset_metadata_path.read_text(encoding="utf-8"))
                     metadata["reference_suite"] = ref_match
                     write_json(ingest_result.dataset_metadata_path, metadata)
         except (ValueError, FileNotFoundError) as exc:
@@ -220,9 +218,7 @@ def run_credibility_protocol(
         # Step 7: Fidelity gate
         logger.info("[%s] Step 7: Running fidelity gate", trace_id)
         fidelity_report_path = reports_dir / f"{run_id}_fidelity_report.json"
-        fidelity_config_resolved = (
-            fidelity_config if fidelity_config.exists() else None
-        )
+        fidelity_config_resolved = fidelity_config if fidelity_config.exists() else None
         fidelity_result = run_baseline_fidelity_gate(
             trace_df=trace_df,
             capacity_cpus=capacity_cpus,
@@ -264,11 +260,7 @@ def run_credibility_protocol(
                 "seed": seed,
                 "strict_invariants": strict_invariants,
             },
-            config_paths=[
-                p
-                for p in [reference_suite_config, fidelity_config]
-                if p.exists()
-            ],
+            config_paths=[p for p in [reference_suite_config, fidelity_config] if p.exists()],
             seeds=[seed],
         )
         manifest_path = reports_dir / f"{run_id}_credibility_manifest.json"
@@ -326,9 +318,7 @@ def run_suite_credibility(
     for trace in suite.traces:
         trace_file = raw_dir / trace.filename
         if not trace_file.exists():
-            logger.warning(
-                "Skipping trace %s: file not found at %s", trace.trace_id, trace_file
-            )
+            logger.warning("Skipping trace %s: file not found at %s", trace.trace_id, trace_file)
             aggregate.per_trace.append(
                 TraceRunResult(
                     trace_id=trace.trace_id,

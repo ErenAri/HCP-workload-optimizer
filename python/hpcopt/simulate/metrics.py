@@ -34,9 +34,7 @@ def compute_job_metrics(jobs_df: pd.DataFrame, capacity_cpus: int) -> dict[str, 
         utilization = 0.0
     else:
         throughput = float(len(jobs_df) / evaluation_duration)
-        cpu_sec = (
-            jobs_df["requested_cpus"].to_numpy(dtype=float) * runtime
-        ).sum()
+        cpu_sec = (jobs_df["requested_cpus"].to_numpy(dtype=float) * runtime).sum()
         utilization = float(cpu_sec / (capacity_cpus * evaluation_duration))
         utilization = max(0.0, min(1.0, utilization))
 

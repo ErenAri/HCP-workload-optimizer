@@ -47,7 +47,9 @@ def simulate_run_cmd(
     runtime_guard_k: float = typer.Option(0.5, min=0.0, max=2.0, help="ML backfill runtime guard coefficient"),
     strict_uncertainty_mode: bool = typer.Option(False, help="ML policy strict mode"),
     reference_suite_config: Path = typer.Option(
-        Path("configs/data/reference_suite.yaml"), exists=True, readable=True,
+        Path("configs/data/reference_suite.yaml"),
+        exists=True,
+        readable=True,
         help="Reference suite config for trace hash checks",
     ),
 ) -> None:
@@ -66,9 +68,13 @@ def simulate_run_cmd(
             runtime_predictor = RuntimeQuantilePredictor(resolved_model_dir)
 
     result = run_simulation_from_trace(
-        trace_df=trace_df, policy_id=policy, capacity_cpus=capacity_cpus,
-        run_id=resolved_run_id, strict_invariants=strict_invariants,
-        runtime_predictor=runtime_predictor, runtime_guard_k=runtime_guard_k,
+        trace_df=trace_df,
+        policy_id=policy,
+        capacity_cpus=capacity_cpus,
+        run_id=resolved_run_id,
+        strict_invariants=strict_invariants,
+        runtime_predictor=runtime_predictor,
+        runtime_guard_k=runtime_guard_k,
         strict_uncertainty_mode=strict_uncertainty_mode,
     )
 
@@ -88,26 +94,37 @@ def simulate_run_cmd(
             sha256_observed=trace_meta.get("source_trace_sha256"),
             config_path=reference_suite_config,
         )
-    write_json(sim_report_path, {
-        "run_id": resolved_run_id, "policy_id": policy, "status": "ok",
-        "metrics": result.metrics, "objective_metrics": result.objective_metrics,
-        "fallback_accounting": result.fallback_accounting,
-        "model_dir": str(resolved_model_dir) if resolved_model_dir is not None else None,
-        "source_trace_reference_suite": source_reference_match,
-        "jobs_artifact": str(jobs_path), "queue_artifact": str(queue_path),
-    })
+    write_json(
+        sim_report_path,
+        {
+            "run_id": resolved_run_id,
+            "policy_id": policy,
+            "status": "ok",
+            "metrics": result.metrics,
+            "objective_metrics": result.objective_metrics,
+            "fallback_accounting": result.fallback_accounting,
+            "model_dir": str(resolved_model_dir) if resolved_model_dir is not None else None,
+            "source_trace_reference_suite": source_reference_match,
+            "jobs_artifact": str(jobs_path),
+            "queue_artifact": str(queue_path),
+        },
+    )
     write_json(invariant_path, result.invariant_report)
 
     manifest = build_manifest(
-        command="hpcopt simulate run", inputs=[trace, reference_suite_config],
+        command="hpcopt simulate run",
+        inputs=[trace, reference_suite_config],
         outputs=[jobs_path, queue_path, sim_report_path, invariant_path],
         params={
-            "run_id": resolved_run_id, "policy_id": policy, "capacity_cpus": capacity_cpus,
+            "run_id": resolved_run_id,
+            "policy_id": policy,
+            "capacity_cpus": capacity_cpus,
             "strict_invariants": strict_invariants,
             "runtime_model_dir": str(resolved_model_dir) if resolved_model_dir else None,
             "runtime_guard_k": runtime_guard_k,
         },
-        config_paths=[reference_suite_config], seeds=[],
+        config_paths=[reference_suite_config],
+        seeds=[],
     )
     manifest_path = report_out / f"{resolved_run_id}_{policy.lower()}_manifest.json"
     write_manifest(manifest_path, manifest)
@@ -120,7 +137,9 @@ def simulate_fidelity_gate_cmd(
     trace: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset"),
     capacity_cpus: int = typer.Option(64, min=1, help="Cluster CPU capacity"),
     config: Path = typer.Option(
-        Path("configs/simulation/fidelity_gate.yaml"), exists=True, readable=True,
+        Path("configs/simulation/fidelity_gate.yaml"),
+        exists=True,
+        readable=True,
         help="Fidelity gate threshold config",
     ),
     out: Path = typer.Option(Path("outputs/reports"), help="Fidelity report output directory"),
@@ -132,14 +151,20 @@ def simulate_fidelity_gate_cmd(
     trace_df = pd.read_parquet(trace)
     report_path = out / f"{resolved_run_id}_fidelity_report.json"
     result = run_baseline_fidelity_gate(
-        trace_df=trace_df, capacity_cpus=capacity_cpus, out_path=report_path,
-        run_id=resolved_run_id, config_path=config, strict_invariants=strict_invariants,
+        trace_df=trace_df,
+        capacity_cpus=capacity_cpus,
+        out_path=report_path,
+        run_id=resolved_run_id,
+        config_path=config,
+        strict_invariants=strict_invariants,
     )
     manifest = build_manifest(
-        command="hpcopt simulate fidelity-gate", inputs=[trace, config],
+        command="hpcopt simulate fidelity-gate",
+        inputs=[trace, config],
         outputs=[result.report_path],
         params={"run_id": resolved_run_id, "capacity_cpus": capacity_cpus},
-        config_paths=[config], seeds=[],
+        config_paths=[config],
+        seeds=[],
     )
     manifest_path = out / f"{resolved_run_id}_fidelity_manifest.json"
     write_manifest(manifest_path, manifest)
@@ -171,11 +196,20 @@ def simulate_batsim_config_cmd(
     ensure_dir(report_out)
     resolved_run_id = run_id or f"batsim_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
     config = build_batsim_run_config(
-        run_id=resolved_run_id, trace_dataset=trace, policy_id=policy,
-        out_dir=out, platform_path=platform_path, workload_path=workload_path,
-        capacity_cpus=capacity_cpus, edc_mode=edc_mode, edc_library_path=edc_library_path,
-        edc_socket_endpoint=edc_socket_endpoint, edc_init_json=edc_init_json,
-        export_prefix=export_prefix, use_wsl_defaults=use_wsl_defaults, wsl_distro=wsl_distro,
+        run_id=resolved_run_id,
+        trace_dataset=trace,
+        policy_id=policy,
+        out_dir=out,
+        platform_path=platform_path,
+        workload_path=workload_path,
+        capacity_cpus=capacity_cpus,
+        edc_mode=edc_mode,
+        edc_library_path=edc_library_path,
+        edc_socket_endpoint=edc_socket_endpoint,
+        edc_init_json=edc_init_json,
+        export_prefix=export_prefix,
+        use_wsl_defaults=use_wsl_defaults,
+        wsl_distro=wsl_distro,
     )
     typer.echo(f"Batsim config: {config.config_path}")
 
@@ -197,12 +231,19 @@ def simulate_batsim_run_cmd(
     ensure_dir(out)
     ensure_dir(simulation_out)
     result = invoke_batsim_run(
-        config_path=config, batsim_bin=batsim_bin, dry_run=dry_run,
-        use_wsl=use_wsl, wsl_distro=wsl_distro, wsl_load_nix_profile=wsl_load_nix_profile,
+        config_path=config,
+        batsim_bin=batsim_bin,
+        dry_run=dry_run,
+        use_wsl=use_wsl,
+        wsl_distro=wsl_distro,
+        wsl_load_nix_profile=wsl_load_nix_profile,
     )
     report_payload: dict[str, object] = {
-        "config_path": str(config), "status": result.status, "reason": result.reason,
-        "returncode": result.returncode, "command": result.command,
+        "config_path": str(config),
+        "status": result.status,
+        "reason": result.reason,
+        "returncode": result.returncode,
+        "command": result.command,
     }
     report_path = out / f"{config.stem}_batsim_run_report.json"
     write_json(report_path, report_payload)
@@ -219,7 +260,9 @@ def simulate_replay_baselines_cmd(
     run_id: str | None = typer.Option(None),
     strict_invariants: bool = typer.Option(True),
     reference_suite_config: Path = typer.Option(
-        Path("configs/data/reference_suite.yaml"), exists=True, readable=True,
+        Path("configs/data/reference_suite.yaml"),
+        exists=True,
+        readable=True,
     ),
 ) -> None:
     ensure_dir(out)
@@ -232,8 +275,11 @@ def simulate_replay_baselines_cmd(
 
     for policy in policies:
         sim = run_simulation_from_trace(
-            trace_df=trace_df, policy_id=policy, capacity_cpus=capacity_cpus,
-            run_id=f"{resolved_run_id}_{policy.lower()}", strict_invariants=strict_invariants,
+            trace_df=trace_df,
+            policy_id=policy,
+            capacity_cpus=capacity_cpus,
+            run_id=f"{resolved_run_id}_{policy.lower()}",
+            strict_invariants=strict_invariants,
         )
         jobs_path = out / f"{resolved_run_id}_{policy.lower()}_jobs.parquet"
         queue_path = out / f"{resolved_run_id}_{policy.lower()}_queue.parquet"
@@ -243,7 +289,8 @@ def simulate_replay_baselines_cmd(
         write_json(inv_path, sim.invariant_report)
         outputs.extend([jobs_path, queue_path, inv_path])
         combined[policy] = {
-            "metrics": sim.metrics, "objective_metrics": sim.objective_metrics,
+            "metrics": sim.metrics,
+            "objective_metrics": sim.objective_metrics,
             "fallback_accounting": sim.fallback_accounting,
         }
 
@@ -258,9 +305,12 @@ def simulate_replay_baselines_cmd(
         },
     )
     manifest = build_manifest(
-        command="hpcopt simulate replay-baselines", inputs=[trace, reference_suite_config],
-        outputs=outputs + [summary_path], params={"run_id": resolved_run_id, "capacity_cpus": capacity_cpus},
-        config_paths=[reference_suite_config], seeds=[],
+        command="hpcopt simulate replay-baselines",
+        inputs=[trace, reference_suite_config],
+        outputs=outputs + [summary_path],
+        params={"run_id": resolved_run_id, "capacity_cpus": capacity_cpus},
+        config_paths=[reference_suite_config],
+        seeds=[],
     )
     manifest_path = report_out / f"{resolved_run_id}_baseline_replay_manifest.json"
     write_manifest(manifest_path, manifest)
@@ -282,8 +332,13 @@ def stress_gen_cmd(
     burst_factor: int = typer.Option(4),
     burst_duration_sec: int = typer.Option(1800),
 ) -> None:
-    params = {"alpha": alpha, "target_util": target_util, "top_user_share": top_user_share,
-              "burst_factor": burst_factor, "burst_duration_sec": burst_duration_sec}
+    params = {
+        "alpha": alpha,
+        "target_util": target_util,
+        "top_user_share": top_user_share,
+        "burst_factor": burst_factor,
+        "burst_duration_sec": burst_duration_sec,
+    }
     result = generate_stress_scenario(scenario=scenario, out_dir=out, n_jobs=n_jobs, seed=seed, params=params)
     typer.echo(f"Stress dataset: {result.dataset_path}")
 
@@ -314,8 +369,7 @@ def stress_run_cmd(
     policy_id = str(cfg.get("policy_id", "ML_BACKFILL_P50"))
     runtime_guard_k = float(cfg.get("runtime_guard_k", 0.5))
     resolved_run_id = (
-        run_id
-        or f"stress_{scenario}_{policy_id.lower()}_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
+        run_id or f"stress_{scenario}_{policy_id.lower()}_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
     )
     trace_df = pd.read_parquet(resolved_dataset)
 
@@ -327,17 +381,25 @@ def stress_run_cmd(
             runtime_predictor = RuntimeQuantilePredictor(resolved_model_dir)
 
     baseline_sim = run_simulation_from_trace(
-        trace_df=trace_df, policy_id=baseline_policy, capacity_cpus=capacity_cpus,
-        run_id=f"{resolved_run_id}_{baseline_policy.lower()}", strict_invariants=strict_invariants,
+        trace_df=trace_df,
+        policy_id=baseline_policy,
+        capacity_cpus=capacity_cpus,
+        run_id=f"{resolved_run_id}_{baseline_policy.lower()}",
+        strict_invariants=strict_invariants,
     )
     candidate_sim = run_simulation_from_trace(
-        trace_df=trace_df, policy_id=policy_id, capacity_cpus=capacity_cpus,
-        run_id=f"{resolved_run_id}_{policy_id.lower()}", strict_invariants=strict_invariants,
-        runtime_predictor=runtime_predictor, runtime_guard_k=runtime_guard_k,
+        trace_df=trace_df,
+        policy_id=policy_id,
+        capacity_cpus=capacity_cpus,
+        run_id=f"{resolved_run_id}_{policy_id.lower()}",
+        strict_invariants=strict_invariants,
+        runtime_predictor=runtime_predictor,
+        runtime_guard_k=runtime_guard_k,
     )
     fairness_cfg = cfg.get("fairness", {})
     constraints = evaluate_constraint_contract(
-        candidate=candidate_sim.objective_metrics, baseline=baseline_sim.objective_metrics,
+        candidate=candidate_sim.objective_metrics,
+        baseline=baseline_sim.objective_metrics,
         starvation_rate_max=float(fairness_cfg.get("starvation_rate_max", 0.02)),
         fairness_dev_delta_max=float(fairness_cfg.get("fairness_dev_delta_max", 0.05)),
         jain_delta_max=float(fairness_cfg.get("jain_delta_max", 0.03)),
@@ -354,19 +416,29 @@ def stress_run_cmd(
             degrade_signatures[key] = {"candidate": cval, "baseline": bval, "delta": delta, "ratio": round(ratio, 6)}
 
     stress_report_path = report_out / f"{resolved_run_id}_stress_report.json"
-    write_json(stress_report_path, {
-        "run_id": resolved_run_id, "scenario": scenario, "status": stress_status,
-        "constraints": constraints, "candidate_policy_id": policy_id,
-        "baseline_policy_id": baseline_policy, "degrade_signatures": degrade_signatures,
-    })
+    write_json(
+        stress_report_path,
+        {
+            "run_id": resolved_run_id,
+            "scenario": scenario,
+            "status": stress_status,
+            "constraints": constraints,
+            "candidate_policy_id": policy_id,
+            "baseline_policy_id": baseline_policy,
+            "degrade_signatures": degrade_signatures,
+        },
+    )
 
     manifest = build_manifest(
         command="hpcopt stress run",
         inputs=[resolved_dataset, policy],
         outputs=[stress_report_path],
         params={
-            "run_id": resolved_run_id, "scenario": scenario, "policy_id": policy_id,
-            "baseline_policy": baseline_policy, "capacity_cpus": capacity_cpus,
+            "run_id": resolved_run_id,
+            "scenario": scenario,
+            "policy_id": policy_id,
+            "baseline_policy": baseline_policy,
+            "capacity_cpus": capacity_cpus,
         },
         seeds=[],
     )

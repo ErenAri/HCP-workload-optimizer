@@ -1,10 +1,10 @@
 """Tests for retry decorator and circuit breaker."""
+
 from __future__ import annotations
 
 import time
 
 import pytest
-
 from hpcopt.utils.resilience import CircuitBreaker, retry
 
 

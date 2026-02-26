@@ -50,9 +50,7 @@ def _base_dataframe(n_jobs: int, seed: int) -> pd.DataFrame:
             }
         )
     df = pd.DataFrame(rows)
-    df["runtime_overrequest_ratio"] = (
-        df["runtime_requested_sec"] / df["runtime_actual_sec"]
-    )
+    df["runtime_overrequest_ratio"] = df["runtime_requested_sec"] / df["runtime_actual_sec"]
     return df
 
 
@@ -71,8 +69,10 @@ def generate_stress_scenario(
         alpha = float(params.get("alpha", 1.2))
         # Pareto-like long tail on runtime
         df["runtime_actual_sec"] = (
-            60 * (1 + (pd.Series([random.paretovariate(alpha) for _ in range(len(df))])))
-        ).astype(int).clip(upper=7 * 24 * 3600)
+            (60 * (1 + (pd.Series([random.paretovariate(alpha) for _ in range(len(df))]))))
+            .astype(int)
+            .clip(upper=7 * 24 * 3600)
+        )
         df["runtime_requested_sec"] = (df["runtime_actual_sec"] * 1.5).astype(int)
     elif scenario == "low_congestion":
         target_util = float(params.get("target_util", 0.35))
@@ -89,12 +89,8 @@ def generate_stress_scenario(
         burst_factor = int(params.get("burst_factor", 4))
         burst_duration_sec = int(params.get("burst_duration_sec", 1800))
         burst_start = int(df["submit_ts"].quantile(0.4))
-        mask = (df["submit_ts"] >= burst_start) & (
-            df["submit_ts"] < burst_start + burst_duration_sec
-        )
-        df.loc[mask, "submit_ts"] = burst_start + (
-            (df.loc[mask, "submit_ts"] - burst_start) // burst_factor
-        )
+        mask = (df["submit_ts"] >= burst_start) & (df["submit_ts"] < burst_start + burst_duration_sec)
+        df.loc[mask, "submit_ts"] = burst_start + ((df.loc[mask, "submit_ts"] - burst_start) // burst_factor)
         df = df.sort_values("submit_ts").reset_index(drop=True)
         df["job_id"] = range(1, len(df) + 1)
     else:

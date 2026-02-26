@@ -1,11 +1,11 @@
 """CLI tests for profiling and feature pipeline commands."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-from typer.testing import CliRunner
-
 from hpcopt.cli.main import app
+from typer.testing import CliRunner
 
 
 def test_profile_trace_cli(tmp_path: Path, stress_dataset) -> None:
@@ -14,10 +14,14 @@ def test_profile_trace_cli(tmp_path: Path, stress_dataset) -> None:
     result = runner.invoke(
         app,
         [
-            "profile", "trace",
-            "--dataset", str(stress_dataset.dataset_path),
-            "--out", str(report_dir),
-            "--dataset-id", "profile_cli_test",
+            "profile",
+            "trace",
+            "--dataset",
+            str(stress_dataset.dataset_path),
+            "--out",
+            str(report_dir),
+            "--dataset-id",
+            "profile_cli_test",
         ],
     )
     assert result.exit_code == 0, result.output
@@ -32,14 +36,22 @@ def test_features_build_cli(tmp_path: Path, stress_dataset) -> None:
     result = runner.invoke(
         app,
         [
-            "features", "build",
-            "--dataset", str(stress_dataset.dataset_path),
-            "--out", str(out_dir),
-            "--report-out", str(report_dir),
-            "--dataset-id", "features_cli_test",
-            "--n-folds", "2",
-            "--train-fraction", "0.60",
-            "--val-fraction", "0.20",
+            "features",
+            "build",
+            "--dataset",
+            str(stress_dataset.dataset_path),
+            "--out",
+            str(out_dir),
+            "--report-out",
+            str(report_dir),
+            "--dataset-id",
+            "features_cli_test",
+            "--n-folds",
+            "2",
+            "--train-fraction",
+            "0.60",
+            "--val-fraction",
+            "0.20",
         ],
     )
     assert result.exit_code == 0, result.output

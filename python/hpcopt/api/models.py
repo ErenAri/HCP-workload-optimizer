@@ -1,4 +1,5 @@
 """Pydantic request/response models for the HPC Workload Optimizer API."""
+
 from __future__ import annotations
 
 from typing import Literal

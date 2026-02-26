@@ -198,9 +198,7 @@ def assemble_credibility_dossier(
     if recommendation_summary["failure_modes"]:
         md_lines.append("### Failure Modes")
         for fm in recommendation_summary["failure_modes"]:
-            md_lines.append(
-                f"- **{fm.get('trace_id')}** / {fm.get('policy_id')}: {fm.get('rejection_reasons', [])}"
-            )
+            md_lines.append(f"- **{fm.get('trace_id')}** / {fm.get('policy_id')}: {fm.get('rejection_reasons', [])}")
         md_lines.append("")
 
     md_lines.extend(

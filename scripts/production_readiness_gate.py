@@ -91,9 +91,7 @@ def _validate_release_gate(payload: dict[str, Any], checklist_path: Path) -> lis
     now = dt.datetime.now(tz=dt.UTC)
     age_days = (now - reviewed_at).days
     if age_days > 30:
-        errors.append(
-            f"{checklist_path}: checklist is stale ({age_days} days old); update metadata.reviewed_at_utc"
-        )
+        errors.append(f"{checklist_path}: checklist is stale ({age_days} days old); update metadata.reviewed_at_utc")
 
     for item in checks:
         if not item.get("required", False):

@@ -8,7 +8,6 @@ from typing import Any
 
 from hpcopt.api.app import app
 
-
 HTTP_METHODS = {"get", "post", "put", "patch", "delete", "options", "head"}
 
 

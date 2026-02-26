@@ -1,4 +1,5 @@
 """Tests for the Prometheus metrics module."""
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -67,6 +68,7 @@ def test_noop_when_prometheus_not_available() -> None:
     with patch("hpcopt.api.metrics._PROMETHEUS_AVAILABLE", False):
         # Reset metrics so _ensure_metrics returns False
         import hpcopt.api.metrics as m
+
         old_total = m._requests_total
         m._requests_total = None
         try:

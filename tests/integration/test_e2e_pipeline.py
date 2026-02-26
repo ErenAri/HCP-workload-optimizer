@@ -1,4 +1,5 @@
 """End-to-end pipeline test: ingest -> features -> train -> predict via API."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,8 +19,8 @@ def test_full_pipeline_ingest_to_prediction(tmp_path: Path, monkeypatch) -> None
       4. Point the API at the trained model and POST a predict request.
       5. Assert the response uses the real model (not fallback).
     """
-    from hpcopt.ingest.swf import ingest_swf
     from hpcopt.features.pipeline import build_feature_dataset
+    from hpcopt.ingest.swf import ingest_swf
     from hpcopt.models.runtime_quantile import train_runtime_quantile_models
 
     # --- Step 1: Ingest SWF trace ---
@@ -66,9 +67,11 @@ def test_full_pipeline_ingest_to_prediction(tmp_path: Path, monkeypatch) -> None
     monkeypatch.setenv("HPCOPT_RUNTIME_MODEL_DIR", str(train_result.model_dir))
 
     from hpcopt.api.model_cache import reset_for_testing as reset_model_cache
+
     reset_model_cache()
 
     from hpcopt.api.app import app as api_app
+
     client = TestClient(api_app)
     response = client.post(
         "/v1/runtime/predict",
@@ -96,8 +99,8 @@ def test_full_pipeline_ingest_to_prediction(tmp_path: Path, monkeypatch) -> None
 @pytest.mark.integration
 def test_pipeline_with_stress_data(tmp_path: Path, monkeypatch) -> None:
     """Verify the pipeline works with synthetic stress data (no fixture needed)."""
-    from hpcopt.simulate.stress import generate_stress_scenario
     from hpcopt.models.runtime_quantile import train_runtime_quantile_models
+    from hpcopt.simulate.stress import generate_stress_scenario
 
     # Generate stress data
     stress = generate_stress_scenario(
@@ -121,9 +124,11 @@ def test_pipeline_with_stress_data(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HPCOPT_RUNTIME_MODEL_DIR", str(train_result.model_dir))
 
     from hpcopt.api.model_cache import reset_for_testing as reset_model_cache
+
     reset_model_cache()
 
     from hpcopt.api.app import app as api_app
+
     client = TestClient(api_app)
     response = client.post(
         "/v1/runtime/predict",

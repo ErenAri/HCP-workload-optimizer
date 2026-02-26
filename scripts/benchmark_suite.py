@@ -2,6 +2,7 @@
 
 Produces a comparative results table across all traces and policies.
 """
+
 from __future__ import annotations
 
 import json
@@ -109,9 +110,10 @@ def main() -> None:
             rpt = reports / (ds_id + "_" + pol.lower() + ".json")
             t0 = time.perf_counter()
             proc = subprocess.run(
-                [str(RUST_BIN), "--input", str(jf), "--policy", pol,
-                 "--capacity-cpus", str(cap), "--output", str(rpt)],
-                capture_output=True, text=True, timeout=60,
+                [str(RUST_BIN), "--input", str(jf), "--policy", pol, "--capacity-cpus", str(cap), "--output", str(rpt)],
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
             dt = time.perf_counter() - t0
 
@@ -129,22 +131,34 @@ def main() -> None:
             viol = m["invariant_violations"]
             njobs = m["jobs_total"]
 
-            print("  " + pol + ": p95_bsld=" + format(bsld, ".2f")
-                  + ", util=" + format(util, ".1%")
-                  + ", mean_wait=" + format(mw, ",.0f") + "s"
-                  + ", time=" + format(dt, ".3f") + "s")
+            print(
+                "  "
+                + pol
+                + ": p95_bsld="
+                + format(bsld, ".2f")
+                + ", util="
+                + format(util, ".1%")
+                + ", mean_wait="
+                + format(mw, ",.0f")
+                + "s"
+                + ", time="
+                + format(dt, ".3f")
+                + "s"
+            )
 
-            results.append({
-                "trace": name,
-                "jobs": njobs,
-                "policy": pol,
-                "p95_bsld": bsld,
-                "utilization": util,
-                "mean_wait_sec": mw,
-                "p95_wait_sec": pw,
-                "elapsed_sec": dt,
-                "violations": viol,
-            })
+            results.append(
+                {
+                    "trace": name,
+                    "jobs": njobs,
+                    "policy": pol,
+                    "p95_bsld": bsld,
+                    "utilization": util,
+                    "mean_wait_sec": mw,
+                    "p95_wait_sec": pw,
+                    "elapsed_sec": dt,
+                    "violations": viol,
+                }
+            )
 
     # ── Results table ───────────────────────────────────────────
 
@@ -157,10 +171,17 @@ def main() -> None:
     print("-" * len(hdr))
 
     for r in results:
-        print("{:<12} {:>8,} {:<25} {:>10.2f} {:>6.1%} {:>10,.0f}s {:>7.3f}s".format(
-            r["trace"], r["jobs"], r["policy"], r["p95_bsld"],
-            r["utilization"], r["mean_wait_sec"], r["elapsed_sec"]
-        ))
+        print(
+            "{:<12} {:>8,} {:<25} {:>10.2f} {:>6.1%} {:>10,.0f}s {:>7.3f}s".format(
+                r["trace"],
+                r["jobs"],
+                r["policy"],
+                r["p95_bsld"],
+                r["utilization"],
+                r["mean_wait_sec"],
+                r["elapsed_sec"],
+            )
+        )
 
     # ── EASY vs FIFO lift ───────────────────────────────────────
 
@@ -169,9 +190,7 @@ def main() -> None:
     fifo = {r["trace"]: r for r in results if r["policy"] == "FIFO_STRICT"}
     easy = {r["trace"]: r for r in results if r["policy"] == "EASY_BACKFILL_BASELINE"}
 
-    print("{:<12} {:>14} {:>14} {:>12}".format(
-        "Trace", "FIFO p95_BSLD", "EASY p95_BSLD", "Improvement"
-    ))
+    print("{:<12} {:>14} {:>14} {:>12}".format("Trace", "FIFO p95_BSLD", "EASY p95_BSLD", "Improvement"))
     print("-" * 55)
 
     for tname in fifo:

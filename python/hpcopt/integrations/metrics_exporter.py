@@ -7,6 +7,7 @@ Usage:
     # As standalone: python -m hpcopt.integrations.metrics_exporter
     # In FastAPI: app.mount("/metrics", metrics_app)
 """
+
 from __future__ import annotations
 
 import logging
@@ -107,6 +108,8 @@ class HPCOptMetricsExporter:
         """Collect prediction feedback metrics."""
         try:
             from hpcopt.integrations.feedback import FeedbackTracker
+
+            assert self.feedback_store is not None  # narrowed by caller
             tracker = FeedbackTracker(store_path=self.feedback_store)
             report = tracker.generate_report()
 
@@ -180,6 +183,7 @@ class HPCOptMetricsExporter:
 
 
 # ── FastAPI integration ─────────────────────────────────────────
+
 
 def create_metrics_app(feedback_store: Path | None = None) -> Any:
     """Create a FastAPI sub-app that serves /metrics endpoint."""

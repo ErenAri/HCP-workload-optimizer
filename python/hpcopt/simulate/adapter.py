@@ -97,20 +97,12 @@ def parse_state_snapshot(payload: dict[str, Any]) -> SchedulerStateSnapshot:
                 requested_cpus=int(job["requested_cpus"]),
                 runtime_estimate_sec=max(0, int(job["runtime_estimate_sec"])),
                 runtime_p90_sec=(
-                    max(0, int(job["runtime_p90_sec"]))
-                    if job.get("runtime_p90_sec") is not None
-                    else None
+                    max(0, int(job["runtime_p90_sec"])) if job.get("runtime_p90_sec") is not None else None
                 ),
                 runtime_guard_sec=(
-                    max(0, int(job["runtime_guard_sec"]))
-                    if job.get("runtime_guard_sec") is not None
-                    else None
+                    max(0, int(job["runtime_guard_sec"])) if job.get("runtime_guard_sec") is not None else None
                 ),
-                estimate_source=(
-                    str(job.get("estimate_source"))
-                    if job.get("estimate_source") is not None
-                    else None
-                ),
+                estimate_source=(str(job.get("estimate_source")) if job.get("estimate_source") is not None else None),
             )
         )
 
@@ -330,11 +322,7 @@ def choose_ml_backfill_p50(
             continue
 
         if strict_uncertainty_mode:
-            runtime_for_gate = (
-                job.runtime_p90_sec
-                or job.runtime_guard_sec
-                or job.runtime_estimate_sec
-            )
+            runtime_for_gate = job.runtime_p90_sec or job.runtime_guard_sec or job.runtime_estimate_sec
         else:
             runtime_for_gate = job.runtime_guard_sec or job.runtime_estimate_sec
         runtime_for_gate = max(0, int(runtime_for_gate))

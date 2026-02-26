@@ -2,6 +2,7 @@
 
 No-ops gracefully when ``opentelemetry`` packages are not installed.
 """
+
 from __future__ import annotations
 
 import logging
@@ -38,6 +39,7 @@ def init_tracing(app: FastAPI) -> None:
         try:
             from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
             from opentelemetry.sdk.trace.export import BatchSpanProcessor
+
             exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
             provider.add_span_processor(BatchSpanProcessor(exporter))
             logger.info("OpenTelemetry OTLP exporter configured: %s", otlp_endpoint)

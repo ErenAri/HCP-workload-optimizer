@@ -4,13 +4,12 @@ Tests invariants:
 - Identical observed vs simulated data always passes
 - Metric computations are bounded and deterministic
 """
+
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
-
-from hypothesis import given, settings, HealthCheck
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 

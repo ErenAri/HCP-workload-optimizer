@@ -1,6 +1,5 @@
-from pathlib import Path
-
 import json
+from pathlib import Path
 
 from hpcopt.ingest.swf import ingest_swf
 from hpcopt.profile.trace_profile import build_trace_profile

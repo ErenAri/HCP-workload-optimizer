@@ -1,4 +1,5 @@
 """Resilience primitives: retry decorator and circuit breaker."""
+
 from __future__ import annotations
 
 import functools
@@ -32,13 +33,19 @@ def retry(
                         delay = backoff_base * (2 ** (attempt - 1))
                         logger.warning(
                             "%s failed (attempt %d/%d): %s — retrying in %.1fs",
-                            fn.__name__, attempt, max_attempts, exc, delay,
+                            fn.__name__,
+                            attempt,
+                            max_attempts,
+                            exc,
+                            delay,
                         )
                         time.sleep(delay)
                     else:
                         logger.error(
                             "%s failed after %d attempts: %s",
-                            fn.__name__, max_attempts, exc,
+                            fn.__name__,
+                            max_attempts,
+                            exc,
                         )
             raise last_exc  # type: ignore[misc]
 

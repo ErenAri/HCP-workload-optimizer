@@ -65,9 +65,7 @@ def run_guard_k_sweep(
                 runtime_guard_k=k,
             )
             obj = sim.objective_metrics
-            constraints = evaluate_constraint_contract(
-                candidate=obj, baseline=baseline_obj
-            )
+            constraints = evaluate_constraint_contract(candidate=obj, baseline=baseline_obj)
             delta_p95 = float(baseline_obj["p95_bsld"] - obj["p95_bsld"])
             delta_util = float(obj["utilization_cpu"] - baseline_obj["utilization_cpu"])
 
@@ -84,9 +82,7 @@ def run_guard_k_sweep(
                     "delta_utilization": delta_util,
                     "constraints_passed": constraints["constraints_passed"],
                     "violations": constraints["violations"],
-                    "prediction_used_rate": float(
-                        sim.fallback_accounting.get("prediction_used_rate", 0)
-                    ),
+                    "prediction_used_rate": float(sim.fallback_accounting.get("prediction_used_rate", 0)),
                     "status": "ok",
                 }
             )
@@ -134,9 +130,7 @@ def build_sensitivity_report(
     ok_deltas = [float(r.get("delta_p95_bsld", 0)) for r in sweep_rows if r.get("status") == "ok"]
     effect_size_range = (min(ok_deltas), max(ok_deltas)) if ok_deltas else (0.0, 0.0)
 
-    metrics_df = pd.DataFrame(
-        [r for r in sweep_rows if r.get("status") == "ok"]
-    )
+    metrics_df = pd.DataFrame([r for r in sweep_rows if r.get("status") == "ok"])
 
     payload = {
         "baseline": baseline,

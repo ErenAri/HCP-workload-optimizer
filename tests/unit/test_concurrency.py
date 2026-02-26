@@ -1,4 +1,5 @@
 """Concurrency tests: model cache, rate limiter, registry, secrets."""
+
 from __future__ import annotations
 
 import threading

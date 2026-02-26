@@ -1,4 +1,5 @@
 """Security-focused tests: auth edge cases, input validation, admin RBAC."""
+
 from __future__ import annotations
 
 import pytest
@@ -23,6 +24,7 @@ def _reset() -> None:
 def test_auth_empty_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HPCOPT_API_KEYS", "a")
     from hpcopt.utils.secrets import invalidate_api_keys_cache
+
     invalidate_api_keys_cache()
 
     response = client.post(
@@ -39,6 +41,7 @@ def test_auth_empty_key(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_auth_very_long_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HPCOPT_API_KEYS", "a")
     from hpcopt.utils.secrets import invalidate_api_keys_cache
+
     invalidate_api_keys_cache()
 
     long_key = "x" * 10_000
@@ -56,6 +59,7 @@ def test_auth_very_long_key(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_auth_key_with_null_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HPCOPT_API_KEYS", "a")
     from hpcopt.utils.secrets import invalidate_api_keys_cache
+
     invalidate_api_keys_cache()
 
     response = client.post(
@@ -85,6 +89,7 @@ def test_admin_auth_no_keys_configured() -> None:
 def test_admin_auth_prefix_check(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HPCOPT_API_KEYS", "admin-a,u")
     from hpcopt.utils.secrets import invalidate_api_keys_cache
+
     invalidate_api_keys_cache()
 
     assert check_admin_auth("/v1/admin/log-level", "admin-a") is True

@@ -104,12 +104,8 @@ def _policy_fidelity(
         cadence_sec=cadence_sec,
     )
 
-    agg_threshold_single = float(
-        thresholds["fidelity_gate"]["aggregate"]["single_metric_max_divergence"]
-    )
-    agg_threshold_dual = float(
-        thresholds["fidelity_gate"]["aggregate"]["two_metric_max_divergence"]
-    )
+    agg_threshold_single = float(thresholds["fidelity_gate"]["aggregate"]["single_metric_max_divergence"])
+    agg_threshold_dual = float(thresholds["fidelity_gate"]["aggregate"]["two_metric_max_divergence"])
     dist_wait_kl_max = float(thresholds["fidelity_gate"]["distribution"]["wait_kl_max"])
     dist_slowdown_ks_max = float(thresholds["fidelity_gate"]["distribution"]["slowdown_ks_max"])
     dist_queue_corr_min = float(thresholds["fidelity_gate"]["distribution"]["queue_corr_min"])
@@ -182,22 +178,14 @@ def run_baseline_fidelity_gate(
         )
         policy_reports[policy_id]["invariant_report"] = sim.invariant_report
 
-    overall_status = (
-        "pass"
-        if all(report["status"] == "pass" for report in policy_reports.values())
-        else "fail"
-    )
+    overall_status = "pass" if all(report["status"] == "pass" for report in policy_reports.values()) else "fail"
 
     report = {
         "run_id": run_id,
         "timestamp_utc": dt.datetime.now(tz=dt.UTC).isoformat(),
         "status": overall_status,
-        "aggregate_metrics": {
-            policy: payload["core_metric_divergence"] for policy, payload in policy_reports.items()
-        },
-        "distribution_metrics": {
-            policy: payload["distribution_metrics"] for policy, payload in policy_reports.items()
-        },
+        "aggregate_metrics": {policy: payload["core_metric_divergence"] for policy, payload in policy_reports.items()},
+        "distribution_metrics": {policy: payload["distribution_metrics"] for policy, payload in policy_reports.items()},
         "queue_series_contract": {
             "mode": thresholds["fidelity_gate"]["queue_series"]["mode"],
             "cadence_sec": int(thresholds["fidelity_gate"]["queue_series"]["cadence_sec"]),

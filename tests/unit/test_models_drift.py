@@ -1,11 +1,11 @@
 """Tests for the drift detection module."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 import numpy as np
 import pytest
-
 from hpcopt.models.drift import (
     DEFAULT_METRIC_DEGRADATION_FACTOR,
     DEFAULT_N_BINS,
@@ -78,10 +78,17 @@ def test_compute_drift_report_end_to_end(tmp_path: Path) -> None:
     from hpcopt.simulate.stress import generate_stress_scenario
 
     stress = generate_stress_scenario(
-        scenario="heavy_tail", out_dir=tmp_path, n_jobs=100, seed=1, params={"alpha": 1.25},
+        scenario="heavy_tail",
+        out_dir=tmp_path,
+        n_jobs=100,
+        seed=1,
+        params={"alpha": 1.25},
     )
     result = train_runtime_quantile_models(
-        dataset_path=stress.dataset_path, out_dir=tmp_path / "m", model_id="drift_test", seed=1,
+        dataset_path=stress.dataset_path,
+        out_dir=tmp_path / "m",
+        model_id="drift_test",
+        seed=1,
     )
 
     report = compute_drift_report(

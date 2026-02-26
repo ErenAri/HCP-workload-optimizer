@@ -1,9 +1,10 @@
 """Tests for file-based API key loading."""
+
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
 
+import pytest
 from hpcopt.utils.secrets import invalidate_api_keys_cache, load_api_keys
 
 

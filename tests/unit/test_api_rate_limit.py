@@ -1,11 +1,10 @@
 """Tests for the token-bucket rate limiter."""
+
 from __future__ import annotations
 
 import threading
-import time
 
 import pytest
-
 from hpcopt.api.rate_limit import (
     check_rate_limit,
     reset_for_testing,

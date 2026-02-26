@@ -6,12 +6,11 @@ Tests deterministic invariants that must hold for all valid inputs:
 - job start_ts >= submit_ts always
 - deterministic replay (same seed -> same outcome)
 """
+
 from __future__ import annotations
 
 import pandas as pd
-import pytest
-
-from hypothesis import given, settings, assume, HealthCheck
+from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 
@@ -23,10 +22,12 @@ def _make_trace_df(jobs: list[dict]) -> pd.DataFrame:
 def _job_strategy(min_jobs: int = 5, max_jobs: int = 50):
     """Strategy that generates a valid trace DataFrame for simulation."""
     return st.integers(min_value=min_jobs, max_value=max_jobs).flatmap(
-        lambda n: st.fixed_dictionaries({
-            "n_jobs": st.just(n),
-            "seed": st.integers(min_value=0, max_value=10000),
-        })
+        lambda n: st.fixed_dictionaries(
+            {
+                "n_jobs": st.just(n),
+                "seed": st.integers(min_value=0, max_value=10000),
+            }
+        )
     )
 
 
@@ -34,11 +35,11 @@ def _job_strategy(min_jobs: int = 5, max_jobs: int = 50):
 @settings(max_examples=10, suppress_health_check=[HealthCheck.too_slow], deadline=None)
 def test_simulation_invariants_fifo(data: dict) -> None:
     """FIFO_STRICT simulation: all invariants hold on synthetic data."""
-    from hpcopt.simulate.stress import generate_stress_scenario
-    from hpcopt.simulate.core import run_simulation_from_trace
-
     import tempfile
     from pathlib import Path
+
+    from hpcopt.simulate.core import run_simulation_from_trace
+    from hpcopt.simulate.stress import generate_stress_scenario
 
     with tempfile.TemporaryDirectory() as tmp:
         stress = generate_stress_scenario(
@@ -80,11 +81,11 @@ def test_simulation_invariants_fifo(data: dict) -> None:
 @settings(max_examples=10, suppress_health_check=[HealthCheck.too_slow], deadline=None)
 def test_simulation_invariants_easy_backfill(data: dict) -> None:
     """EASY_BACKFILL_BASELINE simulation: all invariants hold on synthetic data."""
-    from hpcopt.simulate.stress import generate_stress_scenario
-    from hpcopt.simulate.core import run_simulation_from_trace
-
     import tempfile
     from pathlib import Path
+
+    from hpcopt.simulate.core import run_simulation_from_trace
+    from hpcopt.simulate.stress import generate_stress_scenario
 
     with tempfile.TemporaryDirectory() as tmp:
         stress = generate_stress_scenario(
@@ -120,11 +121,11 @@ def test_simulation_invariants_easy_backfill(data: dict) -> None:
 @settings(max_examples=5, suppress_health_check=[HealthCheck.too_slow], deadline=None)
 def test_simulation_deterministic_replay(seed_a: int) -> None:
     """Same trace + same seed must produce byte-identical results."""
-    from hpcopt.simulate.stress import generate_stress_scenario
-    from hpcopt.simulate.core import run_simulation_from_trace
-
     import tempfile
     from pathlib import Path
+
+    from hpcopt.simulate.core import run_simulation_from_trace
+    from hpcopt.simulate.stress import generate_stress_scenario
 
     with tempfile.TemporaryDirectory() as tmp:
         stress = generate_stress_scenario(
@@ -159,11 +160,11 @@ def test_simulation_deterministic_replay(seed_a: int) -> None:
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow], deadline=None)
 def test_temporal_ordering_invariant(data: dict) -> None:
     """For all completed jobs: completion_ts >= start_ts >= submit_ts."""
-    from hpcopt.simulate.stress import generate_stress_scenario
-    from hpcopt.simulate.core import run_simulation_from_trace
-
     import tempfile
     from pathlib import Path
+
+    from hpcopt.simulate.core import run_simulation_from_trace
+    from hpcopt.simulate.stress import generate_stress_scenario
 
     with tempfile.TemporaryDirectory() as tmp:
         stress = generate_stress_scenario(
@@ -188,23 +189,22 @@ def test_temporal_ordering_invariant(data: dict) -> None:
             assert len(jobs) > 0
 
             # Full temporal chain: submit_ts <= start_ts <= end_ts
-            assert (jobs["start_ts"] >= jobs["submit_ts"]).all(), \
-                f"{policy}: start_ts < submit_ts for some jobs"
-            assert (jobs["end_ts"] >= jobs["start_ts"]).all(), \
-                f"{policy}: end_ts < start_ts for some jobs"
-            assert (jobs["end_ts"] >= jobs["submit_ts"]).all(), \
+            assert (jobs["start_ts"] >= jobs["submit_ts"]).all(), f"{policy}: start_ts < submit_ts for some jobs"
+            assert (jobs["end_ts"] >= jobs["start_ts"]).all(), f"{policy}: end_ts < start_ts for some jobs"
+            assert (jobs["end_ts"] >= jobs["submit_ts"]).all(), (
                 f"{policy}: end_ts < submit_ts for some jobs (transitivity)"
+            )
 
 
 @given(data=_job_strategy(5, 40))
 @settings(max_examples=50, suppress_health_check=[HealthCheck.too_slow], deadline=None)
 def test_metric_monotonicity(data: dict) -> None:
     """Makespan must be >= max(completion_ts) - min(submit_ts)."""
-    from hpcopt.simulate.stress import generate_stress_scenario
-    from hpcopt.simulate.core import run_simulation_from_trace
-
     import tempfile
     from pathlib import Path
+
+    from hpcopt.simulate.core import run_simulation_from_trace
+    from hpcopt.simulate.stress import generate_stress_scenario
 
     with tempfile.TemporaryDirectory() as tmp:
         stress = generate_stress_scenario(
@@ -232,5 +232,6 @@ def test_metric_monotonicity(data: dict) -> None:
             reported_makespan = result.metrics.get("makespan_sec", actual_span)
 
             # Reported makespan must be at least as large as the observed span
-            assert reported_makespan >= actual_span - 1, \
+            assert reported_makespan >= actual_span - 1, (
                 f"{policy}: makespan {reported_makespan} < observed span {actual_span}"
+            )

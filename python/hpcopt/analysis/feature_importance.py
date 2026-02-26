@@ -62,12 +62,8 @@ def compute_permutation_importance(
                 "feature": col,
                 "importance_mean": float(result.importances_mean[i]),
                 "importance_std": float(result.importances_std[i]),
-                "importance_ci_lower": float(
-                    result.importances_mean[i] - 1.96 * result.importances_std[i]
-                ),
-                "importance_ci_upper": float(
-                    result.importances_mean[i] + 1.96 * result.importances_std[i]
-                ),
+                "importance_ci_lower": float(result.importances_mean[i] - 1.96 * result.importances_std[i]),
+                "importance_ci_upper": float(result.importances_mean[i] + 1.96 * result.importances_std[i]),
             }
         )
     ranked.sort(key=lambda x: float(x["importance_mean"]), reverse=True)

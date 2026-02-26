@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import pandas as pd
-
 from hpcopt.ingest.swf import ingest_swf
 
 

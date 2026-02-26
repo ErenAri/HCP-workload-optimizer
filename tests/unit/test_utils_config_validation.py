@@ -1,4 +1,5 @@
 """Tests for config validation utility."""
+
 from __future__ import annotations
 
 import json
@@ -11,6 +12,7 @@ import yaml
 
 def test_validate_config_missing_file(tmp_path: Path) -> None:
     from hpcopt.utils.config_validation import validate_config
+
     result = validate_config(tmp_path / "missing.yaml", "test")
     assert result["valid"] is False
     assert len(result["errors"]) > 0
@@ -38,8 +40,8 @@ def test_validate_config_schema_not_found(tmp_path: Path) -> None:
 
 
 def test_validate_config_valid_with_schema(tmp_path: Path) -> None:
-    from hpcopt.utils.config_validation import validate_config
     import hpcopt.utils.config_validation as mod
+    from hpcopt.utils.config_validation import validate_config
 
     schema = {
         "type": "object",
@@ -59,8 +61,8 @@ def test_validate_config_valid_with_schema(tmp_path: Path) -> None:
 
 
 def test_validate_config_invalid_against_schema(tmp_path: Path) -> None:
-    from hpcopt.utils.config_validation import validate_config
     import hpcopt.utils.config_validation as mod
+    from hpcopt.utils.config_validation import validate_config
 
     schema = {
         "type": "object",

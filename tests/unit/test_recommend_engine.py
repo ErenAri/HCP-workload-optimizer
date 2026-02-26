@@ -1,11 +1,11 @@
 """Tests for the recommendation engine."""
+
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
 import pytest
-
 from hpcopt.recommend.engine import (
     RecommendationResult,
     _extract_objective,
@@ -17,8 +17,9 @@ from hpcopt.recommend.engine import (
 )
 
 
-def _make_sim_report(path: Path, *, policy_id: str, p95_bsld: float,
-                     utilization_cpu: float, fairness_dev: float) -> Path:
+def _make_sim_report(
+    path: Path, *, policy_id: str, p95_bsld: float, utilization_cpu: float, fairness_dev: float
+) -> Path:
     payload = {
         "policy_id": policy_id,
         "run_id": f"run_{policy_id}",
@@ -42,10 +43,15 @@ def test_is_dominated() -> None:
 
 
 def test_extract_objective_valid() -> None:
-    report = {"objective_metrics": {
-        "p95_bsld": 2.0, "utilization_cpu": 0.7,
-        "fairness_dev": 0.1, "jain": 0.95, "starved_rate": 0.01,
-    }}
+    report = {
+        "objective_metrics": {
+            "p95_bsld": 2.0,
+            "utilization_cpu": 0.7,
+            "fairness_dev": 0.1,
+            "jain": 0.95,
+            "starved_rate": 0.01,
+        }
+    }
     obj = _extract_objective(report)
     assert obj["p95_bsld"] == 2.0
 
@@ -114,12 +120,18 @@ def test_regime_user_skew() -> None:
 
 def test_generate_recommendation_accepted(tmp_path: Path) -> None:
     baseline = _make_sim_report(
-        tmp_path / "baseline.json", policy_id="FIFO",
-        p95_bsld=3.0, utilization_cpu=0.65, fairness_dev=0.1,
+        tmp_path / "baseline.json",
+        policy_id="FIFO",
+        p95_bsld=3.0,
+        utilization_cpu=0.65,
+        fairness_dev=0.1,
     )
     candidate = _make_sim_report(
-        tmp_path / "candidate.json", policy_id="ML",
-        p95_bsld=2.0, utilization_cpu=0.70, fairness_dev=0.1,
+        tmp_path / "candidate.json",
+        policy_id="ML",
+        p95_bsld=2.0,
+        utilization_cpu=0.70,
+        fairness_dev=0.1,
     )
     out = tmp_path / "rec.json"
     result = generate_recommendation_report(
@@ -134,12 +146,18 @@ def test_generate_recommendation_accepted(tmp_path: Path) -> None:
 
 def test_generate_recommendation_blocked(tmp_path: Path) -> None:
     baseline = _make_sim_report(
-        tmp_path / "baseline.json", policy_id="FIFO",
-        p95_bsld=1.0, utilization_cpu=0.90, fairness_dev=0.05,
+        tmp_path / "baseline.json",
+        policy_id="FIFO",
+        p95_bsld=1.0,
+        utilization_cpu=0.90,
+        fairness_dev=0.05,
     )
     candidate = _make_sim_report(
-        tmp_path / "candidate.json", policy_id="ML",
-        p95_bsld=2.0, utilization_cpu=0.60, fairness_dev=0.3,
+        tmp_path / "candidate.json",
+        policy_id="ML",
+        p95_bsld=2.0,
+        utilization_cpu=0.60,
+        fairness_dev=0.3,
     )
     out = tmp_path / "rec.json"
     result = generate_recommendation_report(
@@ -153,16 +171,25 @@ def test_generate_recommendation_blocked(tmp_path: Path) -> None:
 
 def test_generate_pareto_recommendation(tmp_path: Path) -> None:
     baseline = _make_sim_report(
-        tmp_path / "baseline.json", policy_id="FIFO",
-        p95_bsld=3.0, utilization_cpu=0.65, fairness_dev=0.1,
+        tmp_path / "baseline.json",
+        policy_id="FIFO",
+        p95_bsld=3.0,
+        utilization_cpu=0.65,
+        fairness_dev=0.1,
     )
     c1 = _make_sim_report(
-        tmp_path / "c1.json", policy_id="ML_A",
-        p95_bsld=2.0, utilization_cpu=0.70, fairness_dev=0.12,
+        tmp_path / "c1.json",
+        policy_id="ML_A",
+        p95_bsld=2.0,
+        utilization_cpu=0.70,
+        fairness_dev=0.12,
     )
     c2 = _make_sim_report(
-        tmp_path / "c2.json", policy_id="ML_B",
-        p95_bsld=2.5, utilization_cpu=0.75, fairness_dev=0.08,
+        tmp_path / "c2.json",
+        policy_id="ML_B",
+        p95_bsld=2.5,
+        utilization_cpu=0.75,
+        fairness_dev=0.08,
     )
     out = tmp_path / "pareto.json"
     result = generate_pareto_recommendation(

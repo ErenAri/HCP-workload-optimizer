@@ -122,11 +122,7 @@ def _iter_rows(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
             runtime_actual_sec_i = max(int(runtime_actual_sec), 0)
             job_id_i = int(job_id)
             allocated_cpus_i = int(allocated_cpus)
-            requested_cpus_i = (
-                int(requested_cpus)
-                if requested_cpus is not None
-                else allocated_cpus_i
-            )
+            requested_cpus_i = int(requested_cpus) if requested_cpus is not None else allocated_cpus_i
 
             start_ts = submit_ts_i + wait_sec_i
             end_ts = start_ts + runtime_actual_sec_i
@@ -151,9 +147,7 @@ def _iter_rows(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 "runtime_overrequest_ratio": None,
             }
             if runtime_requested_sec is not None and runtime_actual_sec_i > 0:
-                row["runtime_overrequest_ratio"] = (
-                    runtime_requested_sec / runtime_actual_sec_i
-                )
+                row["runtime_overrequest_ratio"] = runtime_requested_sec / runtime_actual_sec_i
 
             rows.append(row)
             stats["parsed_rows"] += 1
@@ -178,9 +172,7 @@ def ingest_swf(input_path: Path, out_dir: Path, dataset_id: str, report_dir: Pat
 
     df = pd.DataFrame(rows)
     extra_quality = {
-        "requested_cpu_fallback_rows": int(
-            (df["requested_cpus"] == df["allocated_cpus"]).sum()
-        ),
+        "requested_cpu_fallback_rows": int((df["requested_cpus"] == df["allocated_cpus"]).sum()),
     }
     dataset_path, quality_report_path, dataset_metadata_path = finalize_ingest(
         df=df,

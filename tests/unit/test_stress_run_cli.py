@@ -1,11 +1,10 @@
+import json
 from pathlib import Path
 
-import json
 import yaml
-from typer.testing import CliRunner
-
 from hpcopt.cli.main import app
 from hpcopt.simulate.stress import generate_stress_scenario
+from typer.testing import CliRunner
 
 
 def test_stress_run_cli_emits_report_and_manifest(tmp_path: Path) -> None:
@@ -77,4 +76,3 @@ def test_stress_run_cli_emits_report_and_manifest(tmp_path: Path) -> None:
     assert payload["status"] in {"pass", "fail"}
     assert "constraints" in payload
     assert "degrade_signatures" in payload
-

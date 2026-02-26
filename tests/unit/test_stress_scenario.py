@@ -1,8 +1,7 @@
+import json
 from pathlib import Path
 
-import json
 import pandas as pd
-
 from hpcopt.simulate.stress import generate_stress_scenario
 
 

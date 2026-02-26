@@ -5,6 +5,7 @@ Tests invariants:
 - Score is deterministic for same inputs
 - Fidelity gate blocking always prevents acceptance
 """
+
 from __future__ import annotations
 
 import json
@@ -12,8 +13,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-import pytest
-from hypothesis import given, settings, HealthCheck
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 
@@ -143,7 +143,7 @@ def test_pareto_frontier_non_dominated() -> None:
         c2_path = _write_report(tmp_path / "c2.json", c2)
         c3_path = _write_report(tmp_path / "c3.json", c3)
 
-        result = generate_pareto_recommendation(
+        generate_pareto_recommendation(
             baseline_report_path=baseline_path,
             candidate_report_paths=[c1_path, c2_path, c3_path],
             out_path=tmp_path / "pareto.json",
@@ -161,13 +161,6 @@ def test_pareto_frontier_non_dominated() -> None:
                 scores_j = point_j.get("objective_scores", {})
                 # If j dominates i on all objectives, that's invalid
                 if scores_i and scores_j:
-                    all_worse = all(
-                        scores_j.get(k, 0) >= scores_i.get(k, 0)
-                        for k in scores_i
-                    )
-                    any_strict = any(
-                        scores_j.get(k, 0) > scores_i.get(k, 0)
-                        for k in scores_i
-                    )
-                    assert not (all_worse and any_strict), \
-                        f"Point {i} is dominated by point {j} on the frontier"
+                    all_worse = all(scores_j.get(k, 0) >= scores_i.get(k, 0) for k in scores_i)
+                    any_strict = any(scores_j.get(k, 0) > scores_i.get(k, 0) for k in scores_i)
+                    assert not (all_worse and any_strict), f"Point {i} is dominated by point {j} on the frontier"

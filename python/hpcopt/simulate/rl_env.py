@@ -13,6 +13,7 @@ Usage:
     env = SchedulingEnv(trace_df=df, capacity_cpus=512)
     policy = train_policy(env, episodes=200)
 """
+
 from __future__ import annotations
 
 import logging
@@ -37,6 +38,7 @@ class SchedulingAction:
     starvation_cap_factor: multiplier on default starvation wait cap
         (0.5 = aggressive, 2.0 = permissive)
     """
+
     backfill_threshold: float = 0.8
     priority_boost_short: float = 0.0
     starvation_cap_factor: float = 1.0
@@ -45,6 +47,7 @@ class SchedulingAction:
 @dataclass
 class SchedulingState:
     """Observation space for the RL agent."""
+
     clock_ts: int = 0
     queue_depth: int = 0
     running_count: int = 0
@@ -60,20 +63,24 @@ class SchedulingState:
         """Convert to normalized feature array for neural network input."""
         cap = max(self.capacity_cpus, 1)
         total = max(self.jobs_total, 1)
-        return np.array([
-            self.queue_depth / total,
-            self.running_count / total,
-            self.free_cpus / cap,
-            self.utilization,
-            min(self.avg_wait_sec / 86400.0, 10.0),   # normalize to days, cap at 10
-            min(self.p95_wait_sec / 86400.0, 10.0),
-            self.jobs_completed / total,
-        ], dtype=np.float32)
+        return np.array(
+            [
+                self.queue_depth / total,
+                self.running_count / total,
+                self.free_cpus / cap,
+                self.utilization,
+                min(self.avg_wait_sec / 86400.0, 10.0),  # normalize to days, cap at 10
+                min(self.p95_wait_sec / 86400.0, 10.0),
+                self.jobs_completed / total,
+            ],
+            dtype=np.float32,
+        )
 
 
 @dataclass
 class EpisodeResult:
     """Result of one RL training episode."""
+
     p95_bsld: float
     utilization: float
     mean_wait_sec: float
@@ -208,10 +215,12 @@ class SchedulingEnv:
         # Sort queue: apply priority boost for short jobs
         if action.priority_boost_short > 0:
             median_rt = float(np.median([j["runtime_actual_sec"] for j in self.queued]))
-            self.queued.sort(key=lambda j: (
-                j["submit_ts"]
-                - action.priority_boost_short * 3600 * (1.0 if j["runtime_actual_sec"] < median_rt else 0.0)
-            ))
+            self.queued.sort(
+                key=lambda j: (
+                    j["submit_ts"]
+                    - action.priority_boost_short * 3600 * (1.0 if j["runtime_actual_sec"] < median_rt else 0.0)
+                )
+            )
 
         threshold_cpus = int(action.backfill_threshold * self.capacity_cpus)
 
@@ -264,7 +273,7 @@ class SchedulingEnv:
 
         # BSLD component
         bslds = []
-        for rj in self.completed[-self.decision_interval:]:
+        for rj in self.completed[-self.decision_interval :]:
             wait = rj["start_ts"] - rj["submit_ts"]
             runtime = max(rj["runtime_actual_sec"], 10)
             bslds.append(max(1.0, wait / runtime))
@@ -345,11 +354,13 @@ def random_search_policy(
             best_action = action
             best_result = result
             logger.info(
-                "Trial %d/%d: NEW BEST p95_bsld=%.2f, util=%.1f%%, "
-                "bf_thresh=%.2f, short_boost=%.2f",
-                trial + 1, n_trials,
-                result.p95_bsld, result.utilization * 100,
-                action.backfill_threshold, action.priority_boost_short,
+                "Trial %d/%d: NEW BEST p95_bsld=%.2f, util=%.1f%%, bf_thresh=%.2f, short_boost=%.2f",
+                trial + 1,
+                n_trials,
+                result.p95_bsld,
+                result.utilization * 100,
+                action.backfill_threshold,
+                action.priority_boost_short,
             )
 
     assert best_result is not None
@@ -391,14 +402,16 @@ def grid_search_policy(
             )
             result = env.run_episode(action)
 
-            all_results.append({
-                "backfill_threshold": bf,
-                "priority_boost_short": sb,
-                "p95_bsld": result.p95_bsld,
-                "utilization": result.utilization,
-                "mean_wait_sec": result.mean_wait_sec,
-                "reward": result.reward,
-            })
+            all_results.append(
+                {
+                    "backfill_threshold": bf,
+                    "priority_boost_short": sb,
+                    "p95_bsld": result.p95_bsld,
+                    "utilization": result.utilization,
+                    "mean_wait_sec": result.mean_wait_sec,
+                    "reward": result.reward,
+                }
+            )
 
             if best_result is None or result.p95_bsld < best_result.p95_bsld:
                 best_action = action
@@ -406,10 +419,11 @@ def grid_search_policy(
 
     assert best_result is not None
     logger.info(
-        "Grid search best: p95_bsld=%.2f, util=%.1f%%, "
-        "bf_thresh=%.2f, short_boost=%.2f",
-        best_result.p95_bsld, best_result.utilization * 100,
-        best_action.backfill_threshold, best_action.priority_boost_short,
+        "Grid search best: p95_bsld=%.2f, util=%.1f%%, bf_thresh=%.2f, short_boost=%.2f",
+        best_result.p95_bsld,
+        best_result.utilization * 100,
+        best_action.backfill_threshold,
+        best_action.priority_boost_short,
     )
 
     return best_action, best_result, all_results

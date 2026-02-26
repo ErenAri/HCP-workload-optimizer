@@ -43,10 +43,10 @@ SACCT_COLUMNS = [
 ]
 
 # Regex patterns for JobID variants
-_ARRAY_JOB_RE = re.compile(r"^(\d+)_(\d+)$")      # 12345_0
-_JOB_STEP_RE = re.compile(r"^(\d+)\.(.+)$")        # 12345.batch, 12345.0
+_ARRAY_JOB_RE = re.compile(r"^(\d+)_(\d+)$")  # 12345_0
+_JOB_STEP_RE = re.compile(r"^(\d+)\.(.+)$")  # 12345.batch, 12345.0
 _ARRAY_STEP_RE = re.compile(r"^(\d+)_(\d+)\.(.+)$")  # 12345_0.batch
-_PLAIN_JOB_RE = re.compile(r"^(\d+)$")              # 12345
+_PLAIN_JOB_RE = re.compile(r"^(\d+)$")  # 12345
 
 # Slurm date format (may include 'T' separator)
 _SLURM_DT_FORMATS = [
@@ -126,7 +126,7 @@ def _parse_reqmem(value: str) -> int | None:
 
     # Strip per-cpu / per-node suffix
     unit_suffix = value[-1] if value[-1] in ("c", "n") else ""
-    numeric_part = value[: -1] if unit_suffix else value
+    numeric_part = value[:-1] if unit_suffix else value
 
     multiplier: float = 1.0  # assume megabytes
     if numeric_part.endswith("G") or numeric_part.endswith("g"):
@@ -241,9 +241,7 @@ def _iter_rows(
             # Auto-detect the header row.
             if not header_seen:
                 if "JobID" in tokens or "jobid" in [t.lower() for t in tokens]:
-                    col_indices = {
-                        col.strip(): idx for idx, col in enumerate(tokens)
-                    }
+                    col_indices = {col.strip(): idx for idx, col in enumerate(tokens)}
                     header_seen = True
                     stats["header_lines"] += 1
                     continue
@@ -413,9 +411,7 @@ def ingest_slurm(
 
     rows, stats = _iter_rows(input_path, skip_job_steps=skip_job_steps)
     if not rows:
-        raise ValueError(
-            f"No parsable Slurm rows were produced from input file: {input_path}"
-        )
+        raise ValueError(f"No parsable Slurm rows were produced from input file: {input_path}")
 
     df = pd.DataFrame(rows)
 
@@ -433,9 +429,7 @@ def ingest_slurm(
         source_format="slurm_sacct_parsable2",
     )
 
-    logger.info(
-        "Slurm ingest complete: %d rows written to %s", len(df), dataset_path
-    )
+    logger.info("Slurm ingest complete: %d rows written to %s", len(df), dataset_path)
     return IngestResult(
         dataset_path=dataset_path,
         quality_report_path=quality_report_path,

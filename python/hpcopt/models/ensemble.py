@@ -14,6 +14,7 @@ Usage:
     ])
     prediction = ensemble.predict_one(features)
 """
+
 from __future__ import annotations
 
 import json
@@ -25,7 +26,6 @@ import numpy as np
 import pandas as pd
 
 from hpcopt.models.runtime_quantile import (
-    FEATURE_COLUMNS,
     MIN_PREDICTION_SEC,
     QUANTILES,
     RuntimeQuantilePredictor,
@@ -51,9 +51,7 @@ class EnsemblePredictor:
             raise ValueError("Ensemble requires at least 2 predictors")
 
         self.predictors = predictors
-        self.model_names = model_names or [
-            f"model_{i}" for i in range(len(predictors))
-        ]
+        self.model_names = model_names or [f"model_{i}" for i in range(len(predictors))]
 
         if weights is not None:
             if len(weights) != len(predictors):
@@ -92,15 +90,11 @@ class EnsemblePredictor:
                 metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
                 # Use average pinball loss across quantiles as quality score
                 qm = metrics.get("quantiles", {})
-                avg_pinball = np.mean([
-                    qm[q]["pinball_loss"] for q in QUANTILES if q in qm
-                ])
+                avg_pinball = np.mean([qm[q]["pinball_loss"] for q in QUANTILES if q in qm])
                 pinball_scores.append(float(avg_pinball))
 
         if len(predictors) < 2:
-            raise ValueError(
-                f"Need at least 2 valid model dirs, found {len(predictors)}"
-            )
+            raise ValueError(f"Need at least 2 valid model dirs, found {len(predictors)}")
 
         weights = None
         if auto_weight and len(pinball_scores) == len(predictors):
@@ -111,7 +105,9 @@ class EnsemblePredictor:
             for name, w, pb in zip(names, weights, pinball_scores):
                 logger.info(
                     "Ensemble member %s: pinball=%.2f, weight=%.3f",
-                    name, pb, w,
+                    name,
+                    pb,
+                    w,
                 )
 
         return cls(predictors=predictors, weights=weights, model_names=names)
@@ -144,8 +140,5 @@ class EnsemblePredictor:
         return {
             "type": "ensemble",
             "n_models": len(self.predictors),
-            "members": [
-                {"name": name, "weight": round(w, 4)}
-                for name, w in zip(self.model_names, self.weights)
-            ],
+            "members": [{"name": name, "weight": round(w, 4)} for name, w in zip(self.model_names, self.weights)],
         }

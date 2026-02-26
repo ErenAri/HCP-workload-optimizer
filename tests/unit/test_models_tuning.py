@@ -1,14 +1,13 @@
 """Tests for hyperparameter tuning module."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
-import pandas as pd
-import pytest
-
 
 def test_hyperparams_defaults() -> None:
     from hpcopt.models.tuning import HyperParams
+
     hp = HyperParams()
     assert hp.n_estimators > 0
     assert 0 < hp.learning_rate <= 1.0
@@ -17,6 +16,7 @@ def test_hyperparams_defaults() -> None:
 
 def test_hyperparams_roundtrip() -> None:
     from hpcopt.models.tuning import HyperParams
+
     hp = HyperParams(n_estimators=50, learning_rate=0.05, max_depth=4)
     d = hp.to_dict()
     hp2 = HyperParams.from_dict(d)

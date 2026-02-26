@@ -4,6 +4,7 @@ Provides per-endpoint rate limiting keyed by (api_key, endpoint). Limits are
 configurable via environment variables. A public testing API is exposed so
 tests can override limits and clear buckets without reaching into private state.
 """
+
 from __future__ import annotations
 
 import logging
@@ -41,10 +42,7 @@ def check_rate_limit(api_key: str | None, path: str = "") -> tuple[bool, int]:
         # Proactively evict stale buckets every 30 s or when cap is exceeded.
         stale_cutoff = now - _RATE_STALE_AGE_SEC
         if len(_RATE_BUCKETS) > _RATE_MAX_BUCKETS or now - _RATE_LAST_PRUNE > 30.0:
-            stale_keys = [
-                k for k, v in _RATE_BUCKETS.items()
-                if not v or v[-1] <= stale_cutoff
-            ]
+            stale_keys = [k for k, v in _RATE_BUCKETS.items() if not v or v[-1] <= stale_cutoff]
             for k in stale_keys:
                 del _RATE_BUCKETS[k]
             _RATE_LAST_PRUNE = now
