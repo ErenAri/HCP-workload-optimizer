@@ -45,6 +45,7 @@ Desktop.ini
 ._*.zip
 *.docx
 tmp.ps1
+.coverage
 
 # ---------- Data / artifacts (keep .gitkeep) ----------
 data/raw/*
@@ -77,6 +78,7 @@ docker-compose.override.yml
 
 # ---------- Packaging ----------
 python/hpc_workload_optimizer.egg-info/
+site/
 
 # ---------- Environment ----------
 .env

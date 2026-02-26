@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hpc-workload-optimizer"
-version = "1.0.0"
+version = "2.0.0"
 description = "Systems-first HPC workload optimizer: runtime prediction, scheduling simulation, and policy recommendation."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -91,6 +91,12 @@ markers = [
   "slow: marks tests as slow (deselect with '-m \"not slow\"')",
   "integration: integration tests",
   "load: load/performance tests",
+  "performance: marks performance-sensitive tests",
+]
+filterwarnings = [
+  "ignore:X does not have valid feature names, but LGBMRegressor was fitted with feature names:UserWarning:sklearn\\.utils\\.validation",
+  "ignore:pkg_resources is deprecated as an API.*:UserWarning",
+  "ignore:module 'sre_constants' is deprecated:DeprecationWarning",
 ]
 
 [tool.bandit]

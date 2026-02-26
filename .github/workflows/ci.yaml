@@ -7,6 +7,17 @@ on:
     branches: [main]
 
 jobs:
+  version-consistency:
+    name: Version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verify package/changelog version consistency
+        run: python scripts/verify_version_consistency.py --check-unreleased-link
+
   readiness-checklist:
     name: Production checklist (validate)
     runs-on: ubuntu-latest

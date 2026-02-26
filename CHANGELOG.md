@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-02-26
+
+### Added
+- Gymnasium-compatible RL policy search environment (`SchedulingEnv`) with random/grid search helpers.
+- Expanded CLI/reporting test coverage and bridge/tracing tests.
+- Version consistency validation script (`scripts/verify_version_consistency.py`) integrated into CI/release workflows.
+
+### Changed
+- Package version aligned to `2.0.0`.
+- Test configuration now registers `performance` marker and filters known third-party warning noise.
+
+## [1.2.0] - 2026-02-26
+
+### Added
+- Rust simulation runner integration path and parity checks.
+- Expanded benchmark, deployment, and operations documentation.
+- Docker smoke/load verification and release automation hardening.
+
 ## [1.0.0] - 2026-02-25
 
 ### Added
@@ -38,5 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reinforcement learning policy search
 - Slurm live adapter
 
+[2.0.0]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v1.2.0...v2.0.0
+[1.2.0]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v1.0.0...v1.2.0
 [1.0.0]: https://github.com/ErenAri/HCP-workload-optimizer/releases/tag/v1.0.0
-[Unreleased]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v2.0.0...HEAD

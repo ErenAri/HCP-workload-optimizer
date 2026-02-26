@@ -35,6 +35,7 @@ All code must pass:
 - **Type-check**: `mypy python/hpcopt/ --ignore-missing-imports`
 - **Tests**: `pytest tests/ -v` (324+ tests, 82% coverage gate)
 - **Security**: `bandit -r python/hpcopt/ -ll -ii`
+- **Version consistency**: `python scripts/verify_version_consistency.py --check-unreleased-link`
 
 ## Testing
 
@@ -82,6 +83,7 @@ The `CHANGELOG.md` is maintained manually. When preparing a release:
 1. Add entries under an `## [Unreleased]` section as you merge PRs
 2. At release time, rename `[Unreleased]` to `[X.Y.Z] - YYYY-MM-DD`
 3. The CI release workflow auto-generates a commit-log changelog for the GitHub release page
+4. `pyproject.toml` version, release tag (`vX.Y.Z`), and changelog sections must stay aligned.
 
 ## Branch Strategy
 

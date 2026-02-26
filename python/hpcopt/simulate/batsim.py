@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import math
 import os
-import re
 import shlex
 import shutil
 import subprocess
@@ -14,10 +12,46 @@ from typing import Any
 
 import pandas as pd
 
+from hpcopt.simulate.batsim_helpers import (
+    _WINDOWS_ABS_PATH_RE,
+    windows_path_to_wsl,
+)
+from hpcopt.simulate.batsim_helpers import (
+    SUPPORTED_EDC_MODES as _SUPPORTED_EDC_MODES,
+)
+from hpcopt.simulate.batsim_helpers import (
+    build_edc_args as _build_edc_args,
+)
+from hpcopt.simulate.batsim_helpers import (
+    coerce_positive_float as _coerce_positive_float,
+)
+from hpcopt.simulate.batsim_helpers import (
+    coerce_positive_int as _coerce_positive_int,
+)
+from hpcopt.simulate.batsim_helpers import (
+    extract_cli_arg_value as _extract_cli_arg_value,
+)
+from hpcopt.simulate.batsim_helpers import (
+    parse_job_id as _parse_job_id,
+)
+from hpcopt.simulate.batsim_helpers import (
+    parse_json_object as _parse_json_object,
+)
+from hpcopt.simulate.batsim_helpers import (
+    resolve_default_fcfs_library_path as _resolve_default_fcfs_library_path,
+)
+from hpcopt.simulate.batsim_helpers import (
+    resolve_local_path as _resolve_local_path,
+)
+from hpcopt.simulate.batsim_helpers import (
+    to_int_ts as _to_int_ts,
+)
 from hpcopt.simulate.core import build_observed_queue_series
 from hpcopt.simulate.metrics import compute_job_metrics
 from hpcopt.simulate.objective import compute_objective_contract_metrics
 from hpcopt.utils.io import ensure_dir, write_json
+
+SUPPORTED_EDC_MODES = _SUPPORTED_EDC_MODES
 
 
 @dataclass(frozen=True)
@@ -51,43 +85,6 @@ class BatsimNormalizationResult:
     fallback_accounting: dict[str, Any]
 
 
-_WINDOWS_ABS_PATH_RE = re.compile(r"^[A-Za-z]:[\\/]")
-SUPPORTED_EDC_MODES = {"library_file", "library_str", "socket_file", "socket_str"}
-
-
-def windows_path_to_wsl(path: Path | str) -> str:
-    raw = str(path)
-    if not _WINDOWS_ABS_PATH_RE.match(raw):
-        return raw.replace("\\", "/")
-    drive = raw[0].lower()
-    tail = raw[2:].replace("\\", "/")
-    return f"/mnt/{drive}{tail}"
-
-
-def _coerce_positive_float(value: Any, fallback: float) -> float:
-    if value is None:
-        return fallback
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return fallback
-    if not math.isfinite(parsed) or parsed <= 0:
-        return fallback
-    return parsed
-
-
-def _coerce_positive_int(value: Any, fallback: int) -> int:
-    if value is None:
-        return fallback
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        return fallback
-    if parsed <= 0:
-        return fallback
-    return parsed
-
-
 def _runtime_seconds(row: pd.Series) -> float:
     runtime_actual = _coerce_positive_float(row.get("runtime_actual_sec"), fallback=0.0)
     if runtime_actual > 0:
@@ -119,16 +116,6 @@ def _infer_capacity(trace_df: pd.DataFrame) -> int:
 def _sanitize_profile_id(delay_sec: float) -> str:
     delay_ms = max(1, int(round(delay_sec * 1000.0)))
     return f"delay_ms_{delay_ms}"
-
-
-def _parse_json_object(raw: str) -> dict[str, Any]:
-    try:
-        parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
-    if isinstance(parsed, dict):
-        return parsed
-    return {}
 
 
 def generate_batsim_workload_from_trace(
@@ -231,21 +218,6 @@ def generate_simple_platform_xml(platform_path: Path, capacity_cpus: int) -> Pat
     return platform_path
 
 
-def _resolve_default_fcfs_library_path(wsl_distro: str) -> str:
-    if shutil.which("wsl") is None:
-        return str((Path.home() / ".nix-profile" / "lib" / "libfcfs.so").resolve())
-    proc = subprocess.run(
-        ["wsl", "-d", wsl_distro, "--", "bash", "-lc", 'printf "%s" "$HOME/.nix-profile/lib/libfcfs.so"'],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    candidate = proc.stdout.strip()
-    if proc.returncode == 0 and candidate:
-        return candidate
-    return "$HOME/.nix-profile/lib/libfcfs.so"
-
-
 def _resolve_workload_path(
     trace_dataset: Path,
     workload_path: Path | None,
@@ -262,77 +234,6 @@ def _resolve_workload_path(
     generated = run_artifact_dir / f"{run_id}_workload.json"
     generate_batsim_workload_from_trace(trace_dataset=trace_dataset, out_path=generated, capacity_cpus=capacity_cpus)
     return generated.resolve(), "generated_from_trace"
-
-
-def _build_edc_args(
-    edc_mode: str,
-    edc_library_path: str | None,
-    edc_socket_endpoint: str | None,
-    edc_init_file: Path,
-    edc_init_inline: str,
-) -> list[str]:
-    if edc_mode not in SUPPORTED_EDC_MODES:
-        raise ValueError(f"unsupported edc_mode '{edc_mode}'")
-
-    if edc_mode in {"library_file", "library_str"} and not edc_library_path:
-        raise ValueError("edc_library_path is required for library EDC modes")
-    if edc_mode in {"socket_file", "socket_str"} and not edc_socket_endpoint:
-        raise ValueError("edc_socket_endpoint is required for socket EDC modes")
-
-    if edc_mode == "library_file":
-        return ["--edc-library-file", str(edc_library_path), str(edc_init_file)]
-    if edc_mode == "library_str":
-        return ["--edc-library-str", str(edc_library_path), edc_init_inline]
-    if edc_mode == "socket_file":
-        return ["--edc-socket-file", str(edc_socket_endpoint), str(edc_init_file)]
-    return ["--edc-socket-str", str(edc_socket_endpoint), edc_init_inline]
-
-
-def _extract_cli_arg_value(cli_args: list[Any], flag: str) -> str | None:
-    for idx, arg in enumerate(cli_args[:-1]):
-        if str(arg) == flag:
-            return str(cli_args[idx + 1])
-    return None
-
-
-def _wsl_path_to_windows(raw: str) -> str:
-    # Convert '/mnt/c/path/to/file' to 'C:\\path\\to\\file' for local file IO on Windows.
-    parts = raw.split("/")
-    if len(parts) >= 4 and parts[0] == "" and parts[1] == "mnt" and len(parts[2]) == 1:
-        drive = parts[2].upper()
-        tail = "\\".join(parts[3:])
-        return f"{drive}:\\{tail}"
-    return raw
-
-
-def _resolve_local_path(raw: str) -> Path:
-    candidate = os.path.expandvars(os.path.expanduser(raw))
-    path = Path(candidate)
-    if path.exists():
-        return path
-    wsl_converted = Path(_wsl_path_to_windows(raw))
-    return wsl_converted
-
-
-def _parse_job_id(raw: Any, fallback: int) -> int:
-    text = str(raw)
-    if "!" in text:
-        text = text.split("!")[-1]
-    try:
-        parsed = int(float(text))
-    except (TypeError, ValueError):
-        return fallback
-    return parsed
-
-
-def _to_int_ts(value: Any, fallback: int = 0) -> int:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return fallback
-    if not math.isfinite(parsed):
-        return fallback
-    return max(0, int(math.floor(parsed)))
 
 
 def _load_workload_job_metadata(workload_path: Path | None) -> dict[str, dict[str, Any]]:
