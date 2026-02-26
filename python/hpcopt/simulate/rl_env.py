@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 import pandas as pd
@@ -154,12 +154,55 @@ class SchedulingEnv:
             jobs_total=self.n_jobs,
         )
 
-    def step(self, action: SchedulingAction) -> tuple[SchedulingState, float, bool]:
+    def _normalize_action(self, action: SchedulingAction | Mapping[str, Any]) -> SchedulingAction:
+        """Accept both dataclass actions and legacy dict-style actions."""
+        if isinstance(action, SchedulingAction):
+            return action
+
+        defaults = SchedulingAction()
+        if isinstance(action, Mapping):
+            starvation_cap_factor = action.get("starvation_cap_factor")
+            if starvation_cap_factor is None and "starvation_cap" in action:
+                # Legacy key used by tests/scripts where 100 == 1.0x default cap.
+                starvation_cap_factor = float(action["starvation_cap"]) / 100.0
+
+            return SchedulingAction(
+                backfill_threshold=float(action.get("backfill_threshold", defaults.backfill_threshold)),
+                priority_boost_short=float(action.get("priority_boost_short", defaults.priority_boost_short)),
+                starvation_cap_factor=float(
+                    starvation_cap_factor
+                    if starvation_cap_factor is not None
+                    else defaults.starvation_cap_factor
+                ),
+            )
+
+        raise TypeError("action must be SchedulingAction or a mapping of action parameters")
+
+    def _episode_metrics(self) -> dict[str, float]:
+        """Compute current aggregate metrics for info/reports."""
+        waits = [float(rj["start_ts"] - rj["submit_ts"]) for rj in self.completed]
+        bslds = [
+            max(1.0, (rj["start_ts"] - rj["submit_ts"]) / max(rj["runtime_actual_sec"], 10))
+            for rj in self.completed
+        ]
+        util = self.cpu_time_used / max(self.total_time, 1)
+        return {
+            "p95_bsld": float(np.percentile(bslds, 95)) if bslds else 0.0,
+            "utilization": float(util),
+            "mean_wait_sec": float(np.mean(waits)) if waits else 0.0,
+            "makespan_sec": float(self.clock),
+        }
+
+    def step(
+        self,
+        action: SchedulingAction | Mapping[str, Any],
+    ) -> tuple[SchedulingState, float, bool, dict[str, float]]:
         """Execute one decision step.
 
         Returns:
-            (observation, reward, done)
+            (observation, reward, done, info)
         """
+        normalized_action = self._normalize_action(action)
         events_processed = 0
 
         while events_processed < self.decision_interval:
@@ -171,7 +214,7 @@ class SchedulingEnv:
                 self.job_idx += 1
 
             # Dispatch from queue using RL action parameters
-            self._dispatch(action)
+            self._dispatch(normalized_action)
 
             # Advance clock to next event
             next_ts = self._next_event_time()
@@ -205,7 +248,8 @@ class SchedulingEnv:
 
         reward = self._compute_reward()
         obs = self._observe()
-        return obs, reward, done
+        info = self._episode_metrics()
+        return obs, reward, done, info
 
     def _dispatch(self, action: SchedulingAction) -> None:
         """Dispatch jobs from queue based on RL action parameters."""
@@ -293,25 +337,17 @@ class SchedulingEnv:
         total_reward = 0.0
 
         while True:
-            _, reward, done = self.step(action)
+            _, reward, done, _ = self.step(action)
             total_reward += reward
             if done:
                 break
 
-        # Final metrics
-        bslds = []
-        for rj in self.completed:
-            wait = rj["start_ts"] - rj["submit_ts"]
-            runtime = max(rj["runtime_actual_sec"], 10)
-            bslds.append(max(1.0, wait / runtime))
-
-        waits = [rj["start_ts"] - rj["submit_ts"] for rj in self.completed]
-        util = self.cpu_time_used / max(self.total_time, 1)
+        metrics = self._episode_metrics()
 
         return EpisodeResult(
-            p95_bsld=float(np.percentile(bslds, 95)) if bslds else 0,
-            utilization=float(util),
-            mean_wait_sec=float(np.mean(waits)) if waits else 0,
+            p95_bsld=metrics["p95_bsld"],
+            utilization=metrics["utilization"],
+            mean_wait_sec=metrics["mean_wait_sec"],
             makespan_sec=self.clock,
             reward=total_reward,
         )
