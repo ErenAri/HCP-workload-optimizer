@@ -24,12 +24,6 @@ classifiers = [
   "Typing :: Typed",
 ]
 
-[project.urls]
-Homepage = "https://github.com/ErenAri/HCP-workload-optimizer"
-Repository = "https://github.com/ErenAri/HCP-workload-optimizer"
-Documentation = "https://github.com/ErenAri/HCP-workload-optimizer#readme"
-Issues = "https://github.com/ErenAri/HCP-workload-optimizer/issues"
-Changelog = "https://github.com/ErenAri/HCP-workload-optimizer/blob/main/CHANGELOG.md"
 dependencies = [
   "typer>=0.12.3,<1.0",
   "pydantic>=2.8.2,<3.0",
@@ -41,6 +35,13 @@ dependencies = [
   "scikit-learn>=1.5.0,<2.0",
   "joblib>=1.4.0,<2.0"
 ]
+
+[project.urls]
+Homepage = "https://github.com/ErenAri/HCP-workload-optimizer"
+Repository = "https://github.com/ErenAri/HCP-workload-optimizer"
+Documentation = "https://github.com/ErenAri/HCP-workload-optimizer#readme"
+Issues = "https://github.com/ErenAri/HCP-workload-optimizer/issues"
+Changelog = "https://github.com/ErenAri/HCP-workload-optimizer/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = [

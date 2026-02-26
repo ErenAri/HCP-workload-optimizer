@@ -55,6 +55,7 @@ struct RunningJob {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct CompletedJob {
     job_id: u64,
     submit_ts: i64,
@@ -152,7 +153,7 @@ fn check_invariants(
 fn dispatch_fifo(queued: &mut VecDeque<Job>, free_cpus: &mut u32, clock_ts: i64) -> Vec<RunningJob> {
     let mut started = Vec::new();
     loop {
-        let can_dispatch = queued.front().map_or(false, |h| h.requested_cpus > 0 && h.requested_cpus <= *free_cpus);
+        let can_dispatch = queued.front().is_some_and(|h| h.requested_cpus > 0 && h.requested_cpus <= *free_cpus);
         if !can_dispatch {
             break;
         }
@@ -189,7 +190,7 @@ fn dispatch_easy_backfill(
 
     // Step 1: Try head-of-queue dispatch (greedy, like FIFO)
     loop {
-        let can = queued.front().map_or(false, |h| h.requested_cpus > 0 && h.requested_cpus <= *free_cpus);
+        let can = queued.front().is_some_and(|h| h.requested_cpus > 0 && h.requested_cpus <= *free_cpus);
         if !can {
             break;
         }
@@ -234,8 +235,7 @@ fn dispatch_easy_backfill(
 
     // Step 3: Backfill — scan queue (skip head) for jobs that fit and complete before shadow time.
     let mut backfill_indices = Vec::new();
-    for i in 1..queued.len() {
-        let job = &queued[i];
+    for (i, job) in queued.iter().enumerate().skip(1) {
         if job.requested_cpus > 0
             && job.requested_cpus <= *free_cpus
             && clock_ts.saturating_add(job.runtime_actual_sec.max(0)) <= shadow_time
