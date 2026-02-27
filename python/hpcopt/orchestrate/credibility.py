@@ -24,8 +24,10 @@ from hpcopt.data.reference_suite import (
 )
 from hpcopt.features.pipeline import build_feature_dataset
 from hpcopt.ingest.swf import ingest_swf
+from hpcopt.models.ensemble import EnsemblePredictor
 from hpcopt.models.runtime_quantile import (
     RuntimeQuantilePredictor,
+    _HAS_LIGHTGBM,
     train_runtime_quantile_models,
 )
 from hpcopt.profile.trace_profile import build_trace_profile
@@ -138,7 +140,7 @@ def run_credibility_protocol(
         result.feature_dataset_path = feature_result.feature_dataset_path
         result.artifact_paths.append(feature_result.feature_dataset_path)
 
-        # Step 4: Train
+        # Step 4: Train (sklearn backend — always available)
         logger.info("[%s] Step 4: Training runtime quantile models", trace_id)
         model_id = f"runtime_{trace_id}_{run_ts}"
         train_result = train_runtime_quantile_models(
@@ -146,9 +148,30 @@ def run_credibility_protocol(
             out_dir=models_dir,
             model_id=model_id,
             seed=seed,
+            backend="sklearn",
         )
         result.model_dir = train_result.model_dir
         result.artifact_paths.append(train_result.metrics_path)
+
+        # Step 4b: Train LightGBM model when available and build ensemble predictor.
+        # The ensemble uses inverse-pinball-loss weighting so the better model
+        # gets proportionally more influence on each prediction.
+        predictor_model_dirs = [train_result.model_dir]
+        if _HAS_LIGHTGBM:
+            lgb_model_id = f"runtime_{trace_id}_{run_ts}_lgb"
+            try:
+                lgb_train_result = train_runtime_quantile_models(
+                    dataset_path=ingest_result.dataset_path,
+                    out_dir=models_dir,
+                    model_id=lgb_model_id,
+                    seed=seed,
+                    backend="lightgbm",
+                )
+                predictor_model_dirs.append(lgb_train_result.model_dir)
+                result.artifact_paths.append(lgb_train_result.metrics_path)
+                logger.info("[%s] LightGBM model trained: %s", trace_id, lgb_model_id)
+            except (ImportError, ValueError, OSError) as exc:
+                logger.warning("[%s] LightGBM training failed, using sklearn only: %s", trace_id, exc)
 
         # Step 5: Replay baselines
         logger.info("[%s] Step 5: Replaying baselines", trace_id)
@@ -186,7 +209,13 @@ def run_credibility_protocol(
 
         # Step 6: Simulate ML candidate
         logger.info("[%s] Step 6: Simulating ML candidate", trace_id)
-        predictor = RuntimeQuantilePredictor(train_result.model_dir)
+        if len(predictor_model_dirs) >= 2:
+            predictor = EnsemblePredictor.from_model_dirs(predictor_model_dirs, auto_weight=True)
+            ensemble_summary: dict[str, Any] = predictor.summary
+            logger.info("[%s] Using ensemble predictor: %s", trace_id, ensemble_summary)
+        else:
+            predictor = RuntimeQuantilePredictor(predictor_model_dirs[0])
+            ensemble_summary = {"type": "single", "model_dir": str(predictor_model_dirs[0])}
         ml_sim = run_simulation_from_trace(
             trace_df=trace_df,
             policy_id="ML_BACKFILL_P50",
@@ -210,6 +239,7 @@ def run_credibility_protocol(
                 "objective_metrics": ml_sim.objective_metrics,
                 "fallback_accounting": ml_sim.fallback_accounting,
                 "model_dir": str(train_result.model_dir),
+                "predictor_ensemble": ensemble_summary,
             },
         )
         result.candidate_report_path = ml_report_path

@@ -1,5 +1,6 @@
 import pandas as pd
 from hpcopt.simulate.core import run_simulation_from_trace
+from hpcopt.simulate.core_helpers import build_prediction_features
 
 
 class StubPredictor:
@@ -129,3 +130,50 @@ def test_ml_backfill_strict_uncertainty_changes_eligibility() -> None:
     non_strict_start = int(non_strict.jobs_df.loc[non_strict.jobs_df["job_id"] == 30, "start_ts"].iloc[0])
     strict_start = int(strict.jobs_df.loc[strict.jobs_df["job_id"] == 30, "start_ts"].iloc[0])
     assert non_strict_start < strict_start
+
+
+def test_build_prediction_features_populates_lookback_defaults() -> None:
+    payload = build_prediction_features(
+        {
+            "submit_ts": 123,
+            "requested_cpus": 8,
+            "runtime_requested_sec": 600,
+            "requested_mem": None,
+            "queue_id": 1,
+            "partition_id": 2,
+            "user_id": 3,
+            "group_id": 4,
+        }
+    )
+    assert payload["user_overrequest_mean_lookback"] == 1.0
+    assert payload["user_runtime_median_lookback"] == 600
+    assert payload["queue_congestion_at_submit_jobs"] == 0
+
+
+def test_ml_backfill_p10_uses_p10_estimate_and_guard() -> None:
+    trace = pd.DataFrame(
+        [
+            {
+                "job_id": 1,
+                "submit_ts": 0,
+                "runtime_actual_sec": 50,
+                "requested_cpus": 2,
+                "runtime_requested_sec": 70,
+                "user_id": 1,
+            }
+        ]
+    )
+    result = run_simulation_from_trace(
+        trace_df=trace,
+        policy_id="ML_BACKFILL_P10",
+        capacity_cpus=8,
+        run_id="ml_p10_guard",
+        strict_invariants=True,
+        runtime_predictor=StubPredictor(),
+        runtime_guard_k=1.0,
+        strict_uncertainty_mode=False,
+    )
+    job = result.jobs_df.iloc[0]
+    assert int(job["runtime_estimate_sec"]) == 5
+    assert int(job["runtime_guard_sec"]) == 8
+    assert str(job["estimate_source"]) == "prediction"

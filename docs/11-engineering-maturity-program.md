@@ -24,6 +24,12 @@ This document operationalizes the roadmap into an execution system with clear ow
 4. Run milestone gate review issue with explicit pass/fail evidence.
 5. Update score trends and risks before each release candidate.
 
+Current quality gate baseline (M1 hardening):
+- tests run with warnings-as-errors policy (`[tool.pytest.ini_options].filterwarnings` ends with `error` and explicit allowlist entries),
+- global coverage floor `>= 86%`,
+- package coverage floors: `api >= 88%`, `models >= 89%`, `simulate >= 86%`,
+- docs consistency and OpenAPI compatibility checks are CI-blocking.
+
 ## Scorecard Dimensions
 
 - Reliability (20)

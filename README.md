@@ -73,7 +73,7 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 
 ### Simulation and Evaluation
 
-- Deterministic simulation core for `FIFO_STRICT`, `EASY_BACKFILL_BASELINE`, and `ML_BACKFILL_P50`.
+- Deterministic simulation core for `FIFO_STRICT`, `EASY_BACKFILL_BASELINE`, `ML_BACKFILL_P50`, and `ML_BACKFILL_P10`.
 - Invariant reporting with strict-fail mode.
 - Baseline fidelity gate (aggregate + distribution + queue-correlation checks).
 - Stress scenario generation (heavy-tail, low-congestion, user-skew, burst-shock) and automated stress testing.
@@ -85,14 +85,14 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 
 - Model registry (append-only JSONL) with register/promote/archive lifecycle.
 - Drift detection: Population Stability Index (PSI) per feature and pinball loss degradation tracking.
-- Hyperparameter tuning with random search and chronological cross-validation.
+- Hyperparameter tuning with random search/Optuna and chronological cross-validation, with backend selection (`sklearn` or `lightgbm`).
 - Feature importance analysis via permutation importance.
 - Shadow ingestion daemon for incremental Slurm/PBS polling with watermark persistence.
 - Artifact retention management with production-model and dossier-reference protection.
 
 ### Credibility and Reproducibility
 
-- Full credibility protocol: automated multi-trace suite runs with per-trace fidelity, sensitivity, and recommendation outcomes.
+- Full credibility protocol: automated multi-trace suite runs with per-trace fidelity, sensitivity, and recommendation outcomes, including optional sklearn+LightGBM predictor ensembling.
 - Credibility dossier assembly (JSON + markdown) with cross-trace summary.
 - Policy sensitivity sweeps over guard coefficient (`k`) parameter space.
 - Immutable run manifest generation with hashes, config snapshots, seeds, and environment fingerprints.
@@ -114,7 +114,7 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 - Structured JSON logging with correlation ID propagation.
 - Docker containerization with multi-stage build, pinned base image digests, and Docker secrets support.
 - **Kubernetes manifests**: Deployment (health/readiness probes, security context, resource limits, preStop hook for connection draining), Service, ConfigMap, Secret, HPA (2-8 replicas), ServiceMonitor, OpenTelemetry Collector, Alertmanager, PodDisruptionBudget (minAvailable: 1), NetworkPolicy (ingress from ingress-nginx + monitoring only).
-- GitHub Actions CI/CD: lint, typecheck, test matrix (Python 3.11/3.12), coverage gate (82%), E2E smoke test, Codecov reporting, Rust check/clippy, cross-language parity, bandit SAST, dependency audit, secret scanning, Docker build, and release workflows.
+- GitHub Actions CI/CD: lint, typecheck, test matrix (Python 3.11/3.12), warnings-as-errors test gate, global coverage gate (86%) + package floors (`api>=88`, `models>=89`, `simulate>=86`), docs consistency check, OpenAPI compatibility check, production-readiness validation, E2E smoke test, Codecov reporting, Rust check/clippy, cross-language parity, bandit SAST, dependency audit, secret scanning, Docker build, and release workflows.
 - JSON Schema validation for all configuration files with `additionalProperties: false` enforcement.
 - **OpenTelemetry** distributed tracing with configurable sampling per environment.
 - **API deprecation sunset mechanism** with RFC 8594/9745 `Sunset` and `Deprecation` response headers.
@@ -465,6 +465,7 @@ hpcopt features build \
 hpcopt train runtime \
   --dataset data/curated/ctc_sp2_1996.parquet \
   --out outputs/models \
+  --backend sklearn \
   --model-id runtime_ctc_v1
 
 # Hyperparameter tuning
@@ -472,12 +473,14 @@ hpcopt train tune \
   --dataset data/curated/ctc_sp2_1996.parquet \
   --out outputs/reports \
   --quantile 0.5 \
-  --n-trials 20
+  --n-trials 20 \
+  --backend sklearn
 
 # Resource-fit model
 hpcopt train resource-fit \
   --dataset data/curated/ctc_sp2_1996.parquet \
-  --out outputs/models
+  --out outputs/models \
+  --backend sklearn
 ```
 
 ### 5) Replay baselines
@@ -498,6 +501,14 @@ hpcopt simulate run \
   --capacity-cpus 64 \
   --runtime-guard-k 0.5 \
   --strict-uncertainty-mode \
+  --strict-invariants
+
+# Conservative variant (uses p10 runtime estimate)
+hpcopt simulate run \
+  --trace data/curated/ctc_sp2_1996.parquet \
+  --policy ML_BACKFILL_P10 \
+  --capacity-cpus 64 \
+  --runtime-guard-k 0.5 \
   --strict-invariants
 ```
 
@@ -748,7 +759,7 @@ hpcopt data lock-reference-suite \
 pytest -v
 ```
 
-Current baseline: **330 tests passing** with **82% minimum coverage** (enforced in CI, **84% actual**).
+Current baseline: **420 tests passing** with **86% minimum coverage** (enforced in CI, **86.14% actual**).
 
 Test suite covers:
 
@@ -769,7 +780,7 @@ Test suite covers:
 - **E2E pipeline smoke test** (ingest → features → train → predict),
 - **load tests**: spike (0→100 concurrent), sustained (5s continuous), error rate verification (<1%), tail latency assertions (p99 < 2x p95).
 
-Coverage enforcement: `pytest-cov` with `--cov-fail-under=82` and Codecov PR comments in CI.
+Coverage enforcement: `pytest-cov` with `--cov-fail-under=86` plus `scripts/check_coverage_thresholds.py` package-floor checks and Codecov PR comments in CI.
 
 ### Unified Verification Gate (PowerShell)
 
@@ -943,7 +954,7 @@ flowchart TD
   subgraph Gate["Merge Gate"]
     E2E
     XPARITY
-    COV_CHECK["Coverage ≥ 82%"]
+    COV_CHECK["Coverage ≥ 86% (global) + package floors"]
     SMOKE
   end
 
@@ -957,7 +968,7 @@ flowchart TD
 
 | Dimension | Metric | Evidence |
 |---|---|---|
-| **Testing** | 330 tests, 0 failures, 84% coverage | `pytest tests/ -v --cov-fail-under=82` |
+| **Testing** | 420 tests, 0 failures, 86.14% coverage | `pytest tests/ -v --cov=hpcopt --cov-fail-under=86` |
 | **Code Quality** | 0 lint violations | `ruff check python/` |
 | **CI/CD** | 17 jobs across 5 workflows | `.github/workflows/` |
 | **Security** | 22 × `additionalProperties: false`, SAST, container scan, SBOM | `schemas/`, pre-commit, release workflow |

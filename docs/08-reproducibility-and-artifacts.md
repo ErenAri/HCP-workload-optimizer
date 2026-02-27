@@ -57,7 +57,7 @@ Defines fidelity report essentials:
 ### Adapter Schemas
 
 - `schemas/adapter_snapshot.schema.json`
-- `schemas/adapter_decision.schema.json` (with `enum` constraint on `policy_id`: `FIFO_STRICT`, `EASY_BACKFILL_BASELINE`, `ML_BACKFILL_P50`)
+- `schemas/adapter_decision.schema.json` (with `enum` constraint on `policy_id`: `FIFO_STRICT`, `EASY_BACKFILL_BASELINE`, `ML_BACKFILL_P50`, `ML_BACKFILL_P10`)
 
 These enforce scheduler boundary compatibility.
 
@@ -166,7 +166,7 @@ Correlation IDs can be set explicitly or auto-generated for request tracing.
 
 ## 8. Validation and Test Coverage
 
-Current tests validate (324 tests, 83% coverage with 82% CI gate):
+Current tests validate (420 tests, 86.14% coverage with 86% CI gate + package floors):
 
 - ingestion (SWF, Slurm, PBS) and schema-critical fields,
 - trace profile sections,
@@ -188,7 +188,7 @@ Current tests validate (324 tests, 83% coverage with 82% CI gate):
 - JSON schema validation (well-formedness and `additionalProperties` lockdown for all 10 schemas),
 - file-based secrets loading (all 3 paths + missing file handling).
 
-Coverage enforcement: `pytest-cov` runs in CI with `--cov-fail-under=58` on Python 3.11 and 3.12 matrix.
+Coverage enforcement: `pytest-cov` runs in CI with `--cov-fail-under=86`, then `scripts/check_coverage_thresholds.py` enforces package floors (`api>=88`, `models>=89`, `simulate>=86`).
 
 ## 7. Known Reproducibility Caveat
 
@@ -207,4 +207,3 @@ For each published experiment, archive:
 - command lines used to generate results.
 
 This archive should be sufficient for third-party replay under equivalent tooling.
-

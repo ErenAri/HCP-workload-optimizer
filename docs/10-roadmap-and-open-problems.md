@@ -41,8 +41,8 @@ Completed:
 - JSON Schema validation for all configuration files with `additionalProperties: false` enforcement.
 - Artifact retention management with production model protection.
 - Modular CLI architecture (6 domain modules + assembler, down from 935-line monolith).
-- Coverage enforcement infrastructure (`pytest-cov` with 82% gate in CI).
-- CLI test coverage across all 14 command groups (324 total tests).
+- Coverage enforcement infrastructure (`pytest-cov` with 86% global gate + package floors in CI).
+- CLI test coverage across all 14 command groups (420 total tests).
 - Shared test fixtures (`conftest.py`) for API client, trace paths, and stress datasets.
 - Rust CI governance: `cargo check` + `clippy --deny warnings` + release build in CI.
 - Rust overflow safety: saturating arithmetic across simulation and adapter contract code.

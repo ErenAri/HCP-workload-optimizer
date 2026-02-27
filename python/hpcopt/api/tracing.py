@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 
 from fastapi import FastAPI
 
@@ -21,10 +22,17 @@ def init_tracing(app: FastAPI) -> None:
       - ``OTEL_EXPORTER_OTLP_ENDPOINT`` (default: none / console exporter)
     """
     try:
-        from opentelemetry import trace
-        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-        from opentelemetry.sdk.resources import Resource
-        from opentelemetry.sdk.trace import TracerProvider
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=r"pkg_resources is deprecated as an API.*", category=UserWarning)
+            warnings.filterwarnings(
+                "ignore",
+                message=r"module 'sre_constants' is deprecated",
+                category=DeprecationWarning,
+            )
+            from opentelemetry import trace
+            from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+            from opentelemetry.sdk.resources import Resource
+            from opentelemetry.sdk.trace import TracerProvider
     except ImportError:
         logger.debug("OpenTelemetry packages not installed; tracing disabled")
         return

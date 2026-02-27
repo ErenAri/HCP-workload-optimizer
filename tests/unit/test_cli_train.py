@@ -74,12 +74,15 @@ def test_train_runtime_cli_with_hyperparams_config(tmp_path: Path, monkeypatch: 
             "9",
             "--hyperparams-config",
             str(hp_config),
+            "--backend",
+            "lightgbm",
         ],
     )
     assert result.exit_code == 0, result.output
     assert captured["model_id"] == "runtime_x"
     assert captured["seed"] == 9
     assert captured["hyperparams"] == {"n_estimators": 64, "learning_rate": 0.08}
+    assert captured["backend"] == "lightgbm"
 
 
 def test_train_tune_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -87,14 +90,20 @@ def test_train_tune_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
 
     dataset = tmp_path / "train.parquet"
     dataset.write_text("x", encoding="utf-8")
-    monkeypatch.setattr(
-        tuning_mod,
-        "build_tuning_report",
-        lambda **_kwargs: SimpleNamespace(
+    captured: dict[str, object] = {}
+
+    def _fake_build_tuning_report(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
             best_params=SimpleNamespace(to_dict=lambda: {"max_depth": 4}),
             best_score=0.123456,
             report_path=tmp_path / "reports" / "tuning.json",
-        ),
+        )
+
+    monkeypatch.setattr(
+        tuning_mod,
+        "build_tuning_report",
+        _fake_build_tuning_report,
     )
 
     result = CliRunner().invoke(
@@ -114,12 +123,15 @@ def test_train_tune_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
             "4",
             "--n-folds",
             "2",
+            "--backend",
+            "lightgbm",
         ],
     )
     assert result.exit_code == 0, result.output
     assert "Best params:" in result.output
     assert "Best score:" in result.output
     assert "Tuning report:" in result.output
+    assert captured["backend"] == "lightgbm"
 
 
 def test_train_resource_fit_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -127,13 +139,19 @@ def test_train_resource_fit_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
     dataset = tmp_path / "train.parquet"
     dataset.write_text("x", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def _fake_train_resource_fit(**kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(
+            model_dir=tmp_path / "models" / "rf1",
+            metrics_path=tmp_path / "models" / "rf1" / "metrics.json",
+        )
+
     monkeypatch.setattr(
         resource_fit_mod,
         "train_resource_fit_model",
-        lambda **_kwargs: SimpleNamespace(
-            model_dir=tmp_path / "models" / "rf1",
-            metrics_path=tmp_path / "models" / "rf1" / "metrics.json",
-        ),
+        _fake_train_resource_fit,
     )
 
     result = CliRunner().invoke(
@@ -149,8 +167,11 @@ def test_train_resource_fit_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
             "rf_model",
             "--seed",
             "17",
+            "--backend",
+            "sklearn",
         ],
     )
     assert result.exit_code == 0, result.output
     assert "Model dir:" in result.output
     assert "Metrics:" in result.output
+    assert captured["backend"] == "sklearn"

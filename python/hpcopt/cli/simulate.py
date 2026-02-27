@@ -37,7 +37,7 @@ stress_app = typer.Typer(help="Stress scenario commands")
 @simulate_app.command("run")
 def simulate_run_cmd(
     trace: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset"),
-    policy: str = typer.Option("FIFO_STRICT", help="FIFO_STRICT|EASY_BACKFILL_BASELINE|ML_BACKFILL_P50"),
+    policy: str = typer.Option("FIFO_STRICT", help="FIFO_STRICT|EASY_BACKFILL_BASELINE|ML_BACKFILL_P50|ML_BACKFILL_P10"),
     capacity_cpus: int = typer.Option(64, min=1, help="Cluster CPU capacity"),
     out: Path = typer.Option(Path("outputs/simulations"), help="Simulation artifact output directory"),
     report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),
@@ -62,7 +62,7 @@ def simulate_run_cmd(
 
     runtime_predictor = None
     resolved_model_dir = None
-    if policy == "ML_BACKFILL_P50":
+    if policy in ("ML_BACKFILL_P50", "ML_BACKFILL_P10"):
         resolved_model_dir = resolve_runtime_model_dir(runtime_model_dir)
         if resolved_model_dir is not None:
             runtime_predictor = RuntimeQuantilePredictor(resolved_model_dir)
@@ -375,7 +375,7 @@ def stress_run_cmd(
 
     runtime_predictor = None
     resolved_model_dir = None
-    if policy_id == "ML_BACKFILL_P50":
+    if policy_id in ("ML_BACKFILL_P50", "ML_BACKFILL_P10"):
         resolved_model_dir = resolve_runtime_model_dir(runtime_model_dir)
         if resolved_model_dir is not None:
             runtime_predictor = RuntimeQuantilePredictor(resolved_model_dir)

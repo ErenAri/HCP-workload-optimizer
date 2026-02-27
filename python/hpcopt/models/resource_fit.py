@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,21 @@ from sklearn.preprocessing import OneHotEncoder
 from hpcopt.utils.io import ensure_dir, write_json
 
 logger = logging.getLogger(__name__)
+
+# LightGBM backend auto-detection (mirrors runtime_quantile.py)
+try:
+    with warnings.catch_warnings():
+        # LightGBM optionally imports matplotlib/pyparsing paths that emit
+        # interpreter deprecation warnings on Python 3.11+.
+        warnings.filterwarnings("ignore", message=r"module 'sre_constants' is deprecated", category=DeprecationWarning)
+        warnings.filterwarnings("ignore", message=r"pkg_resources is deprecated as an API.*", category=UserWarning)
+        import lightgbm as lgb  # noqa: F401
+
+    _HAS_LIGHTGBM = True
+except ImportError:
+    _HAS_LIGHTGBM = False
+
+DEFAULT_BACKEND = "lightgbm" if _HAS_LIGHTGBM else "sklearn"
 
 RESOURCE_FEATURES = [
     "requested_cpus",
@@ -124,6 +140,7 @@ def train_resource_fit_model(
     model_id: str,
     node_sizes: list[int] | None = None,
     seed: int = 42,
+    backend: str | None = None,
 ) -> ResourceFitTrainResult:
     """Train resource-fit classifier and regressor."""
     ensure_dir(out_dir)
@@ -132,6 +149,9 @@ def train_resource_fit_model(
 
     if node_sizes is None:
         node_sizes = [1, 2, 4, 8, 16, 32, 64, 128]
+
+    resolved_backend = backend or DEFAULT_BACKEND
+    logger.info("ResourceFit training with backend=%s (lightgbm_available=%s)", resolved_backend, _HAS_LIGHTGBM)
 
     trace_df = pd.read_parquet(dataset_path)
     df = _prepare_resource_frame(trace_df, node_sizes)
@@ -144,6 +164,33 @@ def train_resource_fit_model(
     x_train = train_df[RESOURCE_FEATURES]
     x_test = test_df[RESOURCE_FEATURES]
 
+    # Build estimators based on backend.
+    def _make_classifier() -> Any:
+        if resolved_backend == "lightgbm":
+            if not _HAS_LIGHTGBM:
+                raise ImportError(
+                    "LightGBM backend requested but lightgbm is not installed. "
+                    "Install with: pip install 'hpc-workload-optimizer[lightgbm]'"
+                )
+            return lgb.LGBMClassifier(
+                n_estimators=100, max_depth=4, learning_rate=0.05,
+                num_leaves=31, subsample=0.8, random_state=seed, verbose=-1,
+            )
+        return GradientBoostingClassifier(n_estimators=80, max_depth=3, random_state=seed, subsample=0.8)
+
+    def _make_regressor() -> Any:
+        if resolved_backend == "lightgbm":
+            if not _HAS_LIGHTGBM:
+                raise ImportError(
+                    "LightGBM backend requested but lightgbm is not installed. "
+                    "Install with: pip install 'hpc-workload-optimizer[lightgbm]'"
+                )
+            return lgb.LGBMRegressor(
+                n_estimators=100, max_depth=4, learning_rate=0.05,
+                num_leaves=31, subsample=0.8, random_state=seed, verbose=-1,
+            )
+        return GradientBoostingRegressor(n_estimators=80, max_depth=3, random_state=seed, subsample=0.8)
+
     # Train fragmentation classifier
     y_frag_train = train_df["frag_label"].to_numpy(dtype=int)
     y_frag_test = test_df["frag_label"].to_numpy(dtype=int)
@@ -151,11 +198,17 @@ def train_resource_fit_model(
     frag_pipeline = Pipeline(
         [
             ("preprocess", _build_preprocessor()),
-            ("classifier", GradientBoostingClassifier(n_estimators=80, max_depth=3, random_state=seed, subsample=0.8)),
+            ("classifier", _make_classifier()),
         ]
     )
     frag_pipeline.fit(x_train, y_frag_train)
-    frag_accuracy = float(np.mean(frag_pipeline.predict(x_test) == y_frag_test))
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"X does not have valid feature names, but LGBMClassifier was fitted with feature names",
+            category=UserWarning,
+        )
+        frag_accuracy = float(np.mean(frag_pipeline.predict(x_test) == y_frag_test))
 
     # Train node size regressor
     y_node_train = train_df["optimal_node_cpus"].to_numpy(dtype=float)
@@ -164,11 +217,17 @@ def train_resource_fit_model(
     node_pipeline = Pipeline(
         [
             ("preprocess", _build_preprocessor()),
-            ("regressor", GradientBoostingRegressor(n_estimators=80, max_depth=3, random_state=seed, subsample=0.8)),
+            ("regressor", _make_regressor()),
         ]
     )
     node_pipeline.fit(x_train, y_node_train)
-    node_pred = node_pipeline.predict(x_test)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"X does not have valid feature names, but LGBMRegressor was fitted with feature names",
+            category=UserWarning,
+        )
+        node_pred = node_pipeline.predict(x_test)
     node_mae = float(np.mean(np.abs(y_node_test - node_pred)))
 
     # Save models
@@ -179,6 +238,7 @@ def train_resource_fit_model(
 
     metrics = {
         "model_id": model_id,
+        "backend": resolved_backend,
         "fragmentation_accuracy": frag_accuracy,
         "node_size_mae": node_mae,
         "train_rows": int(len(train_df)),
@@ -189,6 +249,7 @@ def train_resource_fit_model(
     metadata = {
         "model_id": model_id,
         "model_type": "resource_fit",
+        "backend": resolved_backend,
         "features": RESOURCE_FEATURES,
         "node_sizes": node_sizes,
         "seed": seed,
@@ -222,11 +283,21 @@ class ResourceFitPredictor:
         row = {key: features.get(key) for key in RESOURCE_FEATURES}
         frame = pd.DataFrame([row], columns=RESOURCE_FEATURES)
 
-        frag_pred = int(self.frag_classifier.predict(frame)[0])
-        frag_proba = self.frag_classifier.predict_proba(frame)[0]
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"X does not have valid feature names, but LGBMClassifier was fitted with feature names",
+                category=UserWarning,
+            )
+            warnings.filterwarnings(
+                "ignore",
+                message=r"X does not have valid feature names, but LGBMRegressor was fitted with feature names",
+                category=UserWarning,
+            )
+            frag_pred = int(self.frag_classifier.predict(frame)[0])
+            frag_proba = self.frag_classifier.predict_proba(frame)[0]
+            node_pred = float(self.node_regressor.predict(frame)[0])
         confidence = float(max(frag_proba))
-
-        node_pred = float(self.node_regressor.predict(frame)[0])
         recommended = max(1, int(round(node_pred)))
 
         frag_labels = {0: "low", 1: "medium", 2: "high"}

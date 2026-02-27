@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,12 @@ logger = logging.getLogger(__name__)
 
 # Backend auto-detection
 try:
-    import lightgbm as lgb  # noqa: F401
+    with warnings.catch_warnings():
+        # LightGBM optionally imports matplotlib/pyparsing paths that emit
+        # interpreter deprecation warnings on Python 3.11+.
+        warnings.filterwarnings("ignore", message=r"module 'sre_constants' is deprecated", category=DeprecationWarning)
+        warnings.filterwarnings("ignore", message=r"pkg_resources is deprecated as an API.*", category=UserWarning)
+        import lightgbm as lgb  # noqa: F401
 
     _HAS_LIGHTGBM = True
 except ImportError:
@@ -50,9 +56,21 @@ FEATURE_COLUMNS = [
     "group_id",
     "submit_hour",
     "submit_dow",
+    # Lookback features from feature pipeline (fall back to sensible defaults
+    # when training directly on raw SWF traces that skip the feature stage).
+    "user_overrequest_mean_lookback",
+    "user_runtime_median_lookback",
+    "queue_congestion_at_submit_jobs",
 ]
 
-NUMERIC_FEATURES = ["requested_cpus", "runtime_requested_sec", "requested_mem"]
+NUMERIC_FEATURES = [
+    "requested_cpus",
+    "runtime_requested_sec",
+    "requested_mem",
+    "user_overrequest_mean_lookback",
+    "user_runtime_median_lookback",
+    "queue_congestion_at_submit_jobs",
+]
 CATEGORICAL_FEATURES = [
     "queue_id",
     "partition_id",
@@ -82,6 +100,14 @@ def _prepare_training_frame(trace_df: pd.DataFrame) -> pd.DataFrame:
         if col not in df.columns:
             df[col] = None
 
+    # Lookback features: default to neutral values when absent (raw SWF traces
+    # that skip the feature pipeline stage do not have these columns).
+    for col in ["user_overrequest_mean_lookback", "user_runtime_median_lookback"]:
+        if col not in df.columns:
+            df[col] = 1.0
+    if "queue_congestion_at_submit_jobs" not in df.columns:
+        df["queue_congestion_at_submit_jobs"] = 0
+
     df["submit_ts"] = pd.to_numeric(df["submit_ts"], errors="coerce")
     df["runtime_actual_sec"] = pd.to_numeric(df["runtime_actual_sec"], errors="coerce")
     df["requested_cpus"] = pd.to_numeric(df["requested_cpus"], errors="coerce")
@@ -103,6 +129,18 @@ def _prepare_training_frame(trace_df: pd.DataFrame) -> pd.DataFrame:
     submit_dt = pd.to_datetime(df["submit_ts"], unit="s", utc=True)
     df["submit_hour"] = submit_dt.dt.hour
     df["submit_dow"] = submit_dt.dt.dayofweek
+
+    # Coerce lookback features to numeric; fall back to neutral defaults.
+    df["user_overrequest_mean_lookback"] = (
+        pd.to_numeric(df["user_overrequest_mean_lookback"], errors="coerce").fillna(1.0)
+    )
+    df["user_runtime_median_lookback"] = (
+        pd.to_numeric(df["user_runtime_median_lookback"], errors="coerce")
+        .fillna(df["runtime_actual_sec"].median())
+    )
+    df["queue_congestion_at_submit_jobs"] = (
+        pd.to_numeric(df["queue_congestion_at_submit_jobs"], errors="coerce").fillna(0).astype(int)
+    )
 
     df = df.sort_values(["submit_ts", "requested_cpus"]).reset_index(drop=True)
     return df
@@ -233,6 +271,11 @@ def train_runtime_quantile_models(
     x_test = test_df[FEATURE_COLUMNS]
     y_test = test_df[TARGET_COLUMN].to_numpy(dtype=float)
 
+    # Log-transform: training models in log1p space reduces heavy-tail distortion.
+    # Runtime distributions span several orders of magnitude (e.g. SDSC-SP2);
+    # pinball loss in raw seconds over-weights rare long jobs.
+    y_train_log = np.log1p(y_train)
+
     metrics: dict[str, Any] = {
         "model_id": model_id,
         "dataset_path": str(dataset_path),
@@ -252,8 +295,17 @@ def train_runtime_quantile_models(
 
     for quantile_name, quantile in QUANTILES.items():
         pipeline = _build_pipeline(alpha=quantile, seed=seed, hyperparams=hyperparams, backend=resolved_backend)
-        pipeline.fit(x_train, y_train)
-        pred_test = pipeline.predict(x_test)
+        pipeline.fit(x_train, y_train_log)
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"X does not have valid feature names, but LGBMRegressor was fitted with feature names",
+                category=UserWarning,
+            )
+            pred_test_log = pipeline.predict(x_test)
+        # Invert log transform; clamp log output ≥ 0 before expm1 to avoid
+        # returning negative seconds on very small predictions.
+        pred_test = np.expm1(np.maximum(pred_test_log, 0.0))
         pred_test = np.maximum(pred_test, MIN_PREDICTION_SEC)
 
         pinball = _pinball_loss(y_test, pred_test, alpha=quantile)
@@ -337,6 +389,7 @@ def train_runtime_quantile_models(
         "trained_at_utc": metrics["timestamp_utc"],
         "dataset_path": str(dataset_path),
         "model_hashes": model_hashes,
+        "log_transform": True,
     }
 
     metrics_path = model_dir / "metrics.json"
@@ -443,6 +496,17 @@ class RuntimeQuantilePredictor:
             _verify_model_hash(model_path, expected_hashes)
             self.models[quantile_name] = joblib.load(model_path)
 
+        # Detect whether this model was trained with log1p target transform.
+        # Defaults to False so that old models (without the flag) are unchanged.
+        self._log_transform: bool = False
+        metadata_path = model_dir / "metadata.json"
+        if metadata_path.exists():
+            try:
+                md = json.loads(metadata_path.read_text(encoding="utf-8"))
+                self._log_transform = bool(md.get("log_transform", False))
+            except (json.JSONDecodeError, OSError):
+                pass
+
     def predict_one(self, features: dict[str, Any]) -> dict[str, float]:
         row = {key: features.get(key) for key in FEATURE_COLUMNS}
         if row.get("submit_hour") is None or row.get("submit_dow") is None:
@@ -455,9 +519,23 @@ class RuntimeQuantilePredictor:
             row["submit_dow"] = int(ts.dayofweek)
         frame = pd.DataFrame({k: [v] for k, v in row.items()})
 
-        p10 = float(max(MIN_PREDICTION_SEC, self.models["p10"].predict(frame)[0]))
-        p50 = float(max(MIN_PREDICTION_SEC, self.models["p50"].predict(frame)[0]))
-        p90 = float(max(MIN_PREDICTION_SEC, self.models["p90"].predict(frame)[0]))
+        def _inv(v: float) -> float:
+            """Invert log1p transform when applicable."""
+            return float(np.expm1(max(v, 0.0))) if self._log_transform else float(v)
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"X does not have valid feature names, but LGBMRegressor was fitted with feature names",
+                category=UserWarning,
+            )
+            p10_raw = self.models["p10"].predict(frame)[0]
+            p50_raw = self.models["p50"].predict(frame)[0]
+            p90_raw = self.models["p90"].predict(frame)[0]
+
+        p10 = float(max(MIN_PREDICTION_SEC, _inv(p10_raw)))
+        p50 = float(max(MIN_PREDICTION_SEC, _inv(p50_raw)))
+        p90 = float(max(MIN_PREDICTION_SEC, _inv(p90_raw)))
 
         # Enforce monotonic quantiles for control safety.
         ordered = sorted([p10, p50, p90])

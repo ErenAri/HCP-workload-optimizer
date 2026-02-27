@@ -64,7 +64,10 @@ def choose_decisions(
         return choose_fifo_strict(snapshot)
     if policy_id == "EASY_BACKFILL_BASELINE":
         return choose_easy_backfill(snapshot)
-    if policy_id == "ML_BACKFILL_P50":
+    if policy_id in ("ML_BACKFILL_P50", "ML_BACKFILL_P10"):
+        # Both ML policies use the same dispatcher; the difference is that
+        # ML_BACKFILL_P10 sets runtime_estimate_sec to p10 (conservative) in
+        # attach_runtime_estimates, so the backfill window is tighter.
         return choose_ml_backfill_p50(
             snapshot=snapshot,
             strict_uncertainty_mode=strict_uncertainty_mode,
@@ -73,17 +76,28 @@ def choose_decisions(
 
 
 def build_prediction_features(job: dict[str, Any]) -> dict[str, Any]:
+    requested_runtime = int(job["runtime_requested_sec"]) if pd.notna(job.get("runtime_requested_sec")) else None
     return {
         "submit_ts": int(job["submit_ts"]),
         "requested_cpus": int(job["requested_cpus"]),
-        "runtime_requested_sec": (
-            int(job["runtime_requested_sec"]) if pd.notna(job.get("runtime_requested_sec")) else None
-        ),
+        "runtime_requested_sec": requested_runtime,
         "requested_mem": (int(job["requested_mem"]) if pd.notna(job.get("requested_mem")) else None),
         "queue_id": int(job["queue_id"]) if pd.notna(job.get("queue_id")) else None,
         "partition_id": (int(job["partition_id"]) if pd.notna(job.get("partition_id")) else None),
         "user_id": int(job["user_id"]) if pd.notna(job.get("user_id")) else None,
         "group_id": int(job["group_id"]) if pd.notna(job.get("group_id")) else None,
+        # Populate lookback-style features when unavailable in online inference.
+        "user_overrequest_mean_lookback": (
+            float(job["user_overrequest_mean_lookback"]) if pd.notna(job.get("user_overrequest_mean_lookback")) else 1.0
+        ),
+        "user_runtime_median_lookback": (
+            int(job["user_runtime_median_lookback"])
+            if pd.notna(job.get("user_runtime_median_lookback"))
+            else requested_runtime
+        ),
+        "queue_congestion_at_submit_jobs": (
+            int(job["queue_congestion_at_submit_jobs"]) if pd.notna(job.get("queue_congestion_at_submit_jobs")) else 0
+        ),
     }
 
 
@@ -103,7 +117,7 @@ def attach_runtime_estimates(
         requested_runtime = row.get("runtime_requested_sec")
         actual_runtime = int(row["runtime_actual_sec"])
 
-        if policy_id == "ML_BACKFILL_P50":
+        if policy_id in ("ML_BACKFILL_P50", "ML_BACKFILL_P10"):
             predicted = None
             if runtime_predictor is not None:
                 try:
@@ -115,23 +129,33 @@ def attach_runtime_estimates(
             if predicted is not None:
                 p50 = int(max(1, round(predicted["p50"])))
                 p90 = int(max(p50, round(predicted["p90"])))
-                guard = int(round(p50 + runtime_guard_k * (p90 - p50)))
+                if policy_id == "ML_BACKFILL_P10":
+                    # Conservative mode: use p10 as the estimate so the
+                    # backfill window is sized tightly, reducing over-runs.
+                    p10 = int(max(1, round(predicted["p10"])))
+                    estimate = p10
+                    guard = int(round(p10 + runtime_guard_k * (p50 - p10)))
+                else:
+                    estimate = p50
+                    guard = int(round(p50 + runtime_guard_k * (p90 - p50)))
                 source = "prediction"
             elif pd.notna(requested_runtime) and float(requested_runtime) > 0:
                 p50 = int(requested_runtime)
                 p90 = int(requested_runtime)
+                estimate = p50
                 guard = int(requested_runtime)
                 source = "requested_fallback"
             else:
                 p50 = int(actual_runtime)
                 p90 = int(actual_runtime)
+                estimate = p50
                 guard = int(actual_runtime)
                 source = "actual_fallback"
 
             df.at[idx, "runtime_p50_sec"] = p50
             df.at[idx, "runtime_p90_sec"] = p90
             df.at[idx, "runtime_guard_sec"] = max(1, guard)
-            df.at[idx, "runtime_estimate_sec"] = p50
+            df.at[idx, "runtime_estimate_sec"] = estimate
             df.at[idx, "estimate_source"] = source
         else:
             if pd.notna(requested_runtime) and float(requested_runtime) > 0:

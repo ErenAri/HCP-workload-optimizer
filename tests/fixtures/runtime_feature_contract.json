@@ -1,0 +1,47 @@
+{
+  "required_by_predictor": [
+    "requested_cpus",
+    "runtime_requested_sec",
+    "requested_mem",
+    "queue_id",
+    "partition_id",
+    "user_id",
+    "group_id",
+    "submit_hour",
+    "submit_dow",
+    "user_overrequest_mean_lookback",
+    "user_runtime_median_lookback",
+    "queue_congestion_at_submit_jobs"
+  ],
+  "provided_by_simulation": [
+    "submit_ts",
+    "requested_cpus",
+    "runtime_requested_sec",
+    "requested_mem",
+    "queue_id",
+    "partition_id",
+    "user_id",
+    "group_id",
+    "user_overrequest_mean_lookback",
+    "user_runtime_median_lookback",
+    "queue_congestion_at_submit_jobs"
+  ],
+  "derived_by_predictor": [
+    "submit_hour",
+    "submit_dow"
+  ],
+  "default_expectations": {
+    "user_overrequest_mean_lookback": 1.0,
+    "queue_congestion_at_submit_jobs": 0
+  },
+  "sample_job": {
+    "submit_ts": 123,
+    "requested_cpus": 8,
+    "runtime_requested_sec": 600,
+    "requested_mem": null,
+    "queue_id": 1,
+    "partition_id": 2,
+    "user_id": 3,
+    "group_id": 4
+  }
+}

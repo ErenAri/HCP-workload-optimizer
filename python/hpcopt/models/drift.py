@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -320,7 +321,13 @@ def compute_drift_report(
 
         pipeline = joblib.load(model_path)
         try:
-            preds = np.maximum(pipeline.predict(x_eval), 1.0)
+            with warnings.catch_warnings():
+                warnings.filterwarnings(
+                    "ignore",
+                    message=r"X does not have valid feature names, but LGBMRegressor was fitted with feature names",
+                    category=UserWarning,
+                )
+                preds = np.maximum(pipeline.predict(x_eval), 1.0)
         except (ValueError, OSError) as exc:
             logger.warning("Prediction failed for %s: %s", q_name, exc)
             continue

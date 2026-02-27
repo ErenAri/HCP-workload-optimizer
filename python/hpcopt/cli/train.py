@@ -23,6 +23,7 @@ def train_runtime_cmd(
     seed: int = typer.Option(42, help="Training seed"),
     report_out: Path = typer.Option(Path("outputs/reports"), help="Run manifest output directory"),
     hyperparams_config: Path | None = typer.Option(None, help="Optional hyperparams YAML config"),
+    backend: str = typer.Option("sklearn", help="Model backend: sklearn|lightgbm"),
 ) -> None:
     resolved_model_id = model_id or f"runtime_quantile_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
     hp = None
@@ -34,6 +35,7 @@ def train_runtime_cmd(
         model_id=resolved_model_id,
         seed=seed,
         hyperparams=hp,
+        backend=backend,
     )
     manifest = build_manifest(
         command="hpcopt train runtime",
@@ -56,6 +58,7 @@ def train_tune_cmd(
     seed: int = typer.Option(42, help="Tuning seed"),
     n_trials: int = typer.Option(20, min=1, help="Number of search trials"),
     n_folds: int = typer.Option(3, min=1, help="Chronological CV folds"),
+    backend: str = typer.Option("sklearn", help="Model backend: sklearn|lightgbm"),
 ) -> None:
     from hpcopt.models.tuning import build_tuning_report
 
@@ -68,6 +71,7 @@ def train_tune_cmd(
         seed=seed,
         n_trials=n_trials,
         n_folds=n_folds,
+        backend=backend,
     )
     typer.echo(f"Best params: {result.best_params.to_dict()}")
     typer.echo(f"Best score: {result.best_score:.6f}")
@@ -80,10 +84,11 @@ def train_resource_fit_cmd(
     out: Path = typer.Option(Path("outputs/models"), help="Model output directory"),
     model_id: str | None = typer.Option(None, help="Model id override"),
     seed: int = typer.Option(42, help="Training seed"),
+    backend: str | None = typer.Option(None, help="Model backend: sklearn|lightgbm (default: auto-detect)"),
 ) -> None:
     from hpcopt.models.resource_fit import train_resource_fit_model
 
     resolved_id = model_id or f"resource_fit_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
-    result = train_resource_fit_model(dataset_path=dataset, out_dir=out, model_id=resolved_id, seed=seed)
+    result = train_resource_fit_model(dataset_path=dataset, out_dir=out, model_id=resolved_id, seed=seed, backend=backend)
     typer.echo(f"Model dir: {result.model_dir}")
     typer.echo(f"Metrics: {result.metrics_path}")

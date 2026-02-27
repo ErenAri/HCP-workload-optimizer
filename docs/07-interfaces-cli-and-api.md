@@ -122,11 +122,12 @@ Outputs:
 #### Runtime Quantile Training
 
 ```bash
-hpcopt train runtime --dataset <dataset.parquet> --out outputs/models
+hpcopt train runtime --dataset <dataset.parquet> --out outputs/models --backend sklearn
 ```
 
 Options:
 - `--hyperparams-config`: optional YAML with hyperparameter overrides.
+- `--backend`: `sklearn` or `lightgbm`.
 
 Outputs:
 - quantile model artifacts (`p10/p50/p90`),
@@ -141,7 +142,8 @@ hpcopt train tune \
   --out outputs/reports \
   --quantile 0.5 \
   --n-trials 20 \
-  --n-folds 3
+  --n-folds 3 \
+  --backend sklearn
 ```
 
 Outputs: tuning report with best parameters, best score, and trial history.
@@ -151,7 +153,8 @@ Outputs: tuning report with best parameters, best score, and trial history.
 ```bash
 hpcopt train resource-fit \
   --dataset <dataset.parquet> \
-  --out outputs/models
+  --out outputs/models \
+  --backend sklearn
 ```
 
 Trains two models:
@@ -185,6 +188,7 @@ Outputs:
 hpcopt simulate run --trace <dataset.parquet> --policy FIFO_STRICT --capacity-cpus 64
 hpcopt simulate run --trace <dataset.parquet> --policy EASY_BACKFILL_BASELINE --capacity-cpus 64
 hpcopt simulate run --trace <dataset.parquet> --policy ML_BACKFILL_P50 --capacity-cpus 64
+hpcopt simulate run --trace <dataset.parquet> --policy ML_BACKFILL_P10 --capacity-cpus 64
 ```
 
 Key options:
@@ -305,6 +309,7 @@ hpcopt credibility dossier \
 
 Outputs:
 - per-trace results (ingestion, profiling, training, simulation, fidelity, recommendation),
+- optional predictor ensemble summary (when both sklearn and LightGBM models are available),
 - aggregate credibility dossier (JSON + markdown).
 
 ### Analysis

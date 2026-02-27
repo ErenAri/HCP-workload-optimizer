@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -46,14 +47,20 @@ def compute_permutation_importance(
     X = test_df[FEATURE_COLUMNS]
     y = test_df[TARGET_COLUMN].to_numpy(dtype=float)
 
-    result = permutation_importance(
-        pipeline,
-        X,
-        y,
-        n_repeats=n_repeats,
-        random_state=seed,
-        scoring="neg_mean_absolute_error",
-    )
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"X does not have valid feature names, but LGBMRegressor was fitted with feature names",
+            category=UserWarning,
+        )
+        result = permutation_importance(
+            pipeline,
+            X,
+            y,
+            n_repeats=n_repeats,
+            random_state=seed,
+            scoring="neg_mean_absolute_error",
+        )
 
     ranked: list[dict[str, Any]] = []
     for i, col in enumerate(FEATURE_COLUMNS):

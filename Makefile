@@ -1,7 +1,7 @@
 # HPC Workload Optimizer — Common Development Commands
 # Cross-platform Makefile for consistent DX
 
-.PHONY: lint typecheck test test-unit test-integration test-load coverage security serve docker-build docker-run rust-check clean verify help
+.PHONY: lint typecheck test test-unit test-integration test-load coverage coverage-gate docs-check openapi-check readiness-check security serve docker-build docker-run rust-check clean verify help
 
 # ---------------------------------------------------------------
 # Code Quality
@@ -33,7 +33,19 @@ test-load: ## Run load tests
 	pytest tests/load/ -v -m load
 
 coverage: ## Run tests with coverage reporting
-	pytest tests/ -v --cov=hpcopt --cov-report=term-missing --cov-fail-under=82
+	pytest tests/ -v --cov=hpcopt --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=86
+
+coverage-gate: coverage ## Enforce package-level coverage floors
+	python scripts/check_coverage_thresholds.py --coverage-xml coverage.xml --global-fail-under 86 --package-threshold api=88 --package-threshold models=89 --package-threshold simulate=86
+
+docs-check: ## Validate docs consistency against CLI/runtime interfaces
+	python scripts/check_docs_consistency.py
+
+openapi-check: ## Validate OpenAPI backward compatibility
+	python scripts/check_openapi_compat.py --baseline schemas/openapi_baseline.json
+
+readiness-check: ## Validate production readiness checklist shape
+	python scripts/production_readiness_gate.py --mode validate
 
 # ---------------------------------------------------------------
 # Local Development
@@ -79,7 +91,7 @@ clean: ## Remove build artifacts and caches
 	rm -rf dist/ build/ *.egg-info
 
 verify: ## Run full CI-equivalent verification
-	$(MAKE) lint typecheck security test
+	$(MAKE) lint typecheck security coverage-gate docs-check openapi-check readiness-check
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'

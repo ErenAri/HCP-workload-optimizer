@@ -22,7 +22,9 @@ hpcopt train runtime --dataset <canonical_trace.parquet> --out outputs/models
 ```
 
 Model family:
-- `GradientBoostingRegressor` in quantile mode for each alpha in `{0.10, 0.50, 0.90}`.
+- backend-selectable quantile regressors for each alpha in `{0.10, 0.50, 0.90}`:
+  - `GradientBoostingRegressor` (`sklearn` backend),
+  - `LGBMRegressor` (`lightgbm` backend, when installed).
 
 ## 3. Feature Contract
 
@@ -37,6 +39,9 @@ Feature vector:
 - `group_id`
 - `submit_hour`
 - `submit_dow`
+- `user_overrequest_mean_lookback`
+- `user_runtime_median_lookback`
+- `queue_congestion_at_submit_jobs`
 
 Preparation rules:
 
@@ -90,6 +95,9 @@ Predictor class:
 Monotonicity enforcement:
 - predicted values are sorted to satisfy `p10 <= p50 <= p90` before use.
 
+Transform semantics:
+- training uses `log1p(runtime_actual_sec)` and inference applies `expm1` inversion when metadata flag `log_transform=true` is present.
+
 Model resolution order:
 
 1. explicit path argument,
@@ -98,17 +106,22 @@ Model resolution order:
 
 ## 7. Integration into Policy Logic
 
-In `ML_BACKFILL_P50`, each job receives:
+In `ML_BACKFILL_P50` and `ML_BACKFILL_P10`, each job receives:
 
 - `runtime_p50_sec`,
 - `runtime_p90_sec`,
 - `runtime_guard_sec`.
 
-Guard formula:
+Guard formulas:
 
 ```text
-runtime_guard = p50 + runtime_guard_k * (p90 - p50)
+ML_BACKFILL_P50: runtime_guard = p50 + runtime_guard_k * (p90 - p50)
+ML_BACKFILL_P10: runtime_guard = p10 + runtime_guard_k * (p50 - p10)
 ```
+
+Estimate semantics:
+- `ML_BACKFILL_P50` uses `runtime_estimate_sec = p50`,
+- `ML_BACKFILL_P10` uses `runtime_estimate_sec = p10` (more conservative backfill window sizing).
 
 Strict uncertainty mode:
 - backfill gate uses `p90` instead of `runtime_guard`.
@@ -147,6 +160,7 @@ hpcopt train tune --dataset <dataset.parquet> --quantile 0.5 --n-trials 20 --n-f
 
 Tuning approach:
 - random search over `n_estimators`, `max_depth`, `learning_rate`, `subsample`, `min_samples_leaf`,
+- backend-aware parameter support (`num_leaves`, `colsample_bytree`, `min_child_samples` when `lightgbm` is selected),
 - chronological cross-validation (no future leakage),
 - scored by pinball loss for the target quantile,
 - outputs best parameters and full trial history.

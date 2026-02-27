@@ -29,7 +29,7 @@ from hpcopt.simulate.core_helpers import (
 from hpcopt.simulate.metrics import compute_job_metrics
 from hpcopt.simulate.objective import compute_objective_contract_metrics
 
-SUPPORTED_POLICIES = {"FIFO_STRICT", "EASY_BACKFILL_BASELINE", "ML_BACKFILL_P50"}
+SUPPORTED_POLICIES = {"FIFO_STRICT", "EASY_BACKFILL_BASELINE", "ML_BACKFILL_P50", "ML_BACKFILL_P10"}
 
 
 @dataclass

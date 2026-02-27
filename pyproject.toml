@@ -94,9 +94,11 @@ markers = [
   "performance: marks performance-sensitive tests",
 ]
 filterwarnings = [
-  "ignore:X does not have valid feature names, but LGBMRegressor was fitted with feature names:UserWarning:sklearn\\.utils\\.validation",
+  "ignore:X does not have valid feature names, but LGBMRegressor was fitted with feature names:UserWarning",
+  "ignore:X does not have valid feature names, but LGBMClassifier was fitted with feature names:UserWarning",
   "ignore:pkg_resources is deprecated as an API.*:UserWarning",
   "ignore:module 'sre_constants' is deprecated:DeprecationWarning",
+  "error",
 ]
 
 [tool.bandit]
