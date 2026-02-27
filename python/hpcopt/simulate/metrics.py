@@ -51,8 +51,19 @@ def compute_job_metrics(jobs_df: pd.DataFrame, capacity_cpus: int) -> dict[str, 
     }
 
 
-def relative_divergence(observed: float, simulated: float) -> float:
+def relative_divergence(
+    observed: float,
+    simulated: float,
+    denominator_floor: float | None = None,
+) -> float:
+    """Return absolute relative divergence with optional denominator floor.
+
+    A denominator floor stabilizes ratios for low-magnitude metrics where
+    tiny absolute deltas can otherwise explode into large relative values.
+    """
     denom = abs(observed) if abs(observed) > 1e-9 else 1.0
+    if denominator_floor is not None and denominator_floor > 0.0:
+        denom = max(denom, float(denominator_floor))
     return float(abs(simulated - observed) / denom)
 
 

@@ -95,3 +95,11 @@ def test_empty_arrays_ks() -> None:
 
     result = ks_statistic(np.array([]), np.array([]))
     assert result == 0.0
+
+
+def test_relative_divergence_respects_denominator_floor() -> None:
+    """Optional denominator floor should reduce low-magnitude ratio noise."""
+    from hpcopt.simulate.metrics import relative_divergence
+
+    assert relative_divergence(observed=1.0, simulated=2.0) == 1.0
+    assert relative_divergence(observed=1.0, simulated=2.0, denominator_floor=60.0) == 1.0 / 60.0
