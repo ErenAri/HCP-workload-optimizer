@@ -838,6 +838,7 @@ Primary docs:
 - `docs/08-reproducibility-and-artifacts.md`
 - `docs/09-experiment-protocol-mvp.md`
 - `docs/10-roadmap-and-open-problems.md`
+- `docs/11-engineering-maturity-program.md`
 
 Design and contract history:
 
@@ -845,6 +846,14 @@ Design and contract history:
 - `design_docs/policy_spec_baselines_mvp.md`
 - `design_docs/mvp_backlog_p0_p1_p2.md`
 - `design_docs/systems_first_research_appendix.md`
+
+Engineering maturity execution artifacts:
+
+- `program/engineering-maturity/README.md`
+- `program/engineering-maturity/epics.yaml`
+- `program/engineering-maturity/milestones.yaml`
+- `program/engineering-maturity/kpi-dashboard.sample.json`
+- `schemas/engineering_kpi_dashboard.schema.json`
 
 ## Kubernetes Deployment
 

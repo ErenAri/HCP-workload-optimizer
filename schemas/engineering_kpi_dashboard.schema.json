@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ErenAri/HCP-workload-optimizer/schemas/engineering_kpi_dashboard.schema.json",
+  "title": "Engineering KPI Dashboard",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "program_id",
+    "as_of_date",
+    "window_days",
+    "overall_score",
+    "score_breakdown",
+    "slis",
+    "risks",
+    "actions"
+  ],
+  "properties": {
+    "program_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "as_of_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "window_days": {
+      "type": "integer",
+      "minimum": 7,
+      "maximum": 365
+    },
+    "owner": {
+      "type": "string",
+      "minLength": 1
+    },
+    "overall_score": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "score_breakdown": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dimension",
+          "weight",
+          "score",
+          "evidence"
+        ],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "enum": [
+              "reliability",
+              "security",
+              "performance",
+              "quality",
+              "reproducibility",
+              "operability",
+              "governance",
+              "ecosystem"
+            ]
+          },
+          "weight": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "slis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "availability_pct",
+        "api_p95_latency_ms",
+        "simulation_runtime_p95_sec",
+        "coverage_pct",
+        "test_pass_rate_pct",
+        "fidelity_gate_pass_rate_pct",
+        "open_high_sev_vulns"
+      ],
+      "properties": {
+        "availability_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "api_p95_latency_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "simulation_runtime_p95_sec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "coverage_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "test_pass_rate_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "fidelity_gate_pass_rate_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "open_high_sev_vulns": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "severity",
+          "summary",
+          "mitigation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mitigation": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "owner",
+          "due_date",
+          "description",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 1
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "in_progress",
+              "blocked",
+              "done"
+            ]
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

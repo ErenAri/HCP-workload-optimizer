@@ -1,0 +1,97 @@
+{
+  "program_id": "engineering-maturity-2026",
+  "as_of_date": "2026-02-26",
+  "window_days": 28,
+  "owner": "platform-engineering",
+  "overall_score": 86.4,
+  "score_breakdown": [
+    {
+      "dimension": "reliability",
+      "weight": 20,
+      "score": 17.8,
+      "evidence": "415/415 tests pass and deterministic replay checks are green."
+    },
+    {
+      "dimension": "security",
+      "weight": 15,
+      "score": 12.6,
+      "evidence": "Bandit and dependency scans enabled in CI."
+    },
+    {
+      "dimension": "performance",
+      "weight": 15,
+      "score": 12.3,
+      "evidence": "Benchmark suite present; regression thresholds need tighter class budgets."
+    },
+    {
+      "dimension": "quality",
+      "weight": 15,
+      "score": 13.2,
+      "evidence": "Coverage at 86.35% with CI enforcement."
+    },
+    {
+      "dimension": "reproducibility",
+      "weight": 10,
+      "score": 8.8,
+      "evidence": "Reference suite and manifest checks are automated."
+    },
+    {
+      "dimension": "operability",
+      "weight": 10,
+      "score": 8.0,
+      "evidence": "SLO docs and runbooks exist; alert routing maturity still in progress."
+    },
+    {
+      "dimension": "governance",
+      "weight": 10,
+      "score": 8.3,
+      "evidence": "Release checks and policy contracts are versioned."
+    },
+    {
+      "dimension": "ecosystem",
+      "weight": 5,
+      "score": 3.4,
+      "evidence": "Cross-language parity tests exist; broader integration docs still expanding."
+    }
+  ],
+  "slis": {
+    "availability_pct": 99.7,
+    "api_p95_latency_ms": 165.0,
+    "simulation_runtime_p95_sec": 142.0,
+    "coverage_pct": 86.35,
+    "test_pass_rate_pct": 100.0,
+    "fidelity_gate_pass_rate_pct": 97.8,
+    "open_high_sev_vulns": 0
+  },
+  "risks": [
+    {
+      "id": "RISK-001",
+      "severity": "medium",
+      "summary": "Performance headroom is narrow under spike load.",
+      "mitigation": "Complete EPIC-02 profiling backlog and optimize top two hotspots."
+    },
+    {
+      "id": "RISK-002",
+      "severity": "medium",
+      "summary": "Alert routing and MTTR telemetry are not yet fully automated.",
+      "mitigation": "Complete EPIC-05 dashboards and incident drill cadence."
+    }
+  ],
+  "actions": [
+    {
+      "id": "ACT-001",
+      "owner": "runtime-platform",
+      "due_date": "2026-04-15",
+      "description": "Reduce API p95 latency to <= 150 ms.",
+      "status": "in_progress"
+    },
+    {
+      "id": "ACT-002",
+      "owner": "sre",
+      "due_date": "2026-05-01",
+      "description": "Automate SLO dashboard publication in CI.",
+      "status": "planned"
+    }
+  ],
+  "notes": "Baseline snapshot before M1 quality gate."
+}

@@ -1,0 +1,174 @@
+version: 1
+updated_at: 2026-02-26
+program:
+  id: engineering-maturity-2026
+  objective: Reach and sustain a 90+ engineering score with measurable reliability, security, and scale outcomes.
+  scorecard_weights:
+    reliability: 20
+    security: 15
+    performance: 15
+    quality: 15
+    reproducibility: 10
+    operability: 10
+    governance: 10
+    ecosystem: 5
+epics:
+  - id: EPIC-01
+    title: Reliability and Correctness Hardening
+    owner_role: simulation-core
+    status: planned
+    target_quarter: 2026-Q2
+    outcomes:
+      - Zero Sev1 correctness defects in released builds.
+      - Deterministic replay preserved for all supported policies and adapters.
+    deliverables:
+      - Expanded property-based tests for scheduler invariants.
+      - Regression harness for policy edge cases and malformed traces.
+      - Release-blocking invariant report in CI.
+    kpis:
+      - id: test_pass_rate
+        target: ">= 99.5%"
+      - id: escaped_defects_sev1
+        target: "0"
+      - id: deterministic_replay_pass_rate
+        target: "100%"
+
+  - id: EPIC-02
+    title: Performance and Scale Envelope
+    owner_role: runtime-platform
+    status: planned
+    target_quarter: 2026-Q3
+    outcomes:
+      - P95 API prediction latency below production SLO.
+      - Simulation throughput validated on large synthetic workloads.
+    deliverables:
+      - Continuous benchmark suite with class-specific budgets.
+      - Profiling reports and optimization backlog for hot paths.
+      - Capacity model for expected traffic and trace volume.
+    kpis:
+      - id: api_p95_latency_ms
+        target: "<= 150"
+      - id: benchmark_regression_budget_pct
+        target: "<= 5"
+      - id: simulation_runtime_p95_sec
+        target: "<= 120"
+
+  - id: EPIC-03
+    title: Security and Compliance Baseline
+    owner_role: security
+    status: planned
+    target_quarter: 2026-Q2
+    outcomes:
+      - No overdue high-severity vulnerabilities.
+      - Repeatable secrets and dependency hygiene checks in CI.
+    deliverables:
+      - SAST and dependency scan policies with release gates.
+      - Security runbooks and ownership escalation matrix.
+      - Quarterly threat model and control review.
+    kpis:
+      - id: open_high_sev_vulns
+        target: "0 older than 14 days"
+      - id: secret_rotation_sla_days
+        target: "<= 90"
+      - id: security_gate_pass_rate
+        target: "100%"
+
+  - id: EPIC-04
+    title: Test, Coverage, and Release Quality
+    owner_role: qa-release
+    status: planned
+    target_quarter: 2026-Q2
+    outcomes:
+      - Stable coverage above enforcement threshold with no flaky gates.
+      - Release manifests remain verifiable and reproducible.
+    deliverables:
+      - Coverage floor raised in controlled steps with risk review.
+      - Flaky test quarantine and burn-down workflow.
+      - Release candidate checklist linked to signed artifacts.
+    kpis:
+      - id: line_coverage_pct
+        target: ">= 86"
+      - id: flaky_test_rate_pct
+        target: "<= 1"
+      - id: release_checklist_completion_pct
+        target: "100%"
+
+  - id: EPIC-05
+    title: SLO and Incident Operations Maturity
+    owner_role: sre
+    status: planned
+    target_quarter: 2026-Q3
+    outcomes:
+      - Service health tracked with clear SLOs and error budgets.
+      - Incident response rehearsed with actionable postmortems.
+    deliverables:
+      - Dashboards for request latency, fallback rate, and error ratio.
+      - Alert routing and on-call runbooks validated in drills.
+      - Monthly incident review with remediation tracking.
+    kpis:
+      - id: availability_pct
+        target: ">= 99.9"
+      - id: mttr_minutes
+        target: "<= 30"
+      - id: postmortem_completion_sla_days
+        target: "<= 5"
+
+  - id: EPIC-06
+    title: Model Governance and Fidelity Assurance
+    owner_role: ml-systems
+    status: planned
+    target_quarter: 2026-Q3
+    outcomes:
+      - Model promotions backed by fidelity and drift evidence.
+      - Recommendation quality remains stable across trace regimes.
+    deliverables:
+      - Promotion policy with mandatory drift/fidelity artifacts.
+      - Expanded stress scenarios including topology and mixed workloads.
+      - Dashboard-level objective trend and confidence reporting.
+    kpis:
+      - id: fidelity_gate_pass_rate
+        target: ">= 98%"
+      - id: drift_alert_false_positive_rate_pct
+        target: "<= 10"
+      - id: recommendation_acceptance_precision_pct
+        target: ">= 90"
+
+  - id: EPIC-07
+    title: Ecosystem and Contract Stability
+    owner_role: integrations
+    status: planned
+    target_quarter: 2026-Q4
+    outcomes:
+      - Stable adapter contracts across Python and Rust implementations.
+      - Safer migrations through strict schema and API version governance.
+    deliverables:
+      - Contract compatibility matrix per release.
+      - Deprecation lifecycle policy with measurable adoption.
+      - Reference integration guides for common scheduler stacks.
+    kpis:
+      - id: contract_breakage_count
+        target: "0 per minor release"
+      - id: deprecation_notice_lead_days
+        target: ">= 90"
+      - id: cross_language_parity_pass_rate
+        target: "100%"
+
+  - id: EPIC-08
+    title: External Credibility and Reference Deployments
+    owner_role: product-research
+    status: planned
+    target_quarter: 2026-Q4
+    outcomes:
+      - Publicly reproducible benchmark reports for reference traces.
+      - At least one documented reference deployment pattern.
+    deliverables:
+      - Program scorecard snapshots published at each milestone.
+      - Reference deployment playbooks for cloud and on-prem clusters.
+      - Independent architecture review and remediation closure.
+    kpis:
+      - id: published_scorecard_count
+        target: ">= 4 in 2026"
+      - id: reference_deployment_blueprints
+        target: ">= 2"
+      - id: external_review_findings_closed_pct
+        target: "100%"

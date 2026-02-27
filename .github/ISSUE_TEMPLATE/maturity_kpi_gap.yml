@@ -1,0 +1,79 @@
+name: Maturity KPI Gap
+description: Track a KPI regression or gap against engineering maturity targets.
+title: "[Maturity KPI Gap] "
+labels:
+  - engineering-maturity
+  - kpi-gap
+body:
+  - type: input
+    id: metric
+    attributes:
+      label: KPI metric
+      description: Metric key from engineering_kpi_dashboard schema.
+      placeholder: api_p95_latency_ms
+    validations:
+      required: true
+
+  - type: input
+    id: current_value
+    attributes:
+      label: Current value
+      placeholder: "165.0"
+    validations:
+      required: true
+
+  - type: input
+    id: target_value
+    attributes:
+      label: Target value
+      placeholder: "<= 150.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - low
+        - medium
+        - high
+        - critical
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Describe user, system, or release impact.
+    validations:
+      required: true
+
+  - type: textarea
+    id: root_cause
+    attributes:
+      label: Probable root cause
+      description: Include evidence or links to logs, traces, or reports.
+    validations:
+      required: true
+
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Remediation plan
+      description: List actions with owner and due date.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: quality_checks
+    attributes:
+      label: Required checks
+      options:
+        - label: Added to current milestone risk list
+          required: true
+        - label: Linked follow-up PR or tracking issue
+          required: true
+        - label: Dashboard snapshot will be updated after fix
+          required: true

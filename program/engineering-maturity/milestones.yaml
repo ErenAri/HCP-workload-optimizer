@@ -1,0 +1,84 @@
+version: 1
+updated_at: 2026-02-26
+program_id: engineering-maturity-2026
+milestones:
+  - id: M0
+    name: Baseline Freeze
+    due_date: 2026-03-15
+    status: planned
+    objective: Establish trusted baseline metrics and ownership for all scorecard dimensions.
+    entry_criteria:
+      - CI pipeline is green on main branch.
+      - Current scorecard and metric definitions are versioned.
+    exit_criteria:
+      - KPI schema approved and dashboard sample committed.
+      - Epic owners and review cadence assigned.
+      - Current baseline score published with evidence links.
+    required_epics:
+      - EPIC-01
+      - EPIC-03
+      - EPIC-04
+
+  - id: M1
+    name: Quality Gate Uplift
+    due_date: 2026-04-30
+    status: planned
+    objective: Raise correctness and release confidence to stable enterprise baseline.
+    entry_criteria:
+      - M0 completed.
+      - Critical test and coverage backlog triaged.
+    exit_criteria:
+      - Coverage sustained at or above 86 percent for 30 days.
+      - Flaky test rate at or below 1 percent.
+      - Deterministic replay pass rate remains 100 percent.
+    required_epics:
+      - EPIC-01
+      - EPIC-04
+
+  - id: M2
+    name: Security and SLO Gate
+    due_date: 2026-06-30
+    status: planned
+    objective: Align operational and security controls with production service expectations.
+    entry_criteria:
+      - M1 completed.
+      - Security and SRE owners have approved KPI targets.
+    exit_criteria:
+      - No high-severity vulnerabilities older than 14 days.
+      - Availability target >= 99.9 percent over trailing 30 days.
+      - Incident drill evidence and postmortem workflow validated.
+    required_epics:
+      - EPIC-03
+      - EPIC-05
+
+  - id: M3
+    name: Scale and Fidelity Gate
+    due_date: 2026-09-30
+    status: planned
+    objective: Prove scale envelope and model-governance behavior under stress.
+    entry_criteria:
+      - M2 completed.
+      - Benchmark classes and stress profiles are locked.
+    exit_criteria:
+      - API p95 latency <= 150 ms under agreed load profile.
+      - Benchmark regressions remain within <= 5 percent budget.
+      - Fidelity gate pass rate >= 98 percent on reference suite.
+    required_epics:
+      - EPIC-02
+      - EPIC-06
+
+  - id: M4
+    name: Maturity Target Candidate
+    due_date: 2026-12-15
+    status: planned
+    objective: Reach and sustain 90+ score with external credibility evidence.
+    entry_criteria:
+      - M3 completed.
+      - Two quarterly scorecard snapshots published.
+    exit_criteria:
+      - Overall score >= 90 for two consecutive monthly reviews.
+      - Independent architecture review findings closed.
+      - At least one reference deployment playbook verified end to end.
+    required_epics:
+      - EPIC-07
+      - EPIC-08

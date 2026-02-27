@@ -25,9 +25,11 @@ The intent is to present the system as an engineering artifact, not only as an M
    End-to-end protocol for credible MVP experiments on the reference suite.
 10. `docs/10-roadmap-and-open-problems.md`  
    Gate-driven roadmap and research extensions.
-11. `docs/paper_outline.md`  
+11. `docs/11-engineering-maturity-program.md`
+    Program execution model, scorecard dimensions, milestones, and governance loop.
+12. `docs/paper_outline.md`  
    Publication-oriented manuscript structure, contribution framing, and results checklist.
-12. `docs/production-readiness-checklist.md`
+13. `docs/production-readiness-checklist.md`
     Release gating process and production checklist workflow.
 
 ## Operational Documentation
@@ -63,3 +65,11 @@ The `design_docs/` directory retains original planning artifacts and policy cont
 
 These files remain authoritative for design history and contract evolution.  
 The `docs/` corpus consolidates that material into implementation-aligned technical documentation.
+
+## Program Artifacts
+
+- `program/engineering-maturity/README.md`
+- `program/engineering-maturity/epics.yaml`
+- `program/engineering-maturity/milestones.yaml`
+- `program/engineering-maturity/kpi-dashboard.sample.json`
+- `schemas/engineering_kpi_dashboard.schema.json`

@@ -1,0 +1,76 @@
+name: Maturity Milestone Review
+description: Run a milestone gate review against program exit criteria.
+title: "[Maturity Milestone Review] "
+labels:
+  - engineering-maturity
+  - milestone-review
+body:
+  - type: input
+    id: milestone_id
+    attributes:
+      label: Milestone ID
+      description: Use M0-M4 from program/engineering-maturity/milestones.yaml.
+      placeholder: M1
+    validations:
+      required: true
+
+  - type: input
+    id: review_date
+    attributes:
+      label: Review date
+      description: Use YYYY-MM-DD.
+      placeholder: "2026-04-30"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: gate_result
+    attributes:
+      label: Gate result
+      options:
+        - pass
+        - conditional-pass
+        - fail
+    validations:
+      required: true
+
+  - type: textarea
+    id: criteria_status
+    attributes:
+      label: Exit criteria status
+      description: Mark each criterion as met, partial, or unmet with evidence.
+      placeholder: |
+        - Coverage >=86 for 30 days: met (link)
+        - Flaky test rate <=1%: partial (link)
+        - Deterministic replay 100%: met (link)
+    validations:
+      required: true
+
+  - type: textarea
+    id: scorecard
+    attributes:
+      label: Scorecard summary
+      description: Include overall score and key dimension deltas.
+      placeholder: Overall 88.7 (+2.3), reliability +1.2, performance +0.6
+    validations:
+      required: true
+
+  - type: textarea
+    id: decisions
+    attributes:
+      label: Decisions and follow-ups
+      description: Add explicit owners and due dates.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: Confirmation
+      options:
+        - label: KPI dashboard JSON for this review is attached or linked
+          required: true
+        - label: All blocked criteria have remediation owners
+          required: true
+        - label: Next review date is scheduled
+          required: true

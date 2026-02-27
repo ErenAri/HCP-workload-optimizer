@@ -1,0 +1,79 @@
+name: Program Epic
+description: Create or update an epic tracked in the engineering maturity program.
+title: "[Program Epic] "
+labels:
+  - engineering-maturity
+  - epic
+body:
+  - type: input
+    id: epic_id
+    attributes:
+      label: Epic ID
+      description: Use EPIC-XX from program/engineering-maturity/epics.yaml.
+      placeholder: EPIC-01
+    validations:
+      required: true
+
+  - type: input
+    id: owner_role
+    attributes:
+      label: Owner role
+      description: Team or role accountable for delivery.
+      placeholder: simulation-core
+    validations:
+      required: true
+
+  - type: dropdown
+    id: status
+    attributes:
+      label: Current status
+      options:
+        - planned
+        - in_progress
+        - blocked
+        - done
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Target outcome
+      description: Describe measurable business or engineering outcome.
+      placeholder: Deterministic replay remains 100 percent across supported policies.
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Deliverables
+      description: One item per line.
+      placeholder: |
+        - Add release-blocking invariant report.
+        - Extend policy edge-case test harness.
+    validations:
+      required: true
+
+  - type: textarea
+    id: kpis
+    attributes:
+      label: KPI targets
+      description: Include KPI name, current value, target value, due date.
+      placeholder: |
+        test_pass_rate: 100 -> >=99.5 by 2026-04-30
+        line_coverage_pct: 86.35 -> >=87.0 by 2026-06-30
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Governance checks
+      options:
+        - label: Linked to milestone in program/engineering-maturity/milestones.yaml
+          required: true
+        - label: Risks and mitigations documented
+          required: true
+        - label: Evidence artifact path included in issue comments
+          required: true

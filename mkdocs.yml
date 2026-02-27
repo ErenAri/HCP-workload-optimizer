@@ -54,6 +54,7 @@ nav:
     - Reproducibility: 08-reproducibility-and-artifacts.md
     - Experiment Protocol: 09-experiment-protocol-mvp.md
     - Roadmap: 10-roadmap-and-open-problems.md
+    - Engineering Maturity Program: 11-engineering-maturity-program.md
   - Tutorials:
     - Rust Simulation Engine: tutorials/rust-sim-runner.md
     - Benchmark Suite: tutorials/benchmark-suite.md
