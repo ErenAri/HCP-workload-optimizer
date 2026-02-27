@@ -16,9 +16,24 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-# Resolve the project-level schemas/ directory.  Works both from an editable
-# install (repo root) and from a built wheel (schemas shipped as data).
-_SCHEMAS_DIR = Path(__file__).resolve().parents[3] / "schemas"
+
+def _resolve_schemas_dir() -> Path:
+    """Resolve the project-level schemas/ directory.
+
+    Searches upward from this file for a directory containing ``schemas/``
+    so that it works for editable installs, built wheels (with schemas shipped
+    as package data), and any intermediate nesting depth.
+    """
+    anchor = Path(__file__).resolve().parent
+    for parent in [anchor, *anchor.parents]:
+        candidate = parent / "schemas"
+        if candidate.is_dir():
+            return candidate
+    # Fallback: original fixed-depth assumption.
+    return Path(__file__).resolve().parents[3] / "schemas"
+
+
+_SCHEMAS_DIR = _resolve_schemas_dir()
 
 
 def _locate_schema(schema_name: str) -> Path:

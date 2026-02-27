@@ -33,10 +33,10 @@ test-load: ## Run load tests
 	pytest tests/load/ -v -m load
 
 coverage: ## Run tests with coverage reporting
-	pytest tests/ -v --cov=hpcopt --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=86
+	pytest tests/ -v --cov=hpcopt --cov-report=term-missing --cov-report=xml:coverage.xml --cov-fail-under=88
 
 coverage-gate: coverage ## Enforce package-level coverage floors
-	python scripts/check_coverage_thresholds.py --coverage-xml coverage.xml --global-fail-under 86 --package-threshold api=88 --package-threshold models=89 --package-threshold simulate=86
+	python scripts/check_coverage_thresholds.py --coverage-xml coverage.xml --global-fail-under 88 --package-threshold api=88 --package-threshold models=89 --package-threshold simulate=86
 
 docs-check: ## Validate docs consistency against CLI/runtime interfaces
 	python scripts/check_docs_consistency.py
