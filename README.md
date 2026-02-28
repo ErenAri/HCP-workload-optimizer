@@ -260,12 +260,12 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  MAIN[cli/main.py] --> ING[ingest: swf|slurm|pbs|shadow]
-  MAIN --> TRAIN[train: runtime|tune|resource-fit]
-  MAIN --> SIM[simulate: run|baselines|fidelity|batsim]
-  MAIN --> PIPE[pipeline: profile|features|analysis|cred]
-  MAIN --> MODEL[model: list|promote|archive|drift|serve]
-  MAIN --> REPORT[report: export|benchmark|recommend]
+  MAIN["cli/main.py"] --> ING["ingest: swf, slurm, pbs, shadow"]
+  MAIN --> TRAIN["train: runtime, tune, resource-fit"]
+  MAIN --> SIM["simulate: run, baselines, fidelity, batsim"]
+  MAIN --> PIPE["pipeline: profile, features, analysis, cred"]
+  MAIN --> MODEL["model: list, promote, archive, drift, serve"]
+  MAIN --> REPORT["report: export, benchmark, recommend"]
 ```
 
 </details>
