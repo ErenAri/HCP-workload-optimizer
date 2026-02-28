@@ -150,166 +150,125 @@ Language partition:
 
 ### Architecture Diagrams
 
-#### 1) Component and language boundary view
+<details>
+<summary><strong>1) Component and language boundary view</strong></summary>
 
 ```mermaid
 flowchart LR
-  subgraph Inputs["Workload Inputs"]
-    SWF["SWF traces"]
-    SLURM["Slurm sacct --parsable2"]
-    PBS["PBS/Torque accounting logs"]
+  subgraph Inputs
+    SWF[SWF] & SLURM[Slurm] & PBS[PBS]
   end
 
-  subgraph Py["Python platform (python/hpcopt)"]
-    ING["ingest/*"]
-    PROF["profile/*"]
-    FEAT["features/*"]
-    MOD["models/*"]
-    SIM["simulate/*"]
-    FID["fidelity + objective contracts"]
-    REC["recommend/engine.py"]
-    ART["artifacts/* + manifests"]
-    IFACE["cli/ (6 modules) + api/ (app, models, errors, middleware, endpoints, auth, rate_limit, metrics)"]
-    ORCH["orchestrate/credibility.py"]
+  subgraph Python["python/hpcopt"]
+    ING[ingest] --> PROF[profile] --> FEAT[features] --> MOD[models]
+    SIM[simulate] --> FID[fidelity] --> REC[recommend] --> ART[artifacts]
+    CLI[cli + api] --> ING & SIM & REC
+    ORCH[orchestrate] --> ING & MOD & SIM & FID & REC
   end
 
-  subgraph Rs["Rust utilities (rust/)"]
-    RSWF["swf-parser"]
-    RADAPT["sim-runner adapter_contract"]
-    RBAT["sim-runner batsim_runner"]
+  subgraph Rust["rust/"]
+    RSWF[swf-parser] & RSIM[sim-runner]
   end
 
-  SWF --> ING
-  SLURM --> ING
-  PBS --> ING
-  ING --> PROF --> FEAT --> MOD
-  ING --> SIM
-  MOD --> SIM --> FID --> REC --> ART
-  IFACE --> ING
-  IFACE --> SIM
-  IFACE --> REC
-  ORCH --> ING
-  ORCH --> MOD
-  ORCH --> SIM
-  ORCH --> FID
-  ORCH --> REC
+  Inputs --> ING
+  MOD --> SIM
   RSWF --> ING
-  RADAPT --> SIM
-  RBAT --> SIM
+  RSIM --> SIM
 ```
 
-#### 2) Policy evaluation and recommendation gate
+</details>
+
+<details>
+<summary><strong>2) Policy evaluation and recommendation gate</strong></summary>
 
 ```mermaid
 flowchart TD
-  A["Canonical trace parquet"] --> B["Replay baselines<br/>FIFO_STRICT + EASY_BACKFILL_BASELINE"]
-  A --> C["Run candidate policy<br/>ML_BACKFILL_P50"]
-  A --> D["Run fidelity gate<br/>against observed trace"]
-
-  B --> E["Baseline sim report(s)"]
-  C --> F["Candidate sim report<br/>+ fallback accounting"]
-  D --> G["Fidelity report"]
-
-  E --> H["Recommendation engine"]
-  F --> H
-  G --> H
-
-  H --> I{"Primary KPI improved,<br/>constraints passed,<br/>and fidelity passed?"}
-  I -->|"Yes"| J["Accepted recommendation"]
-  I -->|"No"| K["Blocked recommendation<br/>+ failure narrative"]
+  A[Trace parquet] --> B[Replay baselines] & C[ML candidate] & D[Fidelity gate]
+  B --> H[Recommendation engine]
+  C --> H
+  D --> H
+  H --> I{KPI + constraints + fidelity?}
+  I -->|Yes| J[Accepted]
+  I -->|No| K[Blocked + narrative]
 ```
 
-#### 3) Deterministic simulation event loop
+</details>
+
+<details>
+<summary><strong>3) Deterministic simulation event loop</strong></summary>
 
 ```mermaid
 sequenceDiagram
-  participant T as Trace rows (sorted by submit_ts, job_id)
-  participant S as Simulation core
+  participant S as Sim core
   participant A as Policy adapter
   participant I as Invariant checker
 
   loop until all jobs complete
-    S->>S: next_ts = min(next_submit_ts, next_complete_ts)
-    S->>S: process completions at next_ts
-    S->>S: enqueue submissions at next_ts
-    S->>A: build SchedulerStateSnapshot
+    S->>S: advance clock
+    S->>S: process completions + enqueue submissions
+    S->>A: SchedulerStateSnapshot
     A-->>S: dispatch decisions
-    S->>S: start feasible jobs and update free CPUs
-    S->>I: validate invariants + state hash
-    I-->>S: pass or violation record
+    S->>I: validate invariants
+    I-->>S: pass / violation
   end
 ```
 
-#### 4) Credibility suite orchestration path
+</details>
+
+<details>
+<summary><strong>4) Credibility suite orchestration path</strong></summary>
 
 ```mermaid
 flowchart LR
-  REF["configs/data/reference_suite.yaml"] --> SUITE["run_suite_credibility"]
-  SWEEP["configs/credibility/default_sweep.yaml"] --> SUITE
-  RAW["data/raw/*.swf.gz"] --> SUITE
-
-  SUITE --> LOOP{"for each reference trace"}
-  LOOP --> ING2["ingest_swf"]
-  ING2 --> PRO2["build_trace_profile"]
-  PRO2 --> FEAT2["build_feature_dataset"]
-  FEAT2 --> TRAIN2["train_runtime_quantile_models"]
-  TRAIN2 --> BASE2["simulate FIFO/EASY baselines"]
-  BASE2 --> CAND2["simulate ML candidate"]
-  CAND2 --> FID2["run_baseline_fidelity_gate"]
-  FID2 --> REC2["generate_recommendation_report"]
-  REC2 --> MAN2["build_manifest"]
-  MAN2 --> OUT2["outputs/credibility/[trace_id]/..."]
-  OUT2 --> SUM2["credibility_suite_summary.json"]
+  CFG[Config + traces] --> SUITE[run_suite]
+  SUITE --> LOOP{each trace}
+  LOOP --> ING[ingest] --> PROF[profile] --> FEAT[features]
+  FEAT --> TRAIN[train] --> BASE[baselines] --> ML[ML sim]
+  ML --> FID[fidelity] --> REC[recommend] --> MAN[manifest]
+  MAN --> OUT[outputs + summary]
 ```
 
-#### 5) Security and secrets architecture
+</details>
+
+<details>
+<summary><strong>5) Security and secrets architecture</strong></summary>
 
 ```mermaid
 flowchart LR
-  subgraph Sources["Secret Sources (priority order)"]
-    F1["1. HPCOPT_API_KEYS_FILE<br/>(env var -> file path)"]
-    F2["2. /run/secrets/hpcopt_api_keys<br/>(Docker/K8s mount)"]
-    F3["3. HPCOPT_API_KEYS<br/>(legacy env var)"]
+  subgraph Keys["Secret Sources"]
+    F1["1. KEYS_FILE env"] & F2["2. Docker/K8s mount"] & F3["3. Legacy env"]
   end
 
-  F1 --> LOAD["load_api_keys()<br/>utils/secrets.py"]
-  F2 --> LOAD
-  F3 --> LOAD
-
-  LOAD --> MW["API middleware<br/>api/app.py"]
-  MW --> BODY{"Body size check<br/>≤ 1MB?<br/>api/middleware.py"}
-  BODY -->|"No"| R413["413 Payload Too Large"]
-  BODY -->|"Yes"| AUTH{"auth.check_api_key_auth()<br/>X-API-Key valid?"}
-  AUTH -->|"Yes"| ADMIN{"Admin path?<br/>/v1/admin/*"}
-  AUTH -->|"No"| R401["401 Unauthorized"]
-  ADMIN -->|"Yes, admin- key"| RATE["rate_limit.check_rate_limit()<br/>(token bucket)"]
-  ADMIN -->|"Yes, non-admin key"| R403["403 Forbidden"]
-  ADMIN -->|"No"| RATE
-  RATE -->|"Allowed"| TIMEOUT["asyncio.wait_for<br/>(30s default)"]
-  TIMEOUT -->|"OK"| HANDLER["Endpoint handler"]
-  TIMEOUT -->|"Exceeded"| R504["504 Gateway Timeout"]
-  RATE -->|"Exceeded"| R429["429 Rate Limited"]
-
-  subgraph CI["CI Security Gates"]
-    BANDIT["bandit SAST"]
-    AUDIT2["pip-audit"]
-    GITLEAKS["gitleaks"]
-  end
+  Keys --> LOAD[load_api_keys]
+  LOAD --> BODY{Body ≤ 1MB?}
+  BODY -->|No| R413[413]
+  BODY -->|Yes| AUTH{API key valid?}
+  AUTH -->|No| R401[401]
+  AUTH -->|Yes| ADMIN{Admin path?}
+  ADMIN -->|Non-admin key| R403[403]
+  ADMIN -->|OK| RATE{Rate limit?}
+  RATE -->|Exceeded| R429[429]
+  RATE -->|OK| TIMEOUT{Timeout 30s}
+  TIMEOUT -->|Exceeded| R504[504]
+  TIMEOUT -->|OK| HANDLER[Handler]
 ```
 
-#### 6) CLI module architecture
+</details>
+
+<details>
+<summary><strong>6) CLI module architecture</strong></summary>
 
 ```mermaid
 flowchart TD
-  MAIN["cli/main.py<br/>(assembler, 41 lines)"]
-
-  MAIN --> ING_CLI["cli/ingest.py<br/>swf | slurm | pbs | shadow-start"]
-  MAIN --> TRAIN_CLI["cli/train.py<br/>runtime | tune | resource-fit"]
-  MAIN --> SIM_CLI["cli/simulate.py<br/>run | replay-baselines | fidelity-gate | batsim-*"]
-  MAIN --> PIPE_CLI["cli/pipeline.py<br/>profile | features | analysis | credibility"]
-  MAIN --> MODEL_CLI["cli/model.py<br/>list | promote | archive | drift-check | serve"]
-  MAIN --> REPORT_CLI["cli/report.py<br/>export | benchmark | recommend | artifacts"]
+  MAIN[cli/main.py] --> ING[ingest: swf|slurm|pbs|shadow]
+  MAIN --> TRAIN[train: runtime|tune|resource-fit]
+  MAIN --> SIM[simulate: run|baselines|fidelity|batsim]
+  MAIN --> PIPE[pipeline: profile|features|analysis|cred]
+  MAIN --> MODEL[model: list|promote|archive|drift|serve]
+  MAIN --> REPORT[report: export|benchmark|recommend]
 ```
+
+</details>
 
 ## Repository Map
 
@@ -884,85 +843,58 @@ kubectl apply -f k8s/otel-collector.yaml   # optional: distributed tracing
 kubectl apply -f k8s/alertmanager-config.yaml  # optional: alert routing
 ```
 
-#### Kubernetes deployment architecture
+<details>
+<summary><strong>Kubernetes deployment architecture</strong></summary>
 
 ```mermaid
 flowchart LR
-  subgraph K8s["Kubernetes Cluster (namespace: hpcopt)"]
-    NP["NetworkPolicy\ningress-nginx + monitoring"] -.-> SVC
-    ING["Ingress / LoadBalancer"] --> SVC["Service\n:8080"]
-    SVC --> POD1["Pod 1\nhpcopt-api\n(preStop: sleep 5s)"]
-    SVC --> POD2["Pod 2\nhpcopt-api\n(preStop: sleep 5s)"]
-    POD1 --> OTEL["OTel Collector\nsidecar/daemon"]
-    POD2 --> OTEL
-    HPA["HPA\n2-8 replicas"] -.-> POD1
-    HPA -.-> POD2
-    PDB["PDB\nminAvailable: 1"] -.-> POD1
-    PDB -.-> POD2
+  subgraph K8s["namespace: hpcopt"]
+    ING[Ingress] --> SVC[Service :8080]
+    SVC --> POD1[Pod 1] & POD2[Pod 2]
+    HPA[HPA 2-8] -.-> POD1 & POD2
+    PDB[PDB min:1] -.-> POD1 & POD2
   end
 
-  subgraph Obs["Observability"]
-    OTEL --> JAEGER["Jaeger / Tempo"]
-    PROM["Prometheus"] --> SMON["ServiceMonitor"]
-    SMON --> POD1
-    SMON --> POD2
-    PROM --> AM["Alertmanager"]
-    AM --> PD["PagerDuty"]
-    AM --> SLACK["Slack"]
+  subgraph Obs[Observability]
+    POD1 & POD2 --> OTEL[OTel] --> JAEGER[Jaeger]
+    PROM[Prometheus] --> POD1 & POD2
+    PROM --> AM[Alertmanager] --> PD[PagerDuty] & SLACK[Slack]
   end
 
-  PVC[("PVC\nModel Storage")] --> POD1
-  PVC --> POD2
-  SEC[("Secret\nAPI Keys")] --> POD1
-  SEC --> POD2
+  PVC[(Models)] & SEC[(Secrets)] --> POD1 & POD2
 ```
+
+</details>
 
 See `docs/ops/scaling.md` for horizontal scaling guidance and known limitations.
 
 ## CI/CD Pipeline
 
+<details>
+<summary><strong>CI/CD pipeline diagram</strong></summary>
+
 ```mermaid
 flowchart TD
-  subgraph Checks["Parallel CI Jobs (push/PR)"]
-    LINT["Lint (ruff)"]
-    TYPE["Typecheck (mypy, strict)"]
-    SAST["SAST (bandit)"]
-    AUDIT["Dependency audit (pip-audit)"]
-    SECRETS["Secret scan (gitleaks)"]
-    COMPAT["OpenAPI compat check"]
-    READY["Readiness checklist validate"]
-    DOCKER["Docker build (no push)"]
-    DASHBOARD["Grafana dashboard JSON validation"]
+  subgraph Checks["Parallel CI"]
+    LINT[ruff] & TYPE[mypy] & SAST[bandit] & AUDIT[pip-audit]
+    SECRETS[gitleaks] & COMPAT[OpenAPI] & DOCKER[Docker build]
   end
 
-  subgraph Test["Test Matrix"]
-    PY311["Python 3.11 tests + coverage"]
-    PY312["Python 3.12 tests + coverage"]
+  subgraph Tests
+    PY["Python 3.11 + 3.12"] --> COV[Coverage ≥ 86%]
+    RUST[cargo check+clippy+test]
   end
 
-  subgraph Rust["Rust Jobs"]
-    RCHECK["cargo check + clippy + test + build --release"]
-  end
+  PY & RUST --> XPARITY[Cross-language parity]
+  PY --> E2E[E2E smoke]
+  DOCKER --> SMOKE[Container smoke]
 
-  PY312 --> COV["Upload coverage artifact"]
-  PY312 --> CODECOV["Codecov PR report"]
-  RCHECK --> XPARITY["Cross-language adapter parity"]
-  PY312 --> XPARITY
-  PY312 --> E2E["E2E smoke test"]
-  DOCKER --> SMOKE["Docker container smoke test"]
-
-  subgraph Gate["Merge Gate"]
-    E2E
-    XPARITY
-    COV_CHECK["Coverage ≥ 86% (global) + package floors"]
-    SMOKE
-  end
-
-  subgraph Release["Release Gate (v* tags)"]
-    RGATE["production_readiness_gate.py --mode release"]
-    PUBLISH["Build + push Docker image + SBOM"]
+  subgraph Release["Release (v* tags)"]
+    GATE[readiness gate] --> PUBLISH[Docker push + SBOM]
   end
 ```
+
+</details>
 
 ## Production Readiness Evidence
 

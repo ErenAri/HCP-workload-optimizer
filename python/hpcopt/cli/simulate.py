@@ -37,7 +37,10 @@ stress_app = typer.Typer(help="Stress scenario commands")
 @simulate_app.command("run")
 def simulate_run_cmd(
     trace: Path = typer.Option(..., exists=True, readable=True, help="Canonical parquet dataset"),
-    policy: str = typer.Option("FIFO_STRICT", help="FIFO_STRICT|EASY_BACKFILL_BASELINE|ML_BACKFILL_P50|ML_BACKFILL_P10"),
+    policy: str = typer.Option(
+        "FIFO_STRICT",
+        help="FIFO_STRICT|EASY_BACKFILL_BASELINE|ML_BACKFILL_P50|ML_BACKFILL_P10",
+    ),
     capacity_cpus: int = typer.Option(64, min=1, help="Cluster CPU capacity"),
     out: Path = typer.Option(Path("outputs/simulations"), help="Simulation artifact output directory"),
     report_out: Path = typer.Option(Path("outputs/reports"), help="Report output directory"),

@@ -26,8 +26,8 @@ from hpcopt.features.pipeline import build_feature_dataset
 from hpcopt.ingest.swf import ingest_swf
 from hpcopt.models.ensemble import EnsemblePredictor
 from hpcopt.models.runtime_quantile import (
+    _HAS_LIGHTGBM,  # noqa: F401
     RuntimeQuantilePredictor,
-    _HAS_LIGHTGBM,
     train_runtime_quantile_models,
 )
 from hpcopt.profile.trace_profile import build_trace_profile
@@ -209,6 +209,7 @@ def run_credibility_protocol(
 
         # Step 6: Simulate ML candidate
         logger.info("[%s] Step 6: Simulating ML candidate", trace_id)
+        predictor: EnsemblePredictor | RuntimeQuantilePredictor
         if len(predictor_model_dirs) >= 2:
             predictor = EnsemblePredictor.from_model_dirs(predictor_model_dirs, auto_weight=True)
             ensemble_summary: dict[str, Any] = predictor.summary

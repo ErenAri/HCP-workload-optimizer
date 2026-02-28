@@ -89,6 +89,8 @@ def train_resource_fit_cmd(
     from hpcopt.models.resource_fit import train_resource_fit_model
 
     resolved_id = model_id or f"resource_fit_{dt.datetime.now(tz=dt.UTC).strftime('%Y%m%d_%H%M%S')}"
-    result = train_resource_fit_model(dataset_path=dataset, out_dir=out, model_id=resolved_id, seed=seed, backend=backend)
+    result = train_resource_fit_model(
+        dataset_path=dataset, out_dir=out, model_id=resolved_id, seed=seed, backend=backend,
+    )
     typer.echo(f"Model dir: {result.model_dir}")
     typer.echo(f"Metrics: {result.metrics_path}")
