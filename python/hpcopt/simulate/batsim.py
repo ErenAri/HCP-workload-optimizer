@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime as dt
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -484,6 +485,15 @@ def invoke_batsim_run(
         )
 
     if use_wsl:
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+", wsl_distro):
+            return BatsimInvokeResult(
+                command=["wsl"],
+                returncode=2,
+                stdout="",
+                stderr="invalid wsl_distro name",
+                status="failed",
+                reason="invalid_wsl_distro",
+            )
         if shutil.which("wsl") is None:
             return BatsimInvokeResult(
                 command=["wsl", "-d", wsl_distro, "--", "bash", "-lc", ""],

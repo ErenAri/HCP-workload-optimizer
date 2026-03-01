@@ -164,12 +164,12 @@ def _parse_ncpus_from_nodes(value: str) -> int | None:
                 try:
                     ppn = int(part[4:])
                 except ValueError:
-                    pass
+                    logger.debug("Failed to parse ppn from nodes spec: %r", part)
             else:
                 try:
                     node_count = int(part)
                 except ValueError:
-                    pass
+                    logger.debug("Failed to parse node_count from nodes spec: %r", part)
         total_cpus += node_count * ppn
 
     return total_cpus if total_cpus > 0 else None
@@ -292,7 +292,7 @@ def _iter_rows(path: Path) -> tuple[list[dict[str, Any]], dict[str, Any]]:
                 try:
                     ncpus = int(ncpus_raw)
                 except ValueError:
-                    pass
+                    logger.debug("Failed to parse ncpus value: %r", ncpus_raw)
 
             if ncpus is None:
                 ncpus = _parse_ncpus_from_nodes(attrs.get(_ATTR_RESOURCE_LIST_NODES, ""))

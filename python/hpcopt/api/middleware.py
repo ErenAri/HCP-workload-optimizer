@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 import uuid
 from typing import Any, cast
@@ -48,7 +49,7 @@ async def request_middleware(request: Request, call_next: Any) -> Response:
 
     start_time = time.time()
     path = request.url.path
-    request_timeout = float(__import__("os").getenv("HPCOPT_REQUEST_TIMEOUT_SEC", "30"))
+    request_timeout = float(os.getenv("HPCOPT_REQUEST_TIMEOUT_SEC", "30"))
 
     trace_id = request.headers.get("X-Trace-ID") or request.headers.get("X-Correlation-ID") or str(uuid.uuid4())[:12]
     request.state.trace_id = trace_id

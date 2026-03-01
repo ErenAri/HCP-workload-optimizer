@@ -16,8 +16,11 @@ Usage (headless):
 from __future__ import annotations
 
 import json
+import os
 
 from locust import HttpUser, between, task
+
+_API_KEY = os.environ.get("HPCOPT_TEST_API_KEY", "test-benchmark-key")
 
 
 class HPCOptUser(HttpUser):
@@ -27,7 +30,7 @@ class HPCOptUser(HttpUser):
 
     headers = {
         "Content-Type": "application/json",
-        "X-API-Key": "test-benchmark-key",
+        "X-API-Key": _API_KEY,
     }
 
     @task(4)

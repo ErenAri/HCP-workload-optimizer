@@ -128,11 +128,10 @@ class EnsemblePredictor:
 
     def predict_batch(self, features_df: pd.DataFrame) -> pd.DataFrame:
         """Predict for a batch of jobs, returning DataFrame with p10/p50/p90 columns."""
-        results = []
-        for _, row in features_df.iterrows():
-            pred = self.predict_one(row.to_dict())
-            results.append(pred)
-        return pd.DataFrame(results, index=features_df.index)
+        results = features_df.apply(
+            lambda row: self.predict_one(row.to_dict()), axis=1, result_type="expand",
+        )
+        return results
 
     @property
     def summary(self) -> dict[str, Any]:

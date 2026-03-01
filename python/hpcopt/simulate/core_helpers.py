@@ -108,67 +108,80 @@ def attach_runtime_estimates(
     runtime_guard_k: float,
 ) -> pd.DataFrame:
     df = jobs_df.copy()
-    df["runtime_p50_sec"] = None
-    df["runtime_p90_sec"] = None
-    df["runtime_guard_sec"] = None
-    df["estimate_source"] = None
 
-    for idx, row in df.iterrows():
+    if policy_id not in ("ML_BACKFILL_P50", "ML_BACKFILL_P10"):
+        # Vectorized path for non-ML policies.
+        requested = pd.to_numeric(df["runtime_requested_sec"], errors="coerce")
+        has_requested = requested.notna() & (requested > 0)
+        actual = df["runtime_actual_sec"].astype(int)
+
+        estimate = actual.copy()
+        estimate[has_requested] = requested[has_requested].astype(int)
+
+        source = pd.Series("actual_fallback", index=df.index)
+        source[has_requested] = "requested_fallback"
+
+        df["runtime_p50_sec"] = estimate
+        df["runtime_p90_sec"] = estimate
+        df["runtime_guard_sec"] = estimate
+        df["runtime_estimate_sec"] = estimate
+        df["estimate_source"] = source
+        return df
+
+    # ML policies: per-row prediction needed, but collect into lists
+    # for bulk column assignment instead of slow per-cell df.at[].
+    p50_list: list[int] = []
+    p90_list: list[int] = []
+    guard_list: list[int] = []
+    estimate_list: list[int] = []
+    source_list: list[str] = []
+
+    for _idx, row in df.iterrows():
         requested_runtime = row.get("runtime_requested_sec")
         actual_runtime = int(row["runtime_actual_sec"])
 
-        if policy_id in ("ML_BACKFILL_P50", "ML_BACKFILL_P10"):
-            predicted = None
-            if runtime_predictor is not None:
-                try:
-                    predicted = runtime_predictor.predict_one(build_prediction_features(row.to_dict()))
-                except (ValueError, KeyError, TypeError) as exc:
-                    logger.warning("Runtime prediction failed for job %s: %s", row.get("job_id"), exc)
-                    predicted = None
+        predicted = None
+        if runtime_predictor is not None:
+            try:
+                predicted = runtime_predictor.predict_one(build_prediction_features(row.to_dict()))
+            except (ValueError, KeyError, TypeError) as exc:
+                logger.warning("Runtime prediction failed for job %s: %s", row.get("job_id"), exc)
 
-            if predicted is not None:
-                p50 = int(max(1, round(predicted["p50"])))
-                p90 = int(max(p50, round(predicted["p90"])))
-                if policy_id == "ML_BACKFILL_P10":
-                    # Conservative mode: use p10 as the estimate so the
-                    # backfill window is sized tightly, reducing over-runs.
-                    p10 = int(max(1, round(predicted["p10"])))
-                    estimate = p10
-                    guard = int(round(p10 + runtime_guard_k * (p50 - p10)))
-                else:
-                    estimate = p50
-                    guard = int(round(p50 + runtime_guard_k * (p90 - p50)))
-                source = "prediction"
-            elif pd.notna(requested_runtime) and float(requested_runtime) > 0:
-                p50 = int(requested_runtime)
-                p90 = int(requested_runtime)
-                estimate = p50
-                guard = int(requested_runtime)
-                source = "requested_fallback"
+        if predicted is not None:
+            p50 = int(max(1, round(predicted["p50"])))
+            p90 = int(max(p50, round(predicted["p90"])))
+            if policy_id == "ML_BACKFILL_P10":
+                p10 = int(max(1, round(predicted["p10"])))
+                estimate = p10
+                guard = int(round(p10 + runtime_guard_k * (p50 - p10)))
             else:
-                p50 = int(actual_runtime)
-                p90 = int(actual_runtime)
                 estimate = p50
-                guard = int(actual_runtime)
-                source = "actual_fallback"
-
-            df.at[idx, "runtime_p50_sec"] = p50
-            df.at[idx, "runtime_p90_sec"] = p90
-            df.at[idx, "runtime_guard_sec"] = max(1, guard)
-            df.at[idx, "runtime_estimate_sec"] = estimate
-            df.at[idx, "estimate_source"] = source
+                guard = int(round(p50 + runtime_guard_k * (p90 - p50)))
+            source = "prediction"
+        elif pd.notna(requested_runtime) and float(requested_runtime) > 0:
+            p50 = int(requested_runtime)
+            p90 = int(requested_runtime)
+            estimate = p50
+            guard = int(requested_runtime)
+            source = "requested_fallback"
         else:
-            if pd.notna(requested_runtime) and float(requested_runtime) > 0:
-                estimate = int(requested_runtime)
-                source = "requested_fallback"
-            else:
-                estimate = int(actual_runtime)
-                source = "actual_fallback"
-            df.at[idx, "runtime_p50_sec"] = estimate
-            df.at[idx, "runtime_p90_sec"] = estimate
-            df.at[idx, "runtime_guard_sec"] = estimate
-            df.at[idx, "runtime_estimate_sec"] = estimate
-            df.at[idx, "estimate_source"] = source
+            p50 = actual_runtime
+            p90 = actual_runtime
+            estimate = p50
+            guard = actual_runtime
+            source = "actual_fallback"
+
+        p50_list.append(p50)
+        p90_list.append(p90)
+        guard_list.append(max(1, guard))
+        estimate_list.append(estimate)
+        source_list.append(source)
+
+    df["runtime_p50_sec"] = p50_list
+    df["runtime_p90_sec"] = p90_list
+    df["runtime_guard_sec"] = guard_list
+    df["runtime_estimate_sec"] = estimate_list
+    df["estimate_source"] = source_list
     return df
 
 

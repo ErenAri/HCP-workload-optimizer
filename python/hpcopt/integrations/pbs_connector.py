@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -97,6 +98,8 @@ class PBSConnector:
 
     def _run_qstat(self) -> str:
         """Run qstat -f to get detailed job info."""
+        if shutil.which(self.qstat_bin) is None:
+            raise FileNotFoundError(f"qstat binary not found: {self.qstat_bin}")
         cmd = [self.qstat_bin, "-f", "-F", "json"]
         if self.server_name:
             cmd.extend(["@" + self.server_name])
@@ -108,6 +111,8 @@ class PBSConnector:
 
     def _run_qstat_completed(self) -> str:
         """Run qstat for completed jobs (PBS Pro specific)."""
+        if shutil.which(self.qstat_bin) is None:
+            raise FileNotFoundError(f"qstat binary not found: {self.qstat_bin}")
         cmd = [self.qstat_bin, "-x", "-f", "-F", "json"]
         if self.server_name:
             cmd.extend(["@" + self.server_name])

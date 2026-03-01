@@ -17,6 +17,7 @@ import csv
 import io
 import json
 import logging
+import shutil
 import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -137,6 +138,8 @@ class SlurmConnector:
 
     def _run_sacct(self, start_time: str | None = None) -> str:
         """Run sacct and return raw output."""
+        if shutil.which(self.sacct_bin) is None:
+            raise FileNotFoundError(f"sacct binary not found: {self.sacct_bin}")
         cmd = [
             self.sacct_bin,
             "--parsable2",
@@ -160,6 +163,8 @@ class SlurmConnector:
 
     def _run_squeue(self) -> str:
         """Run squeue to get currently queued/running jobs."""
+        if shutil.which(self.squeue_bin) is None:
+            raise FileNotFoundError(f"squeue binary not found: {self.squeue_bin}")
         cmd = [
             self.squeue_bin,
             "--format=%i|%j|%u|%g|%P|%T|%V|%S|%l|%C|%D",

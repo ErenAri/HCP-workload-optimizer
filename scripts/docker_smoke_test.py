@@ -11,14 +11,15 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-BASE_URL = "http://localhost:8080"
-API_KEY = "test-benchmark-key"
-ADMIN_KEY = "admin-benchmark-key"
+BASE_URL = os.environ.get("HPCOPT_SMOKE_BASE_URL", "http://localhost:8080")
+API_KEY = os.environ.get("HPCOPT_TEST_API_KEY", "test-benchmark-key")
+ADMIN_KEY = os.environ.get("HPCOPT_TEST_ADMIN_KEY", "admin-benchmark-key")
 
 CHECKS: list[dict] = []
 

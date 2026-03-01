@@ -139,19 +139,17 @@ def run_simulation_from_trace(
             policy_id=policy_id,
             strict_uncertainty_mode=strict_uncertainty_mode,
         )
+        queue_by_id: dict[int, dict[str, Any]] = {int(job["job_id"]): job for job in queue}
+        dispatched_ids: set[int] = set()
         for dispatch in decision.decisions:
-            idx = next(
-                (i for i, job in enumerate(queue) if int(job["job_id"]) == int(dispatch.job_id)),
-                None,
-            )
-            if idx is None:
+            job = queue_by_id.get(int(dispatch.job_id))
+            if job is None:
                 continue
-            job = queue[idx]
             requested = int(job["requested_cpus"])
             if requested > free_cpus:
                 continue
 
-            queue.pop(idx)
+            dispatched_ids.add(int(dispatch.job_id))
             start_ts = clock_ts
             runtime = int(job["runtime_actual_sec"])
             end_ts = start_ts + runtime
@@ -181,6 +179,9 @@ def run_simulation_from_trace(
                 fallback_counts["requested_fallback_count"] += 1
             else:
                 fallback_counts["actual_fallback_count"] += 1
+
+        if dispatched_ids:
+            queue = [job for job in queue if int(job["job_id"]) not in dispatched_ids]
 
         failed = _check_invariants(
             clock_ts=clock_ts,
