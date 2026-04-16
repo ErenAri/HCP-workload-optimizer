@@ -5,6 +5,8 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000.svg)](https://github.com/astral-sh/ruff)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.pending.svg)](https://doi.org/10.5281/zenodo.pending)
+[![Cite this software](https://img.shields.io/badge/cite-CITATION.cff-informational)](CITATION.cff)
 
 Systems-first HPC scheduling research and engineering platform (Python + Rust) focused on reproducible policy evaluation under uncertainty.
 
@@ -73,7 +75,7 @@ Typical scheduling ML demos optimize a single predictive metric. HPCOpt enforces
 
 ### Simulation and Evaluation
 
-- Deterministic simulation core for `FIFO_STRICT`, `EASY_BACKFILL_BASELINE`, `ML_BACKFILL_P50`, and `ML_BACKFILL_P10`.
+- Deterministic simulation core for ten policies: `FIFO_STRICT`, `EASY_BACKFILL_BASELINE`, `CONSERVATIVE_BACKFILL_BASELINE` (Mu'alem & Feitelson TPDS 2001 — reservations for *all* queued jobs, on a free-CPU availability profile), `EASY_BACKFILL_TSAFRIR` (Tsafrir/Etsion/Feitelson 2007 user-history predictor), `SJF_BACKFILL`, `LJF_BACKFILL`, `FAIRSHARE_BACKFILL` (decayed-usage Slurm-style multifactor priority), `ML_BACKFILL_P50`, `ML_BACKFILL_P10`, and `RL_TRAINED` (MaskablePPO agent trained via the RLScheduler-style env in `python/hpcopt/rl/`; install `[rl]` extras to train).
 - Invariant reporting with strict-fail mode.
 - Baseline fidelity gate (aggregate + distribution + queue-correlation checks).
 - Stress scenario generation (heavy-tail, low-congestion, user-skew, burst-shock) and automated stress testing.

@@ -1,0 +1,63 @@
+name: Engineering Maturity Snapshot
+
+# Generate a schema-validated KPI snapshot weekly (Mondays 06:00 UTC) and on
+# manual dispatch. The snapshot lands under outputs/kpi-snapshots/ and is
+# committed to the kpi-snapshots branch so that historical state is browsable
+# without polluting main.
+#
+# This workflow operationalises docs/11-engineering-maturity-program.md.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    name: Generate maturity snapshot
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install minimal deps
+        run: pip install jsonschema
+
+      - name: Generate snapshot
+        run: python scripts/generate_kpi_snapshot.py --print
+
+      - name: Commit to kpi-snapshots branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          SNAPSHOT_DATE="$(date -u +%Y-%m-%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Stash the freshly written snapshot so we can re-apply it on the target branch.
+          mkdir -p /tmp/kpi
+          cp -r outputs/kpi-snapshots/* /tmp/kpi/
+
+          # Create or update the kpi-snapshots branch from main.
+          git fetch origin kpi-snapshots:kpi-snapshots 2>/dev/null || git branch kpi-snapshots
+          git switch kpi-snapshots
+
+          mkdir -p outputs/kpi-snapshots
+          cp -r /tmp/kpi/* outputs/kpi-snapshots/
+
+          git add outputs/kpi-snapshots/
+          if git diff --staged --quiet; then
+            echo "no snapshot changes"
+            exit 0
+          fi
+          git commit -m "kpi: snapshot ${SNAPSHOT_DATE}"
+          git push origin kpi-snapshots

@@ -1,0 +1,92 @@
+# YAML 1.2 Citation File Format - https://citation-file-format.github.io/
+cff-version: 1.2.0
+message: "If you use HPC Workload Optimizer (HPCOpt) in academic work, please cite it as below."
+title: "HPC Workload Optimizer (HPCOpt): A contract-driven simulation, ML, and policy-recommendation stack for HPC scheduling research"
+abstract: >-
+  HPCOpt is a systems-first HPC scheduling research and engineering platform
+  (Python + Rust) focused on reproducible policy evaluation under uncertainty.
+  It implements deterministic discrete-event simulation, multi-format trace
+  ingestion (SWF, Slurm sacct, PBS), runtime quantile prediction, fidelity
+  gating, fairness/starvation-constrained recommendation, and a production
+  API + Kubernetes deployment with full observability. It includes
+  reference baseline policies (FIFO, EASY-backfill, Tsafrir/Etsion/Feitelson
+  user-history) alongside ML-driven backfill variants.
+type: software
+authors:
+  - family-names: Ari
+    given-names: Eren
+    email: erenari27@gmail.com
+repository-code: "https://github.com/ErenAri/HCP-workload-optimizer"
+url: "https://github.com/ErenAri/HCP-workload-optimizer"
+license: Apache-2.0
+version: 2.1.0
+date-released: 2026-04-16
+keywords:
+  - HPC
+  - scheduling
+  - workload management
+  - simulation
+  - backfill
+  - EASY-backfill
+  - quantile regression
+  - reinforcement learning
+  - reproducibility
+  - Slurm
+  - SWF
+  - Parallel Workloads Archive
+preferred-citation:
+  type: software
+  title: "HPC Workload Optimizer (HPCOpt)"
+  authors:
+    - family-names: Ari
+      given-names: Eren
+      email: erenari27@gmail.com
+  version: 2.1.0
+  year: 2026
+  url: "https://github.com/ErenAri/HCP-workload-optimizer"
+references:
+  - type: article
+    title: "Backfilling Using System-Generated Predictions Rather Than User Runtime Estimates"
+    authors:
+      - family-names: Tsafrir
+        given-names: Dan
+      - family-names: Etsion
+        given-names: Yoav
+      - family-names: Feitelson
+        given-names: "Dror G."
+    journal: "IEEE Transactions on Parallel and Distributed Systems"
+    volume: 18
+    issue: 6
+    year: 2007
+    doi: "10.1109/TPDS.2007.70606"
+  - type: article
+    title: "Utilization, Predictability, Workloads, and User Runtime Estimates in Scheduling the IBM SP2 with Backfilling"
+    authors:
+      - family-names: "Mu'alem"
+        given-names: "Ahuva W."
+      - family-names: Feitelson
+        given-names: "Dror G."
+    journal: "IEEE Transactions on Parallel and Distributed Systems"
+    volume: 12
+    issue: 6
+    year: 2001
+    doi: "10.1109/71.932708"
+  - type: conference-paper
+    title: "Batsim: a Realistic Language-Independent Resources and Jobs Management Systems Simulator"
+    authors:
+      - family-names: Dutot
+        given-names: "Pierre-François"
+      - family-names: Mercier
+        given-names: Michael
+      - family-names: Poquet
+        given-names: Millian
+      - family-names: Richard
+        given-names: Olivier
+    collection-title: "Job Scheduling Strategies for Parallel Processing (JSSPP)"
+    year: 2017
+  - type: data
+    title: "Parallel Workloads Archive"
+    authors:
+      - family-names: Feitelson
+        given-names: "Dror G."
+    url: "https://www.cs.huji.ac.il/labs/parallel/workload/"

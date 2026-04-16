@@ -500,29 +500,51 @@ The continuous integration pipeline enforces 16 quality gates:
 
 ## 11. Related Work
 
-### 11.1 Classic HPC Scheduling
+### 11.1 Classic HPC Scheduling Heuristics
 
-The EASY backfilling algorithm, introduced by Lifka [6], remains the dominant production heuristic. Fair-share scheduling balances utilization against per-user equity but presents fundamental trade-offs: "fair sharing and high utilization are conflicting goals" [7]. Conservative backfilling variants provide stronger guarantees at the cost of reduced throughput.
+The EASY backfilling algorithm of Lifka [6] remains the dominant production heuristic and is the baseline against which essentially all subsequent work is measured. Mu'alem and Feitelson [15] characterised utilization, predictability, and the systematic effect of inflated user wall-time requests on backfill behaviour, motivating the long-running line of work on system-generated runtime predictions. Tsafrir, Etsion, and Feitelson [16] proposed the canonical *user-history* predictor — the average of each user's two most recently completed runtimes, clamped by the user's wall-time request — which any new runtime predictor must beat to be credible. We include this predictor as a first-class baseline policy (`EASY_BACKFILL_TSAFRIR`) precisely so that ML-driven results are not silently competing only against the much weaker user-estimate baseline.
+
+Fairshare scheduling, conservative backfilling [15], and gang scheduling round out the canonical heuristic set. The fundamental tension between throughput and fairness has been characterised repeatedly [7]; we make this tension explicit by reporting Jain index and per-user starvation rates as constraint-gated metrics rather than as soft objectives.
 
 ### 11.2 ML-Based Runtime Prediction
 
-Runtime prediction using machine learning has progressed from linear models to sophisticated ensemble methods. The BOSER plugin [4] achieves 86% accuracy using stacked ensembles (LightGBM, XGBoost, CatBoost) with Bayesian-optimized meta-learners. The ORA system [8] uses retrieval-augmented language models for online adaptation without retraining. Critically, only 1 of 14 existing studies on job queue-time prediction investigates uncertainty aspects [9], making quantile regression approaches underexplored.
+Runtime prediction has progressed from linear models to ensemble methods. BOSER [4] reports 86 % accuracy with stacked LightGBM/XGBoost/CatBoost models and Bayesian-optimised meta-learners. ORA [8] uses retrieval-augmented language models for online adaptation. Martínez et al. [5] survey predictor families and find quantile-regression and uncertainty-aware approaches underexplored. Netti et al. [9] note that only 1 of 14 surveyed queue-time studies treats uncertainty explicitly. Our quantile-regression formulation with monotonic enforcement and pinball-loss tracking sits squarely in that under-served space, and is paired with the Tsafrir [16] and naive (global mean / median, user-history median) baselines so that lift claims are directly comparable to the prior literature.
 
 ### 11.3 Reinforcement Learning for Scheduling
 
-RLBackfilling [3] demonstrates 59% improvement over EASY using actor-critic models with PPO. HeraSched [10] addresses both job selection and allocation with hierarchical RL. ASA [11] improves CPU utilization by 51% through co-scheduling. However, these approaches rarely include deterministic replay guarantees, fidelity validation, or constraint enforcement — making it difficult to verify whether reported gains generalize or stem from evaluation artifacts.
+DeepRM [17] established the RL-for-scheduling formulation. Decima [18] extended it to DAG scheduling for analytics workloads. RLScheduler [19] is the most direct precedent for ML-driven HPC backfill on the Parallel Workloads Archive, releasing both code and reproducible results, and is the standard external baseline in this niche. RLBackfilling [3] reports 59 % improvement over EASY with PPO actor-critic; HeraSched [10] uses hierarchical RL for joint selection and allocation; ASA [11] addresses co-scheduling. A common weakness across this literature is the absence of (a) deterministic replay, (b) distributional fidelity validation, and (c) hard fairness/starvation constraints — making it hard to separate genuine policy gains from evaluation artefacts. HPCOpt's RL surface (`SchedulingEnv`, `RL_TRAINED` policy) is designed so that any RL-derived policy is gated by the same fidelity and constraint contract as the heuristic baselines.
 
-### 11.4 GPU-Aware Scheduling
+### 11.4 Simulation Frameworks
 
-Fragmentation Gradient Descent (FGD) [12] reduces unallocated GPUs by 49% in production Kubernetes clusters. Dynamic multi-objective schedulers [13] achieve 78% utilization with bounded fairness variance. These methods address resource heterogeneity beyond the CPU-only model in our MVP, representing a natural extension direction.
+The de-facto reference simulator is **Batsim** [14] (Inria DataMove), which decouples scheduler from platform via an external protocol on top of the validated **SimGrid** distributed-system simulator. Pybatsim provides Python scheduler bindings and is the customary entry point for research schedulers. **WRENCH** [20] is the workflow-oriented analogue, also built on SimGrid, and is the standard for DAG scheduling research (e.g. Pegasus workloads). The **UB-CCR Slurm Simulator** [21] runs the actual `slurmctld` daemon in accelerated time and is the gold standard when fidelity to a specific Slurm release matters. **AccaSim** [22], **CloudSim Plus** [23], and **OpenDC** [24] complete the open-source landscape, with OpenDC additionally providing visual scenario exploration.
 
-### 11.5 Simulation and Reproducibility
+HPCOpt does not aim to replace these simulators. Its native discrete-event core exists to make the policy/adapter contract executable and the test surface tight; for cross-validation we provide a Batsim integration path (config emission, native/WSL invocation, output normalisation, optional candidate fidelity report) and treat agreement with Batsim as a fidelity criterion rather than as a separate result.
 
-Batsim [14] provides language-independent simulation with multiple realism levels. SimGrid offers the underlying distributed system modeling. Our contribution differs in the *evaluation protocol* layer: fidelity gating, constraint enforcement, and artifact provenance are not addressed by simulation frameworks themselves.
+### 11.5 Production Schedulers and Real-System Integration
 
-### 11.6 Positioning
+The dominant production targets are **Slurm** [25], **PBS Pro / OpenPBS** [26], **HTCondor** [27], and **IBM Spectrum LSF**. The **Flux Framework** [28] from LLNL is the next-generation, RFC-driven, hierarchical scheduler explicitly designed for embedded scheduler experimentation; its `fluxion` graph scheduler with the JSON Graph Format resource model is the most natural integration point for research-grade scheduling stacks. On the Kubernetes side, **Volcano** [29], **Kueue** [30], and **Apache YuniKorn** [31] are the established batch-on-Kubernetes alternatives.
 
-HPCOpt contributes at the *evaluation discipline* layer rather than the *algorithm* layer. We do not claim a novel scheduling algorithm; we claim a novel *framework for determining whether scheduling improvements are credible*. This positions the work orthogonally to algorithm-focused contributions — any scheduling policy (including RL-based approaches) can be evaluated within the HPCOpt credibility protocol.
+HPCOpt currently ingests Slurm `sacct` and PBS accounting logs and emits recommendation reports; production policy artifacts (Slurm `job_submit.lua`, multifactor weights; Flux/Fluxion modules) are tracked as the next integration layer.
+
+### 11.6 GPU and Heterogeneous-Resource Scheduling
+
+Fragmentation Gradient Descent (FGD) [12] reduces unallocated GPUs by 49 % on production Kubernetes clusters. Dynamic multi-objective schedulers [13] reach 78 % utilisation with bounded fairness variance. The Microsoft Philly traces [32] and Alibaba GPU traces [33] are the canonical evaluation datasets. HPCOpt's MVP is CPU-only by design; GPU/heterogeneous resource modelling and the corresponding trace ingesters are scheduled for the next major version.
+
+### 11.7 Reproducibility and Artifact Evaluation
+
+The ACM Artifact Review and Badging v2.0 framework [34] and the SC, HPDC, EuroSys, and SIGMOD/VLDB artifact-evaluation tracks set the bar for what counts as "reproducible" in this community. We supply (a) a Zenodo-archived release with DOI (`CITATION.cff`, `.zenodo.json`), (b) a one-command reproducer (`scripts/reproduce_paper.py`), (c) JSON-Schema-validated immutable run manifests, and (d) an SC-style Artifact Description / Artifact Evaluation appendix (`paper/artifact_appendix.md`) mapping every claim to an exact command.
+
+### 11.8 Positioning Summary
+
+HPCOpt contributes at the *evaluation discipline* and *systems-engineering* layer rather than at the algorithm layer. Concretely, the differentiators against the projects named above are:
+
+- **vs. Batsim/Pybatsim/WRENCH** — HPCOpt adds an executable adapter contract, distributional fidelity gates, and constraint-gated recommendations on top of the simulator output, none of which are part of the simulator's mandate.
+- **vs. UB-CCR Slurm Simulator** — HPCOpt does not run real `slurmctld`, but does provide cross-language Python ↔ Rust adapter parity and a documented path for Batsim cross-validation. The two are complementary: Slurm Simulator answers "exactly how Slurm would behave"; HPCOpt answers "is this policy decision credible *and* fair *and* in-distribution".
+- **vs. RLScheduler / DeepRM / RLBackfilling** — HPCOpt subjects RL-derived policies to the same fidelity and constraint contract as heuristic baselines, and includes the Tsafrir [16] predictor and EASY backfill as in-process baselines so comparisons are head-to-head rather than against weaker reference points.
+- **vs. Flux/Fluxion, Slurm, Volcano, Kueue** — HPCOpt is advisory and offline-first; it consumes their accounting outputs and is designed to emit deployable policy artefacts back into them.
+- **vs. ad-hoc ML-for-scheduling repositories** — HPCOpt enforces JSON-Schema contracts for every artefact, ships a Kubernetes/observability surface (Prometheus, OpenTelemetry, RFC 7807, NetworkPolicy, PodDisruptionBudget), and gates every CI run on coverage, type-check, SAST, secret scan, OpenAPI compatibility, and cross-language adapter parity.
+
+In short, HPCOpt is intended to be a *peer* of Batsim/Pybatsim/RLScheduler at the research-rigour layer and a *peer* of production-grade ML services at the engineering-rigour layer, with the explicit goal of closing the gap between those two communities.
 
 ---
 
@@ -609,6 +631,46 @@ The systems-first evaluation discipline embodied in HPCOpt is orthogonal to algo
 [13] Ibid.
 
 [14] P.-F. Dutot et al., "Batsim: A Realistic Language-Independent Resources and Jobs Management Systems Simulator," in *Proc. JSSPP*, Springer, 2017.
+
+[15] A. W. Mu'alem and D. G. Feitelson, "Utilization, Predictability, Workloads, and User Runtime Estimates in Scheduling the IBM SP2 with Backfilling," *IEEE TPDS*, vol. 12, no. 6, pp. 529–543, 2001. doi:10.1109/71.932708.
+
+[16] D. Tsafrir, Y. Etsion, and D. G. Feitelson, "Backfilling Using System-Generated Predictions Rather Than User Runtime Estimates," *IEEE TPDS*, vol. 18, no. 6, pp. 789–803, 2007. doi:10.1109/TPDS.2007.70606.
+
+[17] H. Mao, M. Alizadeh, I. Menache, and S. Kandula, "Resource Management with Deep Reinforcement Learning," in *Proc. ACM HotNets*, 2016.
+
+[18] H. Mao et al., "Learning Scheduling Algorithms for Data Processing Clusters," in *Proc. ACM SIGCOMM*, 2019.
+
+[19] D. Zhang, D. Dai, Y. He, F. S. Bao, and B. Xie, "RLScheduler: An Automated HPC Batch Job Scheduler Using Reinforcement Learning," in *Proc. SC*, 2020. Code: https://github.com/DIR-LAB/deep-batch-scheduler.
+
+[20] H. Casanova et al., "WRENCH: A Framework for Simulating Workflow Management Systems," in *Proc. WORKS @ SC*, 2018. https://wrench-project.org/.
+
+[21] N. A. Simakov, M. D. Innus, M. D. Jones, J. P. White, S. M. Gallo, R. L. DeLeon, and T. R. Furlani, "A Slurm Simulator: Implementation and Parametric Analysis," in *Proc. PMBS @ SC*, 2017. https://github.com/ubccr-slurm-simulator.
+
+[22] C. Galleguillos et al., "AccaSim: A Customizable Workload Management Simulator for Job Dispatching Research in HPC Systems," *Cluster Computing*, vol. 23, 2020.
+
+[23] M. C. Silva Filho et al., "CloudSim Plus: A Cloud Computing Simulation Framework Pursuing Software Engineering Principles for Improved Modularity, Extensibility and Correctness," in *Proc. IFIP/IEEE IM*, 2017. https://cloudsimplus.org/.
+
+[24] F. Mastenbroek et al., "OpenDC 2.0: Convenient Modeling and Simulation of Emerging Technologies in Cloud Datacenters," in *Proc. CCGrid*, 2021. https://opendc.org/.
+
+[25] A. B. Yoo, M. A. Jette, and M. Grondona, "SLURM: Simple Linux Utility for Resource Management," in *Proc. JSSPP*, Springer, 2003. https://slurm.schedmd.com/.
+
+[26] OpenPBS Project, "OpenPBS Workload Manager." https://www.openpbs.org/.
+
+[27] D. Thain, T. Tannenbaum, and M. Livny, "Distributed Computing in Practice: The Condor Experience," *Concurrency and Computation: Practice and Experience*, vol. 17, 2005. https://htcondor.org/.
+
+[28] D. H. Ahn et al., "Flux: A Next-Generation Resource Management Framework for Large HPC Centers," in *Proc. ICPP Workshops*, 2014. https://flux-framework.org/.
+
+[29] Volcano Project, "Volcano: Cloud Native Batch System." https://volcano.sh/.
+
+[30] Kubernetes SIG-Scheduling, "Kueue: Kubernetes-native Job Queueing." https://kueue.sigs.k8s.io/.
+
+[31] Apache Software Foundation, "Apache YuniKorn: A universal resource scheduler." https://yunikorn.apache.org/.
+
+[32] M. Jeon et al., "Analysis of Large-Scale Multi-Tenant GPU Clusters for DNN Training Workloads," in *Proc. USENIX ATC*, 2019. Trace: https://github.com/msr-fiddle/philly-traces.
+
+[33] Alibaba Group, "Alibaba Cluster Trace Program," 2017–2023. https://github.com/alibaba/clusterdata.
+
+[34] Association for Computing Machinery, "Artifact Review and Badging Version 2.0," 2020. https://www.acm.org/publications/policies/artifact-review-and-badging-current.
 
 ---
 

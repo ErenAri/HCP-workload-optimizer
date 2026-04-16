@@ -30,6 +30,10 @@ class AdapterQueuedJob:
     runtime_p90_sec: int | None = None
     runtime_guard_sec: int | None = None
     estimate_source: str | None = None
+    # Optional fairshare priority (higher → earlier dispatch).
+    # None for non-fairshare policies; populated by attach_runtime_estimates
+    # for FAIRSHARE_BACKFILL.
+    priority_score: float | None = None
 
 
 @dataclass(frozen=True)
@@ -261,6 +265,190 @@ def choose_easy_backfill(snapshot: SchedulerStateSnapshot) -> SchedulerDecision:
     return SchedulerDecision(
         policy_id="EASY_BACKFILL_BASELINE",
         reservation_ts=reservation_ts,
+        decisions=tuple(decisions),
+    )
+
+
+def _easy_style_dispatch(
+    snapshot: SchedulerStateSnapshot,
+    policy_id: str,
+    queue: list[AdapterQueuedJob],
+    head_reason: str,
+    follow_reason: str,
+    backfill_reason: str,
+) -> SchedulerDecision:
+    """Generic EASY-style backfill over a pre-sorted queue.
+
+    Used by SJF / LJF / FAIRSHARE: the queue ordering already encodes
+    priority; the head-of-queue reservation is computed against the
+    *sorted* head, not the FIFO head.
+    """
+    if not queue:
+        return SchedulerDecision(policy_id=policy_id, reservation_ts=None, decisions=tuple())
+
+    hol = queue[0]
+    reservation_ts = _reservation_ts_for_hol(snapshot, hol)
+    available = snapshot.free_cpus
+    decisions: list[DispatchDecision] = []
+
+    if hol.requested_cpus > 0 and hol.requested_cpus <= available:
+        decisions.append(
+            DispatchDecision(
+                job_id=hol.job_id,
+                requested_cpus=hol.requested_cpus,
+                runtime_estimate_sec=hol.runtime_estimate_sec,
+                estimated_completion_ts=snapshot.clock_ts + hol.runtime_estimate_sec,
+                reason=head_reason,
+            )
+        )
+        available -= hol.requested_cpus
+        for job in queue[1:]:
+            if job.requested_cpus <= 0 or job.requested_cpus > available:
+                continue
+            decisions.append(
+                DispatchDecision(
+                    job_id=job.job_id,
+                    requested_cpus=job.requested_cpus,
+                    runtime_estimate_sec=job.runtime_estimate_sec,
+                    estimated_completion_ts=snapshot.clock_ts + job.runtime_estimate_sec,
+                    reason=follow_reason,
+                )
+            )
+            available -= job.requested_cpus
+        return SchedulerDecision(policy_id=policy_id, reservation_ts=reservation_ts, decisions=tuple(decisions))
+
+    for job in queue[1:]:
+        if job.requested_cpus <= 0 or job.requested_cpus > available:
+            continue
+        completion_ts = snapshot.clock_ts + job.runtime_estimate_sec
+        if completion_ts <= reservation_ts:
+            decisions.append(
+                DispatchDecision(
+                    job_id=job.job_id,
+                    requested_cpus=job.requested_cpus,
+                    runtime_estimate_sec=job.runtime_estimate_sec,
+                    estimated_completion_ts=completion_ts,
+                    reason=backfill_reason,
+                )
+            )
+            available -= job.requested_cpus
+
+    return SchedulerDecision(policy_id=policy_id, reservation_ts=reservation_ts, decisions=tuple(decisions))
+
+
+def choose_sjf_backfill(snapshot: SchedulerStateSnapshot) -> SchedulerDecision:
+    """Shortest-Job-First with EASY-style backfill.
+
+    Queue is sorted by ascending ``runtime_estimate_sec`` (ties broken by
+    submit order then job_id for determinism).  The head-of-queue (i.e. the
+    shortest job) gets the reservation; remaining jobs may backfill if they
+    fit *and* finish by the reservation.
+    """
+    queue = sorted(
+        snapshot.queued_jobs,
+        key=lambda j: (j.runtime_estimate_sec, j.submit_ts, j.job_id),
+    )
+    return _easy_style_dispatch(
+        snapshot, "SJF_BACKFILL", queue,
+        head_reason="sjf_head_dispatch",
+        follow_reason="sjf_follow_dispatch",
+        backfill_reason="sjf_backfill",
+    )
+
+
+def choose_ljf_backfill(snapshot: SchedulerStateSnapshot) -> SchedulerDecision:
+    """Longest-Job-First with EASY-style backfill (mirrors SJF, descending)."""
+    queue = sorted(
+        snapshot.queued_jobs,
+        key=lambda j: (-j.runtime_estimate_sec, j.submit_ts, j.job_id),
+    )
+    return _easy_style_dispatch(
+        snapshot, "LJF_BACKFILL", queue,
+        head_reason="ljf_head_dispatch",
+        follow_reason="ljf_follow_dispatch",
+        backfill_reason="ljf_backfill",
+    )
+
+
+def choose_fairshare_backfill(snapshot: SchedulerStateSnapshot) -> SchedulerDecision:
+    """Fairshare-priority queue with EASY-style backfill.
+
+    Sort by descending ``priority_score`` (computed by
+    ``hpcopt.simulate.fairshare.compute_fairshare_priorities``).  Jobs with
+    no priority score are treated as priority 0.
+    """
+    def _key(j: AdapterQueuedJob) -> tuple[float, int, int]:
+        score = float(j.priority_score) if j.priority_score is not None else 0.0
+        return (-score, j.submit_ts, j.job_id)
+
+    queue = sorted(snapshot.queued_jobs, key=_key)
+    return _easy_style_dispatch(
+        snapshot, "FAIRSHARE_BACKFILL", queue,
+        head_reason="fairshare_head_dispatch",
+        follow_reason="fairshare_follow_dispatch",
+        backfill_reason="fairshare_backfill",
+    )
+
+
+def choose_conservative_backfill(snapshot: SchedulerStateSnapshot) -> SchedulerDecision:
+    """Conservative Backfill (Mu'alem & Feitelson 2001).
+
+    Reserves a future start time for *every* queued job (FIFO order) on the
+    free-resource availability profile.  A job is dispatched now iff its
+    earliest fitting window equals ``clock_ts``; otherwise it occupies a
+    future reservation that no later job may displace.
+
+    This is strictly more predictable than EASY (every queued job's worst-
+    case start time is bounded at submission), at typically a small
+    utilisation cost — see Tsafrir/Etsion/Feitelson (TPDS 2007).
+    """
+    from hpcopt.simulate.availability_profile import AvailabilityProfile
+
+    if not snapshot.queued_jobs:
+        return SchedulerDecision(
+            policy_id="CONSERVATIVE_BACKFILL_BASELINE",
+            reservation_ts=None,
+            decisions=tuple(),
+        )
+
+    profile = AvailabilityProfile.from_snapshot(
+        clock_ts=snapshot.clock_ts,
+        free_cpus=snapshot.free_cpus,
+        running=[(rj.end_ts, rj.allocated_cpus) for rj in snapshot.running_jobs],
+    )
+
+    queue = sorted(snapshot.queued_jobs, key=lambda j: (j.submit_ts, j.job_id))
+    head_reservation: int | None = None
+    decisions: list[DispatchDecision] = []
+
+    for idx, job in enumerate(queue):
+        if job.requested_cpus <= 0 or job.requested_cpus > snapshot.capacity_cpus:
+            continue
+        runtime = max(1, int(job.runtime_estimate_sec))
+        start = profile.find_earliest_window(
+            req=job.requested_cpus,
+            runtime=runtime,
+            after=snapshot.clock_ts,
+        )
+        # Commit the reservation immediately so subsequent queued jobs
+        # cannot start in a way that would push it later.
+        profile.insert(start=start, duration=runtime, req=job.requested_cpus)
+        if idx == 0:
+            head_reservation = start
+        if start == snapshot.clock_ts:
+            decisions.append(
+                DispatchDecision(
+                    job_id=job.job_id,
+                    requested_cpus=job.requested_cpus,
+                    runtime_estimate_sec=job.runtime_estimate_sec,
+                    estimated_completion_ts=snapshot.clock_ts + job.runtime_estimate_sec,
+                    reason="cbf_head_dispatch" if idx == 0 else "cbf_backfill",
+                )
+            )
+
+    return SchedulerDecision(
+        policy_id="CONSERVATIVE_BACKFILL_BASELINE",
+        reservation_ts=head_reservation,
         decisions=tuple(decisions),
     )
 

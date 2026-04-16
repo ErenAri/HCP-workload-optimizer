@@ -1,0 +1,38 @@
+{
+  "title": "HPC Workload Optimizer (HPCOpt): A contract-driven simulation, ML, and policy-recommendation stack for HPC scheduling research",
+  "description": "HPCOpt is a systems-first HPC scheduling research and engineering platform (Python + Rust) focused on reproducible policy evaluation under uncertainty. It implements deterministic discrete-event simulation, multi-format trace ingestion (SWF, Slurm sacct, PBS), runtime quantile prediction, fidelity gating, fairness/starvation-constrained recommendation, and a production API + Kubernetes deployment with full observability. Reference baselines include FIFO, EASY-backfill, and the Tsafrir/Etsion/Feitelson user-history predictor, alongside ML-driven backfill variants.",
+  "creators": [
+    {
+      "name": "Ari, Eren",
+      "affiliation": "Independent",
+      "orcid": null
+    }
+  ],
+  "upload_type": "software",
+  "license": "Apache-2.0",
+  "access_right": "open",
+  "keywords": [
+    "HPC",
+    "scheduling",
+    "workload management",
+    "simulation",
+    "backfill",
+    "EASY-backfill",
+    "quantile regression",
+    "reinforcement learning",
+    "reproducibility",
+    "Slurm",
+    "SWF",
+    "Parallel Workloads Archive"
+  ],
+  "communities": [
+    {"identifier": "hpc"}
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/ErenAri/HCP-workload-optimizer",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}

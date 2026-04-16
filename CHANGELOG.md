@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-04-16
+
+### Added
+- **`RL_TRAINED` policy and reinforcement-learning training pipeline** patterned after Zhang et al., "RLScheduler" (SC'20).
+  - New `python/hpcopt/rl/` package: `env.py` (Gymnasium env with `Box(0,1,(128,8))` observation, `Discrete(128)` action, `action_masks()` for `MaskablePPO`), `features.py` (kernel-based per-slot MLP features extractor — permutation-equivariant), `train.py` (PPO training loop with RLScheduler-default hyperparameters: clip=0.2, lr=3e-4, n_steps=4096, γ=1.0, GAE λ=0.97), `inference.py` (loads a trained model and acts as the `RL_TRAINED` adapter dispatcher).
+  - Per-step reward = `-bsld(job)` accumulated as jobs complete (RLScheduler convention; sum over episode ≈ `-mean_bsld`).
+  - `run_simulation_from_trace` extended with a backward-compatible `policy_context` parameter for stateful policies.
+  - New `scripts/train_rl_policy.py` CLI for offline training on parquet traces.
+  - New optional dependency group `[rl]`: `gymnasium`, `torch`, `stable-baselines3`, `sb3-contrib`. Core simulator remains lightweight; RL imports are lazy.
+  - `RL_TRAINED` falls back to FIFO when no model is loaded so the policy is safe to enumerate on systems without `[rl]`.
+- 7 new tests in `tests/unit/test_rl_scheduler_env.py` (skipped cleanly when `[rl]` not installed) and 2 in `tests/unit/test_rl_trained_fallback.py` (always run).
+
+### Changed
+- Project version bumped to `2.3.0`.
+- `simulate/core.py:SUPPORTED_POLICIES` expanded to ten policies.
+
+## [2.2.0] - 2026-04-16
+
+### Added
+- **`CONSERVATIVE_BACKFILL_BASELINE` policy**: faithful implementation of Mu'alem & Feitelson (TPDS 2001). Reservations are committed for *every* queued job (not just the head, as in EASY), so a queued job's worst-case start time is bounded at submission and can only improve. Built on a new `AvailabilityProfile` data structure (`python/hpcopt/simulate/availability_profile.py`) representing the free-CPU timeline as a list of `(time, free_after)` events with O(log n) lookup and O(n) insert.
+- **`SJF_BACKFILL` and `LJF_BACKFILL` policies**: shortest-/longest-job-first queue ordering with EASY-style head-of-queue reservation and backfill.
+- **`FAIRSHARE_BACKFILL` policy**: priority-ordered queue using exponentially-decayed per-user CPU-second usage (Slurm `priority/multifactor` model; default 7-day half-life). Priorities are precomputed in `python/hpcopt/simulate/fairshare.py` from the trace, respecting completion-time causality.
+- 20 new unit tests in `tests/unit/test_availability_profile.py` and `tests/unit/test_phase1_policies.py`, including the canonical CBF correctness test (a backfill candidate that *would* push a deeper queued reservation later must be refused).
+- `AdapterQueuedJob` extended with optional `priority_score` field (backward-compatible default `None`).
+
+### Changed
+- Project version bumped to `2.2.0`.
+- `simulate/core.py:SUPPORTED_POLICIES` expanded to nine policies.
+
+## [2.1.0] - 2026-04-16
+
+### Added
+- **`EASY_BACKFILL_TSAFRIR` policy**: implementation of the Tsafrir/Etsion/Feitelson (TPDS 2007) user-history runtime predictor — average of each user's two most recently completed runtimes, clamped by the user's wall-time request, with documented cold-start rules. Per-job estimates are precomputed by a chronological scan that respects completion-time causality.
+  - New module `python/hpcopt/models/baseline_tsafrir.py`.
+  - Policy registered in `simulate/core.py:SUPPORTED_POLICIES`.
+  - Fallback accounting now reports `tsafrir_history_count`, `tsafrir_cold_start_count` and the corresponding rates.
+  - 12 new unit tests in `tests/unit/test_tsafrir_baseline.py`.
+- `CITATION.cff` and `.zenodo.json` for citation metadata and DOI minting.
+
+### Changed
+- Project version bumped to `2.1.0`.
+- Author email corrected to `erenari27@gmail.com`.
+
 ## [2.0.0] - 2026-02-26
 
 ### Added
@@ -56,7 +99,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reinforcement learning policy search
 - Slurm live adapter
 
+[2.3.0]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v2.2.0...v2.3.0
+[2.2.0]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v2.1.0...v2.2.0
+[2.1.0]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v1.0.0...v1.2.0
 [1.0.0]: https://github.com/ErenAri/HCP-workload-optimizer/releases/tag/v1.0.0
-[Unreleased]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/ErenAri/HCP-workload-optimizer/compare/v2.3.0...HEAD

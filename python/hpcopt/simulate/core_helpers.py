@@ -7,12 +7,18 @@ from typing import Any
 
 import pandas as pd
 
+from hpcopt.models.baseline_tsafrir import compute_tsafrir_estimates
 from hpcopt.simulate.adapter import (
     SchedulerStateSnapshot,
+    choose_conservative_backfill,
     choose_easy_backfill,
+    choose_fairshare_backfill,
     choose_fifo_strict,
+    choose_ljf_backfill,
     choose_ml_backfill_p50,
+    choose_sjf_backfill,
 )
+from hpcopt.simulate.fairshare import compute_fairshare_priorities
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +65,36 @@ def choose_decisions(
     snapshot: SchedulerStateSnapshot,
     policy_id: str,
     strict_uncertainty_mode: bool = False,
+    policy_context: dict[str, Any] | None = None,
 ) -> Any:
     if policy_id == "FIFO_STRICT":
         return choose_fifo_strict(snapshot)
     if policy_id == "EASY_BACKFILL_BASELINE":
         return choose_easy_backfill(snapshot)
+    if policy_id == "EASY_BACKFILL_TSAFRIR":
+        # Same dispatch logic as EASY_BACKFILL_BASELINE; only the per-job
+        # runtime_estimate_sec carried in the snapshot differs (set to the
+        # Tsafrir prediction by attach_runtime_estimates).
+        decision = choose_easy_backfill(snapshot)
+        # Re-tag the policy id so downstream metrics/manifests attribute results correctly.
+        return type(decision)(
+            policy_id="EASY_BACKFILL_TSAFRIR",
+            reservation_ts=decision.reservation_ts,
+            decisions=decision.decisions,
+        )
+    if policy_id == "CONSERVATIVE_BACKFILL_BASELINE":
+        return choose_conservative_backfill(snapshot)
+    if policy_id == "SJF_BACKFILL":
+        return choose_sjf_backfill(snapshot)
+    if policy_id == "LJF_BACKFILL":
+        return choose_ljf_backfill(snapshot)
+    if policy_id == "FAIRSHARE_BACKFILL":
+        return choose_fairshare_backfill(snapshot)
+    if policy_id == "RL_TRAINED":
+        # Lazy import: keeps gymnasium/torch optional.
+        from hpcopt.rl.inference import choose_rl_trained
+        rl_policy = (policy_context or {}).get("rl_policy")
+        return choose_rl_trained(snapshot, rl_policy)
     if policy_id in ("ML_BACKFILL_P50", "ML_BACKFILL_P10"):
         # Both ML policies use the same dispatcher; the difference is that
         # ML_BACKFILL_P10 sets runtime_estimate_sec to p10 (conservative) in
@@ -109,8 +140,32 @@ def attach_runtime_estimates(
 ) -> pd.DataFrame:
     df = jobs_df.copy()
 
+    if policy_id == "EASY_BACKFILL_TSAFRIR":
+        # Tsafrir/Etsion/Feitelson 2007 user-history predictor. Per-job
+        # estimate is precomputed by a chronological scan with per-user
+        # completion history. Falls back to the user-supplied wall-time
+        # request on cold start (zero completed jobs) via compute_tsafrir_estimates.
+        requested = pd.to_numeric(df["runtime_requested_sec"], errors="coerce")
+        has_requested = requested.notna() & (requested > 0)
+        actual = df["runtime_actual_sec"].astype(int)
+        user_estimate = actual.copy()
+        user_estimate[has_requested] = requested[has_requested].astype(int)
+        # Ensure the column used by compute_tsafrir_estimates is populated.
+        df["runtime_estimate_sec"] = user_estimate
+        df = compute_tsafrir_estimates(df)
+        estimate = df["tsafrir_runtime_sec"].astype(int)
+        source = pd.Series("tsafrir_cold_start", index=df.index)
+        source[df["tsafrir_history_count"] >= 1] = "tsafrir_history_1"
+        source[df["tsafrir_history_count"] >= 2] = "tsafrir_history_2"
+        df["runtime_p50_sec"] = estimate
+        df["runtime_p90_sec"] = estimate
+        df["runtime_guard_sec"] = estimate
+        df["runtime_estimate_sec"] = estimate
+        df["estimate_source"] = source
+        return df
+
     if policy_id not in ("ML_BACKFILL_P50", "ML_BACKFILL_P10"):
-        # Vectorized path for non-ML policies.
+        # Vectorized path for non-ML policies (FIFO, EASY, CBF, SJF, LJF, FAIRSHARE).
         requested = pd.to_numeric(df["runtime_requested_sec"], errors="coerce")
         has_requested = requested.notna() & (requested > 0)
         actual = df["runtime_actual_sec"].astype(int)
@@ -126,6 +181,9 @@ def attach_runtime_estimates(
         df["runtime_guard_sec"] = estimate
         df["runtime_estimate_sec"] = estimate
         df["estimate_source"] = source
+
+        if policy_id == "FAIRSHARE_BACKFILL":
+            df["priority_score"] = compute_fairshare_priorities(df)
         return df
 
     # ML policies: per-row prediction needed, but collect into lists

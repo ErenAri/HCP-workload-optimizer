@@ -11,7 +11,62 @@ Current policy set:
 
 - `FIFO_STRICT`
 - `EASY_BACKFILL_BASELINE`
+- `EASY_BACKFILL_TSAFRIR` (Tsafrir/Etsion/Feitelson, TPDS 2007 — user-history runtime estimates)
+- `CONSERVATIVE_BACKFILL_BASELINE` (Mu'alem & Feitelson, TPDS 2001 — reservations for **all** queued jobs)
+- `SJF_BACKFILL` — shortest-job-first ordering with EASY-style reservation/backfill
+- `LJF_BACKFILL` — longest-job-first variant (research baseline)
+- `FAIRSHARE_BACKFILL` — Slurm-style decayed-usage multifactor priority (default 7-day half-life)
 - `ML_BACKFILL_P50`
+- `ML_BACKFILL_P10`
+- `RL_TRAINED` (MaskablePPO agent — RLScheduler-style env at `python/hpcopt/rl/env.py`, training entry point `scripts/train_rl_policy.py`; requires `pip install -e ".[rl]"`)
+
+### 2.1 Conservative Backfill semantics
+
+Conservative Backfill (CBF) differs from EASY in one key respect: **every**
+queued job receives a future-start reservation at scheduling time, not just
+the head-of-queue. A backfill candidate may run now only if doing so does
+not push any of those reservations later. Reservations are committed
+against a free-CPU **availability profile** — a list of `(time, free_after)`
+events maintained in `python/hpcopt/simulate/availability_profile.py`.
+This is strictly more predictable than EASY (each queued job's worst-case
+start time is known at submission), at typically a small utilisation cost.
+
+### 2.2 RL_TRAINED protocol
+
+Patterned after Zhang, Dai, Bose, Li, Xu, Park, "RLScheduler" (SC'20):
+
+* **Observation:** `Box(0, 1, shape=(MAX_QUEUE_SIZE=128, JOB_FEATURES=8), float32)`
+  encoding the front 128 waiting jobs (requested cpus / capacity, runtime
+  estimate normalised by 12h, wait so far, fits-now flag, queue position,
+  free-cpus fraction, log10 runtime, validity flag). Padding rows are zero.
+* **Action:** `Discrete(128)` — pick which queued job to dispatch next.
+  Invalid slots (padding, or jobs that don't fit current free CPUs) are
+  masked through `action_masks()` and combined with
+  `sb3_contrib.MaskablePPO`.
+* **Reward:** per-step, accumulated as `-bsld(job)` for each job that
+  completes during the step's clock advance. Episode return ≈ `-mean_bsld`.
+* **Policy network:** kernel-based — the same small MLP applied
+  independently to each of the 128 slots produces one logit per slot;
+  this is permutation-equivariant, the key trick from the RLScheduler
+  paper (`KernelFeaturesExtractor` in `python/hpcopt/rl/features.py`).
+* **Training defaults** (from the RLScheduler reference repo): clip 0.2,
+  lr 3e-4, n_steps 4096, batch 256, γ=1.0, GAE λ=0.97, episodes of 256
+  jobs sampled at random offsets in the trace.
+
+When the simulator dispatches under `RL_TRAINED`, a loaded `RLPolicy` is
+passed via `policy_context={"rl_policy": rl_policy}`. With no policy
+loaded, the dispatcher falls back to FIFO so the policy is safe to
+enumerate on systems without the `[rl]` extras.
+
+### 2.3 Fairshare priority
+
+`FAIRSHARE_BACKFILL` orders the queue by descending priority score, where
+`score = -decayed_usage_cpu_seconds(user, t_submit)`. Decay follows
+`usage(t) = usage(t0) · 0.5^((t-t0)/H)` with `H = 604800s` (7 days,
+matching the Slurm `priority/multifactor` default). Priorities are
+precomputed from the trace in `python/hpcopt/simulate/fairshare.py`,
+respecting completion-time causality (only completions strictly before a
+job's submit time contribute to that job's score).
 
 These policies are implemented in:
 

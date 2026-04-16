@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hpc-workload-optimizer"
-version = "2.0.0"
+version = "2.3.0"
 description = "Systems-first HPC workload optimizer: runtime prediction, scheduling simulation, and policy recommendation."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [
-  { name = "Eren Ari", email = "erenari@example.com" }
+  { name = "Eren Ari", email = "erenari27@gmail.com" }
 ]
 keywords = ["hpc", "scheduling", "workload", "optimizer", "simulation", "backfill", "quantile-regression"]
 classifiers = [
@@ -70,6 +70,12 @@ tracing = [
 ]
 lightgbm = [
   "lightgbm>=4.3.0,<5.0"
+]
+rl = [
+  "gymnasium>=0.29.0,<2.0",
+  "torch>=2.1.0,<3.0",
+  "stable-baselines3>=2.3.0,<3.0",
+  "sb3-contrib>=2.3.0,<3.0"
 ]
 
 [project.scripts]

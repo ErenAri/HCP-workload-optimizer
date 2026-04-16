@@ -29,7 +29,18 @@ from hpcopt.simulate.core_helpers import (
 from hpcopt.simulate.metrics import compute_job_metrics
 from hpcopt.simulate.objective import compute_objective_contract_metrics
 
-SUPPORTED_POLICIES = {"FIFO_STRICT", "EASY_BACKFILL_BASELINE", "ML_BACKFILL_P50", "ML_BACKFILL_P10"}
+SUPPORTED_POLICIES = {
+    "FIFO_STRICT",
+    "EASY_BACKFILL_BASELINE",
+    "EASY_BACKFILL_TSAFRIR",
+    "CONSERVATIVE_BACKFILL_BASELINE",
+    "SJF_BACKFILL",
+    "LJF_BACKFILL",
+    "FAIRSHARE_BACKFILL",
+    "ML_BACKFILL_P50",
+    "ML_BACKFILL_P10",
+    "RL_TRAINED",
+}
 
 
 @dataclass
@@ -53,6 +64,7 @@ def run_simulation_from_trace(
     runtime_guard_k: float = 0.5,
     strict_uncertainty_mode: bool = False,
     starvation_wait_cap_sec: int = 172800,
+    policy_context: dict[str, Any] | None = None,
 ) -> SimulationResult:
     if policy_id not in SUPPORTED_POLICIES:
         raise ValueError(f"Unsupported policy: {policy_id}")
@@ -83,6 +95,8 @@ def run_simulation_from_trace(
         "prediction_used_count": 0,
         "requested_fallback_count": 0,
         "actual_fallback_count": 0,
+        "tsafrir_history_count": 0,
+        "tsafrir_cold_start_count": 0,
     }
 
     while len(completed) < total_jobs:
@@ -122,6 +136,11 @@ def run_simulation_from_trace(
                     runtime_p90_sec=int(job["runtime_p90_sec"]),
                     runtime_guard_sec=int(job["runtime_guard_sec"]),
                     estimate_source=str(job["estimate_source"]),
+                    priority_score=(
+                        float(job["priority_score"])
+                        if job.get("priority_score") is not None and pd.notna(job.get("priority_score"))
+                        else None
+                    ),
                 )
                 for job in queue
             ),
@@ -138,18 +157,20 @@ def run_simulation_from_trace(
             snapshot=snapshot,
             policy_id=policy_id,
             strict_uncertainty_mode=strict_uncertainty_mode,
+            policy_context=policy_context,
         )
-        queue_by_id: dict[int, dict[str, Any]] = {int(job["job_id"]): job for job in queue}
+        queue_by_id: dict[int, dict[str, Any]] = {int(j["job_id"]): j for j in queue}
         dispatched_ids: set[int] = set()
         for dispatch in decision.decisions:
-            job = queue_by_id.get(int(dispatch.job_id))
-            if job is None:
+            dispatch_id = int(dispatch.job_id)
+            if dispatch_id not in queue_by_id:
                 continue
+            job = queue_by_id[dispatch_id]
             requested = int(job["requested_cpus"])
             if requested > free_cpus:
                 continue
 
-            dispatched_ids.add(int(dispatch.job_id))
+            dispatched_ids.add(dispatch_id)
             start_ts = clock_ts
             runtime = int(job["runtime_actual_sec"])
             end_ts = start_ts + runtime
@@ -177,6 +198,10 @@ def run_simulation_from_trace(
                 fallback_counts["prediction_used_count"] += 1
             elif estimate_source == "requested_fallback":
                 fallback_counts["requested_fallback_count"] += 1
+            elif estimate_source == "tsafrir_cold_start":
+                fallback_counts["tsafrir_cold_start_count"] += 1
+            elif estimate_source in ("tsafrir_history_1", "tsafrir_history_2"):
+                fallback_counts["tsafrir_history_count"] += 1
             else:
                 fallback_counts["actual_fallback_count"] += 1
 
@@ -253,6 +278,8 @@ def run_simulation_from_trace(
         "prediction_used_rate": float(fallback_counts["prediction_used_count"] / denominator),
         "requested_fallback_rate": float(fallback_counts["requested_fallback_count"] / denominator),
         "actual_fallback_rate": float(fallback_counts["actual_fallback_count"] / denominator),
+        "tsafrir_history_rate": float(fallback_counts["tsafrir_history_count"] / denominator),
+        "tsafrir_cold_start_rate": float(fallback_counts["tsafrir_cold_start_count"] / denominator),
         "total_scheduled_jobs": total_scheduled,
         "runtime_guard_k": float(runtime_guard_k),
         "strict_uncertainty_mode": bool(strict_uncertainty_mode),

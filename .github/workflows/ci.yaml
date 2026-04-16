@@ -43,6 +43,8 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Check OpenAPI compatibility
         run: python scripts/check_openapi_compat.py --baseline schemas/openapi_baseline.json
+      - name: Verify generated API reference is up to date
+        run: python scripts/generate_api_reference.py --check
 
   security-dependency-audit:
     name: Security dependency audit
